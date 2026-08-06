@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import type { ExecuteResult, PageElement, AgentAction } from '../../main/browser/types'
 
 type ParsedCommand = { kind: 'help' } | { kind: 'action'; action: AgentAction } | null
@@ -30,8 +30,15 @@ export default function App(): React.JSX.Element {
   const [cmd, setCmd] = useState('')
   const [vision, setVision] = useState(true)
   const [lines, setLines] = useState<Line[]>([])
+  const logRef = useRef<HTMLDivElement | null>(null)
 
   const push = (kind: Line['kind'], text: string): void => setLines((p) => [...p, { kind, text }])
+
+  useEffect(() => {
+    const log = logRef.current
+    if (!log) return
+    log.scrollTop = log.scrollHeight
+  }, [lines])
 
   function parse(input: string): ParsedCommand {
     const [head = '', ...rest] = input.trim().split(/\s+/)
@@ -141,7 +148,7 @@ export default function App(): React.JSX.Element {
         </button>
       </div>
 
-      <div className="log">
+      <div className="log" ref={logRef}>
         {lines.map((l, i) => (
           <div key={i} style={{ color: color(l.kind) }}>
             {l.text}
@@ -165,8 +172,8 @@ export default function App(): React.JSX.Element {
             stroke="currentColor"
             strokeWidth="2"
           >
-            <path d="M12 3v18" />
-            <path d="M16.5 12l-9-9" />
+            <path d="M12 19V5" />
+            <path d="M6 11l6-6 6 6" />
           </svg>
         </button>
       </div>
