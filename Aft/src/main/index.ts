@@ -64,7 +64,7 @@ function createWindow(): void {
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.aft.agent')
 
-  ipcMain.handle('agent:execute', async (_e, action: AgentAction): Promise<ExecuteResult> => {
+  ipcMain.handle('aft:execute', async (_e, action: AgentAction): Promise<ExecuteResult> => {
     try {
       const out = await controller.execute(action)
       return { ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }
@@ -78,7 +78,7 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('agent:vision', async (_e, on: boolean): Promise<ExecuteResult> => {
+  ipcMain.handle('aft:vision', async (_e, on: boolean): Promise<ExecuteResult> => {
     try {
       const page = await controller.setVision(on)
       return { ok: true, result: on ? 'Gorus acildi' : 'Gorus kapatildi', page, vision: on }
@@ -92,7 +92,7 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('agent:home', async (): Promise<ExecuteResult> => {
+  ipcMain.handle('aft:home', async (): Promise<ExecuteResult> => {
     try {
       const out = await controller.execute({ action: 'go_to_url', url: HOME_URL })
       return { ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }

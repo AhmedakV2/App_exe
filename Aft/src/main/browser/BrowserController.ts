@@ -54,7 +54,7 @@ export class BrowserController {
         result = await this.clearType(a.index ?? -1)
         break
       case 'scroll':
-        result=await this.scroll(a.deltaY ?? 0)
+        result = await this.scroll(a.deltaY ?? 0)
         break
       case 'press_enter':
         result = await this.pressEnter()
@@ -149,7 +149,7 @@ export class BrowserController {
       deltaX: 0,
       deltaY
     })
-    return ' Kaydırıldı: ${deltaY}px;'
+    return `Kaydırıldı: ${deltaY}px`
   }
 
   private mouse(type: string, x: number, y: number): Promise<unknown> {

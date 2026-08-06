@@ -66,7 +66,7 @@ export default function App(): React.JSX.Element {
     }
 
     try {
-      report(await window.agent.execute(parsed.action))
+      report(await window.aft.execute(parsed.action))
     } catch (err) {
       push('err', 'KOPRU HATASI: ' + (err as Error).message)
     }
@@ -76,7 +76,7 @@ export default function App(): React.JSX.Element {
     const next = !vision
     setVision(next)
     try {
-      report(await window.agent.setVision(next))
+      report(await window.aft.setVision(next))
     } catch (err) {
       push('err', 'KOPRU HATASI: ' + (err as Error).message)
     }
@@ -84,7 +84,7 @@ export default function App(): React.JSX.Element {
 
   async function goHome(): Promise<void> {
     push('in', '> home')
-    report(await window.agent.home())
+    report(await window.aft.home())
   }
 
   const color = (k: Line['kind']): string =>
@@ -156,7 +156,19 @@ export default function App(): React.JSX.Element {
           onKeyDown={(e) => e.key === 'Enter' && run()}
           placeholder="( action ) komutları verir."
         />
-        <button onClick={run}>Calistir</button>
+        <button onClick={run}>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M12 3v18" />
+            <path d="M16.5 12l-9-9" />
+          </svg>
+        </button>
       </div>
     </div>
   )

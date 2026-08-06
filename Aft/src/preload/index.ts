@@ -1,11 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 const api = {
-  execute: (action: unknown) => ipcRenderer.invoke('agent:execute', action),
-  setVision: (on: boolean) => ipcRenderer.invoke('agent:vision', on),
-  home: () => ipcRenderer.invoke('agent:home'),
+  execute: (action: unknown) => ipcRenderer.invoke('aft:execute', action),
+  setVision: (on: boolean) => ipcRenderer.invoke('aft:vision', on),
+  home: () => ipcRenderer.invoke('aft:home'),
   versions: process.versions
 }
 
-contextBridge.exposeInMainWorld('agent', api)
+contextBridge.exposeInMainWorld('aft', api)
 console.log('[PRELOAD] yuklendi')
