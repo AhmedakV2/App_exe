@@ -18,7 +18,33 @@ body { background: #111; color: #eee; font: 13px system-ui, sans-serif; }
 .icon:hover { color: #ccc; }
 .icon.on { background: #ef6c1a; color: #fff; border-color: #ef6c1a; }
 
-.log { flex: 1; overflow: auto; padding: 10px; font: 12px monospace; white-space: pre-wrap; }
+.log {
+  flex: 1;
+  overflow: auto;
+  padding: 10px;
+  font: 12px monospace;
+  white-space: pre-wrap;
+  scrollbar-width: thin;
+  scrollbar-color: #4a4f59 #121212;
+}
+
+.log::-webkit-scrollbar {
+  width: 10px;
+}
+
+.log::-webkit-scrollbar-track {
+  background: #121212;
+}
+
+.log::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #4a4f59 0%, #343841 100%);
+  border: 2px solid #121212;
+  border-radius: 999px;
+}
+
+.log::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #5a6270 0%, #404652 100%);
+}
 
 .input { display: flex; gap: 6px; padding: 10px; border-top: 1px solid #2a2a2a; }
 .input input {
