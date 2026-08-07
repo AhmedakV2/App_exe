@@ -4,7 +4,7 @@ import { AgentAction, PageElement, PageState } from './types'
 
 export class BrowserController {
   private lastState: PageState | null = null
-  private vision = true
+  private vision = false
 
   constructor(private readonly view: WebContentsView) {}
 
@@ -29,46 +29,49 @@ export class BrowserController {
   }
 
   async execute(a: AgentAction): Promise<{ result: string; page: PageState }> {
-    this.attach()
-    let result: string
-    switch (a.action) {
-      case 'go_to_url':
-        result = await this.navigate(a.url ?? '')
-        break
-      case 'click':
-        result = await this.click(a.index ?? -1)
-        break
-      case 'double_click':
-        result = await this.DbClick(a.index ?? -1)
-        break
-      case 'right_click':
-        result = await this.RClick(a.index ?? -1)
-        break
-      case 'mouse_move':
-        result = await this.mouseMove(a.index ?? -1)
-        break
-      case 'type':
-        result = await this.type(a.index ?? -1, a.text ?? '')
-        break
-      case 'clear_type':
-        result = await this.clearType(a.index ?? -1)
-        break
-      case 'scroll':
-        result = await this.scroll(a.deltaY ?? 0)
-        break
-      case 'press_key':
-        result = await this.press(a.key ?? '', a.index)
-        break
-      case 'snapshot':
-        result = 'Sayfa tarandi'
-        break
-      default:
-        throw new Error('Bilinmeyen aksiyon: ' + a.action)
-    }
-    await this.settle()
+    return this.enqueue(async () => {
+      this.attach()
+      let result: string
 
-    this.lastState = await snapshot(this.view.webContents, this.vision)
-    return { result, page: this.lastState }
+      switch (a.action) {
+        case 'go_to_url':
+          result = await this.navigate(a.url ?? '')
+          break
+        case 'click':
+          result = await this.click(a.index ?? -1)
+          break
+        case 'double_click':
+          result = await this.DbClick(a.index ?? -1)
+          break
+        case 'right_click':
+          result = await this.RClick(a.index ?? -1)
+          break
+        case 'mouse_move':
+          result = await this.mouseMove(a.index ?? -1)
+          break
+        case 'type':
+          result = await this.type(a.index ?? -1, a.text ?? '')
+          break
+        case 'clear_type':
+          result = await this.clearType(a.index ?? -1)
+          break
+        case 'scroll':
+          result = await this.scroll(a.deltaY ?? 0)
+          break
+        case 'press_key':
+          result = await this.press(a.key ?? '', a.index)
+          break
+        case 'snapshot':
+          result = 'Sayfa tarandi'
+          break
+        default:
+          throw new Error('Bilinmeyen aksiyon: ' + a.action)
+      }
+
+      await this.settle(a.action === 'go_to_url' ? 160 : 80)
+      this.lastState = await snapshot(this.view.webContents, this.vision)
+      return { result, page: this.lastState }
+    })
   }
 
   private async navigate(url: string): Promise<string> {
@@ -170,6 +173,45 @@ export class BrowserController {
     return `Kaydırıldı: ${deltaY}px`
   }
 
+  async back(): Promise<{ result: string; page: PageState }> {
+    return this.enqueue(async () => {
+      this.attach()
+      if (!this.view.webContents.navigationHistory.canGoBack())
+        throw new Error('Geri gidilecek sayfa yok')
+
+      const loaded = this.waitForLoad()
+      this.view.webContents.navigationHistory.goBack()
+      await loaded
+
+      return this.finish('Geri gidildi', 120)
+    })
+  }
+
+  async forward(): Promise<{ result: string; page: PageState }> {
+    return this.enqueue(async () => {
+      this.attach()
+      if (!this.view.webContents.navigationHistory.canGoForward())
+        throw new Error('Ileri gidilecek sayfa yok')
+
+      const loaded = this.waitForLoad()
+      this.view.webContents.navigationHistory.goForward()
+      await loaded
+
+      return this.finish('Ileri gidildi', 120)
+    })
+  }
+
+  async reload(): Promise<{ result: string; page: PageState }> {
+    return this.enqueue(async () => {
+      this.attach()
+      const loaded = this.waitForLoad()
+      this.view.webContents.reloadIgnoringCache()
+      await loaded
+
+      return this.finish('Sayfa yenilendi', 120)
+    })
+  }
+
   private mouse(type: string, x: number, y: number): Promise<unknown> {
     return this.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 })
   }
@@ -192,7 +234,38 @@ export class BrowserController {
     return el
   }
 
-  private settle(): Promise<void> {
-    return new Promise((r) => setTimeout(r, 700))
+  private actionQueue: Promise<void> = Promise.resolve()
+
+  private enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const next = this.actionQueue.then(task, task)
+    this.actionQueue = next.then(
+      () => undefined,
+      () => undefined
+    )
+    return next
+  }
+
+  private waitForLoad(): Promise<void> {
+    return new Promise((resolve) => {
+      const wc = this.view.webContents
+      const done = (): void => {
+        wc.off('did-finish-load', done)
+        wc.off('did-fail-load', done)
+        resolve()
+      }
+
+      wc.once('did-finish-load', done)
+      wc.once('did-fail-load', done)
+    })
+  }
+
+  private async finish(result: string, delay = 120): Promise<{ result: string; page: PageState }> {
+    await this.settle(delay)
+    this.lastState = await snapshot(this.view.webContents, this.vision)
+    return { result, page: this.lastState }
+  }
+
+  private settle(ms = 120): Promise<void> {
+    return new Promise((r) => setTimeout(r, ms))
   }
 }
