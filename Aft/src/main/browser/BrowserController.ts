@@ -56,8 +56,8 @@ export class BrowserController {
       case 'scroll':
         result = await this.scroll(a.deltaY ?? 0)
         break
-      case 'press_enter':
-        result = await this.pressEnter()
+      case 'press_key':
+        result = await this.press(a.key ?? '', a.index)
         break
       case 'snapshot':
         result = 'Sayfa tarandi'
@@ -122,12 +122,30 @@ export class BrowserController {
     await this.send('Input.dispatchKeyEvent', { type: 'keyUp', ...key })
   }
 
-  private async pressEnter(): Promise<string> {
-    const key = { windowsVirtualKeyCode: 13, key: 'Enter', code: 'Enter' }
-    await this.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...key })
-    await this.send('Input.dispatchKeyEvent', { type: 'char', text: '\r' })
-    await this.send('Input.dispatchKeyEvent', { type: 'keyUp', ...key })
-    return 'Enter gonderildi'
+  private async press(key: string, index?: number): Promise<string> {
+    if (typeof index === 'number' && index >= 0) await this.click(index)
+
+    type KeyEvent = { windowsVirtualKeyCode: number; key: string; code: string }
+
+    const named: Record<string, KeyEvent> = {
+      enter: { windowsVirtualKeyCode: 13, key: 'Enter ', code: 'Enter' },
+      space: { windowsVirtualKeyCode: 32, key: '', code: 'Space' },
+      tab: { windowsVirtualKeyCode: 9, key: 'Tab', code: 'Tab' },
+      escape: { windowsVirtualKeyCode: 27, key: 'Escape', code: 'Escape' },
+      backspace: { windowsVirtualKeyCode: 8, key: 'Backspace', code: 'Backspace' }
+    }
+
+    let keyEvent: KeyEvent
+    if (key.length === 1) {
+      const upper = key.toUpperCase()
+      keyEvent = { windowsVirtualKeyCode: upper.charCodeAt(0), key, code: `Key${upper}` }
+    } else {
+      keyEvent = named[key] ?? { windowsVirtualKeyCode: 0, key, code: key }
+    }
+
+    await this.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...keyEvent })
+    await this.send('Input.dispatchKeyEvent', { type: 'keyUp', ...keyEvent })
+    return `${key} tusuna basildi${typeof index === 'number' ? ' on [' + index + ']' : ''}`
   }
 
   private async mouseMove(index: number): Promise<string> {

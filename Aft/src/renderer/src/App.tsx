@@ -22,10 +22,12 @@ const COMMANDS: Record<string, { usage: string; build: (a: string[]) => AgentAct
   clear: { usage: 'clear <index>', build: (a) => ({ action: 'clear_type', index: Number(a[0]) }) },
   move: { usage: 'move <index>', build: (a) => ({ action: 'mouse_move', index: Number(a[0]) }) },
   scroll: { usage: 'scroll <deltaY>', build: (a) => ({ action: 'scroll', deltaY: Number(a[0]) }) },
-  enter: { usage: 'enter <index>', build: () => ({ action: 'press_enter' }) },
-  snap: { usage: 'snap', build: () => ({ action: 'snapshot' }) }
+  snap: { usage: 'snap', build: () => ({ action: 'snapshot' }) },
+  press: {
+    usage: 'press <key> <index>',
+    build: (a) => ({ action: 'press_key', key: a[0], index: a[1] ? Number(a[1]) : undefined })
+  }
 }
-
 export default function App(): React.JSX.Element {
   const [cmd, setCmd] = useState('')
   const [vision, setVision] = useState(true)

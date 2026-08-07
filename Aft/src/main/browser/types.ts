@@ -22,12 +22,12 @@ export type ActionName =
   | 'click'
   | 'type'
   | 'scroll'
-  | 'press_enter'
   | 'snapshot'
   | 'double_click'
   | 'right_click'
   | 'mouse_move'
   | 'clear_type'
+  | 'press_key'
 
 export interface AgentAction {
   action: ActionName
@@ -35,6 +35,7 @@ export interface AgentAction {
   text?: string
   url?: string
   deltaY?: number
+  key?: string
 }
 
 export interface ExecuteResult {
