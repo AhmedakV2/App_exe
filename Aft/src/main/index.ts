@@ -1,4 +1,4 @@
-import { app, BaseWindow, WebContentsView, ipcMain } from 'electron'
+import { app, BaseWindow, WebContentsView, ipcMain, Menu } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
@@ -28,6 +28,7 @@ function layout(): void {
 }
 
 function createWindow(): void {
+  Menu.setApplicationMenu(null)
   win = new BaseWindow({ width: 1600, height: 950, title: 'AFT', icon: iconPath })
   chatView = new WebContentsView({
     webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true }
@@ -95,6 +96,46 @@ app.whenReady().then(() => {
   ipcMain.handle('aft:home', async (): Promise<ExecuteResult> => {
     try {
       const out = await controller.execute({ action: 'go_to_url', url: HOME_URL })
+      return { ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }
+    } catch (err) {
+      return {
+        ok: false,
+        result: (err as Error).message,
+        page: null,
+        vision: controller.isVisionOn()
+      }
+    }
+  })
+
+  ipcMain.handle('aft:back', async (): Promise<ExecuteResult> => {
+    try {
+      const out = await controller.back()
+      return { ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }
+    } catch (err) {
+      return {
+        ok: false,
+        result: (err as Error).message,
+        page: null,
+        vision: controller.isVisionOn()
+      }
+    }
+  })
+  ipcMain.handle('aft:forward', async (): Promise<ExecuteResult> => {
+    try {
+      const out = await controller.forward()
+      return { ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }
+    } catch (err) {
+      return {
+        ok: false,
+        result: (err as Error).message,
+        page: null,
+        vision: controller.isVisionOn()
+      }
+    }
+  })
+  ipcMain.handle('aft:reload', async (): Promise<ExecuteResult> => {
+    try {
+      const out = await controller.reload()
       return { ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }
     } catch (err) {
       return {
