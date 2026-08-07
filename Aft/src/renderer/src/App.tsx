@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
-import type { ExecuteResult, PageElement, AgentAction } from '../../main/browser/types'
+import type { ExecuteResult, AgentAction } from '../../main/browser/types'
 
 type ParsedCommand = { kind: 'help' } | { kind: 'action'; action: AgentAction } | null
 type Line = { kind: 'in' | 'ok' | 'err' | 'el'; text: string }
+
+const MAX_LINES = 300
 
 const COMMANDS: Record<string, { usage: string; build: (a: string[]) => AgentAction }> = {
   go: { usage: 'go <url>', build: (a) => ({ action: 'go_to_url', url: a[0] }) },
@@ -30,11 +32,13 @@ const COMMANDS: Record<string, { usage: string; build: (a: string[]) => AgentAct
 }
 export default function App(): React.JSX.Element {
   const [cmd, setCmd] = useState('')
-  const [vision, setVision] = useState(true)
+  const [vision, setVision] = useState(false)
   const [lines, setLines] = useState<Line[]>([])
   const logRef = useRef<HTMLDivElement | null>(null)
+  const [navBusy, setNavBusy] = useState(false)
 
-  const push = (kind: Line['kind'], text: string): void => setLines((p) => [...p, { kind, text }])
+  const push = (kind: Line['kind'], text: string): void =>
+    setLines((p) => [...p, { kind, text }].slice(-MAX_LINES))
 
   useEffect(() => {
     const log = logRef.current
@@ -45,7 +49,7 @@ export default function App(): React.JSX.Element {
   function parse(input: string): ParsedCommand {
     const [head = '', ...rest] = input.trim().split(/\s+/)
     const key = head.toLowerCase()
-    if (key === 'action') return { kind: 'help' }
+    if (key === 'a') return { kind: 'help' }
 
     const entry = COMMANDS[key]
     return entry ? { kind: 'action', action: entry.build(rest) } : null
@@ -53,12 +57,6 @@ export default function App(): React.JSX.Element {
 
   function report(res: ExecuteResult): void {
     push(res.ok ? 'ok' : 'err', res.result)
-    if (!res.ok || !res.page || !res.vision) return
-    res.page.elements
-      .slice(0, 60)
-      .forEach((e: PageElement) =>
-        push('el', `[${e.i}] <${e.tag}${e.type ? ' ' + e.type : ''}> ${e.text}`)
-      )
   }
 
   async function run(): Promise<void> {
@@ -85,15 +83,40 @@ export default function App(): React.JSX.Element {
     const next = !vision
     setVision(next)
     try {
-      report(await window.aft.setVision(next))
+      await window.aft.setVision(next)
     } catch (err) {
       push('err', 'KOPRU HATASI: ' + (err as Error).message)
     }
   }
 
+  async function runNav(label: string, fn: () => Promise<ExecuteResult>): Promise<void> {
+    if (navBusy) return
+    setNavBusy(true)
+    push('in', '> ' + label)
+
+    try {
+      report(await fn())
+    } catch (err) {
+      push('err', 'KOPRU HATASI: ' + (err as Error).message)
+    } finally {
+      setNavBusy(false)
+    }
+  }
+
   async function goHome(): Promise<void> {
-    push('in', '> home')
-    report(await window.aft.home())
+    await runNav('home', () => window.aft.home())
+  }
+
+  async function goBack(): Promise<void> {
+    await runNav('back', () => window.aft.back())
+  }
+
+  async function goForward(): Promise<void> {
+    await runNav('forward', () => window.aft.forward())
+  }
+
+  async function reloadPage(): Promise<void> {
+    await runNav('reload', () => window.aft.reload())
   }
 
   const color = (k: Line['kind']): string =>
@@ -102,8 +125,48 @@ export default function App(): React.JSX.Element {
   return (
     <div className="shell">
       <div className="bar">
-        <span className="brand">AFT AGENT</span>
-        <button className="icon" onClick={goHome} title="Google'a don">
+        <span className="brand">AGENT CHAT</span>
+        <button className="icon" onClick={goBack} disabled={navBusy} title="Geri">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+
+        <button className="icon" onClick={goForward} disabled={navBusy} title="Ileri">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+
+        <button className="icon" onClick={reloadPage} disabled={navBusy} title="Yenile">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M3 12a9 9 0 0 1 15.3-6.4" />
+            <path d="M18 4v5h-5" />
+            <path d="M21 12a9 9 0 0 1-15.3 6.4" />
+          </svg>
+        </button>
+        <button className="icon" onClick={goHome} disabled={navBusy} title="Google'a don">
           <svg
             width="16"
             height="16"
@@ -163,7 +226,7 @@ export default function App(): React.JSX.Element {
           value={cmd}
           onChange={(e) => setCmd(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && run()}
-          placeholder="( action ) komutları verir."
+          placeholder=" Komutlar için 'a' yaz."
         />
         <button onClick={run}>
           <svg
