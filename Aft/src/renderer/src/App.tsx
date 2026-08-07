@@ -24,8 +24,8 @@ const COMMANDS: Record<string, { usage: string; build: (a: string[]) => AgentAct
   scroll: { usage: 'scroll <deltaY>', build: (a) => ({ action: 'scroll', deltaY: Number(a[0]) }) },
   snap: { usage: 'snap', build: () => ({ action: 'snapshot' }) },
   press: {
-    usage: 'press <key> <index>',
-    build: (a) => ({ action: 'press_key', key: a[0], index: a[1] ? Number(a[1]) : undefined })
+    usage: 'press <index> <key>',
+    build: (a) => ({ action: 'press_key', key: a[1], index: a[0] ? Number(a[0]) : undefined })
   }
 }
 export default function App(): React.JSX.Element {
