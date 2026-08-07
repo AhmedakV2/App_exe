@@ -1,5 +1,5 @@
 * { box-sizing: border-box; }
-html, body, #root { margin: 0; padding: 0; height: 100%; }
+html, body, #root { margin: 0; padding: 0; height: 100%;  }
 
 body { background: #111; color: #eee; font: 13px system-ui, sans-serif; }
 
@@ -13,11 +13,14 @@ body { background: #111; color: #eee; font: 13px system-ui, sans-serif; }
 
 .icon {
   background: #1f1f1f; color: #777; border: 1px solid #333;
-  padding: 5px 7px; cursor: pointer; display: flex; border-radius: 3px;
+  padding: 5px 5px; cursor: pointer; display: flex; border-radius: 10px;
 }
 .icon:hover { color: #ccc; }
 .icon.on { background: #ef6c1a; color: #fff; border-color: #ef6c1a; }
-
+.icon:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .log {
   flex: 1;
   overflow: auto;
@@ -46,12 +49,19 @@ body { background: #111; color: #eee; font: 13px system-ui, sans-serif; }
   background: linear-gradient(180deg, #5a6270 0%, #404652 100%);
 }
 
-.input { display: flex; gap: 6px; padding: 10px; border-top: 1px solid #2a2a2a; }
-.input input {
-  flex: 1; background: #1c1c1c; color: #eee; border: 1px solid #3a3a3a;
-  padding: 8px; font: 12px monospace; outline: none;
+.input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 53px;
+  border-top: 2px solid #404652;
 }
-.input input:focus { border-color: #ef6c1a; }
+.input input {
+  flex: 1 ; background: #1c1c1c; color: #eee; border: 1px solid #3a3a3a;
+  padding: 8px; font: 12px monospace; outline: none; border-radius: 10px
+}
+
 .input button {
-  background: #ef6c1a; color: #fff; border: 0; padding: 8px 14px; cursor: pointer; font-weight: 600;
+  background: #1f1f1f; color: #777; border: 0; border-radius: 10px; padding: 8px 14px; cursor: pointer;
 }
