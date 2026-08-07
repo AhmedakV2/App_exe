@@ -7,6 +7,9 @@ declare global {
       setVision: (on: boolean) => Promise<ExecuteResult>
       home: () => Promise<ExecuteResult>
       versions: NodeJS.ProcessVersions
+      back: () => Promise<ExecuteResult>
+      forward: () => Promise<ExecuteResult>
+      reload: () => Promise<ExecuteResult>
     }
   }
 }
