@@ -44,3 +44,15 @@ export interface ExecuteResult {
   page: PageState | null
   vision: boolean
 }
+
+export type NavKind = 'back' | 'forward' | 'reload' | 'home' | 'stop'
+
+export interface BrowserState {
+  url: string
+  title: string
+  canGoBack: boolean
+  canGoForward: boolean
+  loading: boolean
+  chatOpen: boolean
+  vision: boolean
+}
