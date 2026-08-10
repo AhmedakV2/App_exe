@@ -1,5 +1,8 @@
 :root {
-  --frame: #0d0d0d;
+  --frame: 32px;
+  --divider: 1px;
+  --frame-bg: #0d0d0d;
+  --divider-bg: #262626;
   --surface: #151515;
   --surface-soft: #1c1c1c;
   --hover: #232323;
@@ -8,9 +11,9 @@
   --faint: #5c5c5c;
   --accent: #ef6c1a;
   --danger: #d13438;
-  --frame-size: 28px;
   --radius-outer: 10px;
   --radius-inner: 6px;
+  --control: 26px;
 }
 
 * {
@@ -27,7 +30,7 @@ body,
 }
 
 body {
-  background: var(--frame);
+  background: var(--frame-bg);
   color: var(--text);
   font:
     13px system-ui,
@@ -39,26 +42,46 @@ button {
   font: inherit;
 }
 
-.frame {
-  display: flex;
-  flex-direction: column;
+.shell {
+  position: relative;
   height: 100%;
   width: 100%;
-  background: var(--frame);
+  padding: var(--frame);
+  background: var(--frame-bg);
   border-radius: var(--radius-outer);
   overflow: hidden;
 }
 
-.topbar {
+.shell-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--frame);
   display: flex;
   align-items: center;
-  flex: 0 0 var(--frame-size);
-  height: var(--frame-size);
   -webkit-app-region: drag;
   user-select: none;
 }
 
-.topbar-left {
+.shell-side {
+  position: absolute;
+  left: 0;
+  top: var(--frame);
+  bottom: var(--frame);
+  width: var(--frame);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 1px;
+  -webkit-app-region: drag;
+}
+
+.shell-side .icon-btn {
+  -webkit-app-region: no-drag;
+}
+
+.bar-left {
   display: flex;
   align-items: center;
   gap: 1px;
@@ -70,13 +93,13 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: var(--control);
+  height: var(--control);
   margin-right: 3px;
   color: var(--accent);
 }
 
-.topbar-drag {
+.bar-drag {
   flex: 1;
   min-width: 0;
   height: 100%;
@@ -86,7 +109,7 @@ button {
   padding: 0 12px;
 }
 
-.topbar-title {
+.bar-title {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -98,7 +121,7 @@ button {
   color: var(--faint);
 }
 
-.topbar-right {
+.bar-right {
   display: flex;
   align-items: center;
   gap: 1px;
@@ -111,8 +134,8 @@ button {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: var(--control);
+  height: var(--control);
   background: transparent;
   color: var(--muted);
   border: 0;
@@ -140,7 +163,6 @@ button {
 
 .icon-btn.on {
   color: var(--accent);
-  background: transparent;
 }
 
 .icon-btn.on:hover:not(:disabled) {
@@ -158,43 +180,28 @@ button {
   cursor: default;
 }
 
-.main {
+.workspace {
   display: flex;
-  flex: 1;
-  min-height: 0;
-  padding: 0 var(--frame-size) var(--frame-size) 0;
+  height: 100%;
+  width: 100%;
 }
 
-.side {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 0 0 var(--frame-size);
-  width: var(--frame-size);
-  padding-top: 1px;
-  -webkit-app-region: drag;
-}
-
-.side .icon-btn {
-  -webkit-app-region: no-drag;
-}
-
-.content {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  gap: 1px;
+.divider {
+  flex: 0 0 var(--divider);
+  width: var(--divider);
+  height: 100%;
+  background: var(--divider-bg);
 }
 
 .stage {
   flex: 1;
   min-width: 0;
-  background: var(--frame);
+  background: var(--frame-bg);
 }
 
 .panel {
-  flex: 0 0 300px;
-  width: 300px;
+  flex: 0 0 320px;
+  width: 320px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -209,9 +216,9 @@ button {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 0 0 26px;
-  height: 26px;
-  padding: 0 3px 0 8px;
+  flex: 0 0 28px;
+  height: 28px;
+  padding: 0 4px 0 10px;
 }
 
 .brand {
@@ -232,8 +239,8 @@ button {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   background: transparent;
   color: var(--muted);
   border: 0;
@@ -255,7 +262,7 @@ button {
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
-  padding: 0 8px 6px;
+  padding: 0 10px 6px;
   font:
     12px/1.55 ui-monospace,
     monospace;
@@ -292,15 +299,15 @@ button {
 .composer {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   flex: 0 0 auto;
-  padding: 4px 6px 6px;
+  padding: 5px 7px 7px;
 }
 
 .composer input {
   flex: 1;
   min-width: 0;
-  height: 26px;
+  height: 28px;
   background: var(--surface-soft);
   color: var(--text);
   border: 0;
@@ -326,8 +333,8 @@ button {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   background: var(--surface-soft);
   color: var(--muted);
   border: 0;

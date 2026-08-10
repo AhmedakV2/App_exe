@@ -7,9 +7,9 @@ import { BrowserController } from './browser/BrowserController'
 import { AgentAction, BrowserState, ExecuteResult, NavKind, WindowAction } from './browser/types'
 import type { CoverageSummary, ScanLevel } from './discovery'
 
-const CHAT_WIDTH = 300
-const CHAT_GAP = 1
-const FRAME_SIZE = 28
+const FRAME = 32
+const DIVIDER = 1
+const CHAT_WIDTH = 320
 const STAGE_RADIUS = 6
 const FRAME_COLOR = '#0d0d0d'
 const HOME_URL = 'https://www.google.com'
@@ -30,26 +30,25 @@ function preloadPath(): string {
   return existsSync(mjs) ? mjs : join(__dirname, '../preload/index.js')
 }
 
-function sideWidth(total: number): number {
-  const usable = Math.max(0, total - FRAME_SIZE * 2)
-  const wanted = chatOpen ? CHAT_WIDTH + CHAT_GAP : 0
+function chatBlock(total: number): number {
+  const usable = Math.max(0, total - FRAME * 2)
+  const wanted = chatOpen ? CHAT_WIDTH + DIVIDER : 0
   return Math.max(0, Math.min(wanted, usable))
 }
 
 function layout(): void {
   if (!win || win.isDestroyed()) return
   const { width, height } = win.getContentBounds()
-  const side = sideWidth(width)
-  const x = FRAME_SIZE + side
-  const y = FRAME_SIZE
+  const x = FRAME + chatBlock(width)
+  const y = FRAME
 
   chatView.setBounds({ x: 0, y: 0, width, height })
   targetView.setBorderRadius(chatOpen ? 0 : STAGE_RADIUS)
   targetView.setBounds({
     x,
     y,
-    width: Math.max(0, width - FRAME_SIZE - x),
-    height: Math.max(0, height - FRAME_SIZE - y)
+    width: Math.max(0, width - FRAME - x),
+    height: Math.max(0, height - FRAME - y)
   })
 }
 
