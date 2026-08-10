@@ -7,10 +7,10 @@ import { BrowserController } from './browser/BrowserController'
 import { AgentAction, BrowserState, ExecuteResult, NavKind, WindowAction } from './browser/types'
 import type { CoverageSummary, ScanLevel } from './discovery'
 
-const RAIL_WIDTH = 56
-const CHAT_WIDTH = 400
-const FRAME_SIZE = 44
-const STAGE_RADIUS = 10
+const CHAT_WIDTH = 360
+const CHAT_GAP = 6
+const FRAME_SIZE = 34
+const STAGE_RADIUS = 8
 const FRAME_COLOR = '#0d0d0d'
 const HOME_URL = 'https://www.google.com'
 const iconPath = app.isPackaged
@@ -32,7 +32,7 @@ function preloadPath(): string {
 
 function sideWidth(total: number): number {
   const usable = Math.max(0, total - FRAME_SIZE * 2)
-  const wanted = chatOpen ? RAIL_WIDTH + CHAT_WIDTH : RAIL_WIDTH
+  const wanted = chatOpen ? CHAT_WIDTH + CHAT_GAP : 0
   return Math.max(0, Math.min(wanted, usable))
 }
 
