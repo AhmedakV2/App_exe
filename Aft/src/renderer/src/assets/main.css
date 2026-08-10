@@ -183,7 +183,7 @@ button {
   display: flex;
   flex: 1;
   min-width: 0;
-  gap: 6px;
+  gap: 1px;
 }
 
 .stage {
@@ -200,7 +200,7 @@ button {
   flex-direction: column;
   height: 100%;
   background: var(--surface);
-  border-radius: var(--radius-inner);
+  border-radius: var(--radius-inner) 0 0 var(--radius-inner);
   overflow: hidden;
   contain: strict;
 }

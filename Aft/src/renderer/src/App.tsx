@@ -250,7 +250,12 @@ export default function App(): React.JSX.Element {
     setState((prev) => ({ ...prev, vision: next }))
     try {
       const res: ExecuteResult = await window.aft.setVision(next)
-      if (!res.ok) push('err', res.result)
+      if (!res.ok) {
+        push('err', res.result)
+        return
+      }
+      const snap: ExecuteResult = await window.aft.execute({ action: 'snapshot' })
+      push(snap.ok ? 'ok' : 'err', snap.result)
     } catch (err) {
       push('err', 'KOPRU HATASI: ' + (err as Error).message)
     }
