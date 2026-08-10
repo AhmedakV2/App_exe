@@ -108,13 +108,20 @@ const GLYPHS: Record<string, React.JSX.Element> = {
 
 const Logo = memo(function Logo(): React.JSX.Element {
   return (
-    <svg width="18" height="18" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 512 512"
+      fill="currentColor"
+      aria-hidden="true"
+      role="img"
+    >
       <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
     </svg>
   )
 })
 
-const Glyph = memo(function Glyph({ name, size = 14 }: { name: string; size?: number }) {
+const Glyph = memo(function Glyph({ name, size = 18 }: { name: string; size?: number }) {
   return (
     <svg
       width={size}
@@ -371,7 +378,7 @@ export default function App(): React.JSX.Element {
               <header className="panel-head">
                 <span className="brand">AGENT CHAT</span>
                 <button className="collapse" title="Chati kapat" onClick={toggleChat} type="button">
-                  <Glyph name="collapse" size={13} />
+                  <Glyph name="collapse" size={15} />
                 </button>
               </header>
 
@@ -390,7 +397,7 @@ export default function App(): React.JSX.Element {
                   spellCheck={false}
                 />
                 <button className="send" onClick={() => void run()} type="button">
-                  <Glyph name="send" size={14} />
+                  <Glyph name="send" size={16} />
                 </button>
               </div>
             </section>
