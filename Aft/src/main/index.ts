@@ -90,7 +90,6 @@ function respond(
     }
   )
 }
-
 function normalizeLevel(value: unknown): ScanLevel {
   const level = Number(value)
   if (level === 0 || level === 1 || level === 2 || level === 3) return level
