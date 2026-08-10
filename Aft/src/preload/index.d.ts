@@ -10,6 +10,8 @@ declare global {
       back: () => Promise<ExecuteResult>
       forward: () => Promise<ExecuteResult>
       reload: () => Promise<ExecuteResult>
+      scan: (level: number) => Promise<ExecuteResult>
+      coverage: () => Promise<CoverageSummary | null>
     }
   }
 }

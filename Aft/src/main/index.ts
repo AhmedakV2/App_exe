@@ -4,6 +4,7 @@ import { existsSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { BrowserController } from './browser/BrowserController'
 import { AgentAction, ExecuteResult } from './browser/types'
+import type { CoverageSummary, ScanLevel } from './discovery'
 
 const CHAT_WIDTH = 420
 const HOME_URL = 'https://www.google.com'
@@ -27,9 +28,30 @@ function layout(): void {
   targetView.setBounds({ x: CHAT_WIDTH, y: 0, width: width - CHAT_WIDTH, height })
 }
 
+function respond(
+  handler: () => Promise<{ result: string; page: ExecuteResult['page'] }>
+): Promise<ExecuteResult> {
+  return handler().then(
+    (out) => ({ ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }),
+    (err: unknown) => ({
+      ok: false,
+      result: err instanceof Error ? err.message : String(err),
+      page: null,
+      vision: controller.isVisionOn()
+    })
+  )
+}
+
+function normalizeLevel(value: unknown): ScanLevel {
+  const level = Number(value)
+  if (level === 0 || level === 1 || level === 2 || level === 3) return level
+  return controller.getLevel()
+}
+
 function createWindow(): void {
   Menu.setApplicationMenu(null)
   win = new BaseWindow({ width: 1600, height: 950, title: 'AFT', icon: iconPath })
+
   chatView = new WebContentsView({
     webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true }
   })
@@ -49,103 +71,63 @@ function createWindow(): void {
     chatView.webContents.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  targetView.webContents.loadURL(HOME_URL)
-
   targetView.webContents.setWindowOpenHandler(({ url }) => {
     targetView.webContents.loadURL(url)
     return { action: 'deny' }
   })
 
   controller = new BrowserController(targetView)
-  targetView.webContents.once('did-finish-load', () => controller.attach())
 
+  controller.attach()
+  targetView.webContents.on('did-finish-load', () => {
+    controller.attach()
+    controller.invalidate()
+  })
+  targetView.webContents.on('did-navigate-in-page', () => controller.invalidate())
+
+  targetView.webContents.loadURL(HOME_URL)
+
+  win.on('closed', () => controller.dispose())
   win.show()
 }
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.aft.agent')
 
-  ipcMain.handle('aft:execute', async (_e, action: AgentAction): Promise<ExecuteResult> => {
-    try {
-      const out = await controller.execute(action)
-      return { ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }
-    } catch (err) {
-      return {
-        ok: false,
-        result: (err as Error).message,
-        page: null,
-        vision: controller.isVisionOn()
-      }
-    }
+  ipcMain.handle('aft:execute', (_e, action: AgentAction): Promise<ExecuteResult> =>
+    respond(() => controller.execute(action))
+  )
+
+  ipcMain.handle('aft:scan', (_e, level: unknown): Promise<ExecuteResult> =>
+    respond(async () => {
+      const target = normalizeLevel(level)
+      controller.setLevel(target)
+      const page = await controller.scan(target)
+      return { result: 'Tarama tamam: seviye ' + target, page }
+    })
+  )
+
+  ipcMain.handle('aft:coverage', async (): Promise<CoverageSummary | null> => {
+    const graph = controller.currentGraph()
+    return graph ? graph.coverage : null
   })
 
-  ipcMain.handle('aft:vision', async (_e, on: boolean): Promise<ExecuteResult> => {
-    try {
+  ipcMain.handle('aft:vision', (_e, on: boolean): Promise<ExecuteResult> =>
+    respond(async () => {
       const page = await controller.setVision(on)
-      return { ok: true, result: on ? 'Gorus acildi' : 'Gorus kapatildi', page, vision: on }
-    } catch (err) {
-      return {
-        ok: false,
-        result: (err as Error).message,
-        page: null,
-        vision: controller.isVisionOn()
-      }
-    }
-  })
+      return { result: on ? 'Gorus acildi' : 'Gorus kapatildi', page }
+    })
+  )
 
-  ipcMain.handle('aft:home', async (): Promise<ExecuteResult> => {
-    try {
-      const out = await controller.execute({ action: 'go_to_url', url: HOME_URL })
-      return { ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }
-    } catch (err) {
-      return {
-        ok: false,
-        result: (err as Error).message,
-        page: null,
-        vision: controller.isVisionOn()
-      }
-    }
-  })
+  ipcMain.handle('aft:home', (): Promise<ExecuteResult> =>
+    respond(() => controller.execute({ action: 'go_to_url', url: HOME_URL }))
+  )
 
-  ipcMain.handle('aft:back', async (): Promise<ExecuteResult> => {
-    try {
-      const out = await controller.back()
-      return { ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }
-    } catch (err) {
-      return {
-        ok: false,
-        result: (err as Error).message,
-        page: null,
-        vision: controller.isVisionOn()
-      }
-    }
-  })
-  ipcMain.handle('aft:forward', async (): Promise<ExecuteResult> => {
-    try {
-      const out = await controller.forward()
-      return { ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }
-    } catch (err) {
-      return {
-        ok: false,
-        result: (err as Error).message,
-        page: null,
-        vision: controller.isVisionOn()
-      }
-    }
-  })
-  ipcMain.handle('aft:reload', async (): Promise<ExecuteResult> => {
-    try {
-      const out = await controller.reload()
-      return { ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }
-    } catch (err) {
-      return {
-        ok: false,
-        result: (err as Error).message,
-        page: null,
-        vision: controller.isVisionOn()
-      }
-    }
-  })
+  ipcMain.handle('aft:back', (): Promise<ExecuteResult> => respond(() => controller.back()))
+
+  ipcMain.handle('aft:forward', (): Promise<ExecuteResult> => respond(() => controller.forward()))
+
+  ipcMain.handle('aft:reload', (): Promise<ExecuteResult> => respond(() => controller.reload()))
 
   createWindow()
 })

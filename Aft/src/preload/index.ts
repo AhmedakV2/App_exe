@@ -7,6 +7,8 @@ const api = {
   back: () => ipcRenderer.invoke('aft:back'),
   forward: () => ipcRenderer.invoke('aft:forward'),
   reload: () => ipcRenderer.invoke('aft:reload'),
+  scan: (level: number) => ipcRenderer.invoke('aft:scan', level),
+  coverage: () => ipcRenderer.invoke('aft:coverage'),
   versions: process.versions
 }
 
