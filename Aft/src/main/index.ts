@@ -1,13 +1,17 @@
 import { app, BaseWindow, WebContentsView, ipcMain, Menu } from 'electron'
+import type { WebContents } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { BrowserController } from './browser/BrowserController'
-import { AgentAction, BrowserState, ExecuteResult, NavKind } from './browser/types'
+import { AgentAction, BrowserState, ExecuteResult, NavKind, WindowAction } from './browser/types'
 import type { CoverageSummary, ScanLevel } from './discovery'
 
 const RAIL_WIDTH = 56
 const CHAT_WIDTH = 400
+const FRAME_BORDER = 1
+const TOPBAR_HEIGHT = 44
+const FRAME_COLOR = '#0d0d0d'
 const HOME_URL = 'https://www.google.com'
 const iconPath = app.isPackaged
   ? join(process.resourcesPath, 'build', 'icon.png')
@@ -27,16 +31,25 @@ function preloadPath(): string {
 }
 
 function sideWidth(total: number): number {
+  const usable = Math.max(0, total - FRAME_BORDER * 2)
   const wanted = chatOpen ? RAIL_WIDTH + CHAT_WIDTH : RAIL_WIDTH
-  return Math.max(RAIL_WIDTH, Math.min(wanted, total))
+  return Math.max(0, Math.min(wanted, usable))
 }
 
 function layout(): void {
   if (!win || win.isDestroyed()) return
   const { width, height } = win.getContentBounds()
   const side = sideWidth(width)
-  chatView.setBounds({ x: 0, y: 0, width: side, height })
-  targetView.setBounds({ x: side, y: 0, width: Math.max(0, width - side), height })
+  const x = FRAME_BORDER + side
+  const y = FRAME_BORDER + TOPBAR_HEIGHT
+
+  chatView.setBounds({ x: 0, y: 0, width, height })
+  targetView.setBounds({
+    x,
+    y,
+    width: Math.max(0, width - FRAME_BORDER - x),
+    height: Math.max(0, height - FRAME_BORDER - y)
+  })
 }
 
 function scheduleLayout(): void {
@@ -56,7 +69,9 @@ function snapshotState(): BrowserState {
     canGoForward: controller.canGoForward(),
     loading: controller.isLoading(),
     chatOpen,
-    vision: controller.isVisionOn()
+    vision: controller.isVisionOn(),
+    maximized: !win || win.isDestroyed() ? false : win.isMaximized(),
+    fullscreen: !win || win.isDestroyed() ? false : win.isFullScreen()
   }
 }
 
@@ -117,6 +132,51 @@ function navigate(kind: NavKind): void {
   pushState()
 }
 
+function toggleFullScreen(): void {
+  if (!win || win.isDestroyed()) return
+  win.setFullScreen(!win.isFullScreen())
+}
+
+function windowAction(action: WindowAction): void {
+  if (!win || win.isDestroyed()) return
+  switch (action) {
+    case 'minimize':
+      win.minimize()
+      break
+    case 'maximize':
+      if (win.isMaximized()) win.unmaximize()
+      else win.maximize()
+      break
+    case 'fullscreen':
+      toggleFullScreen()
+      break
+    case 'close':
+      win.close()
+      break
+  }
+  pushState()
+}
+
+function bindFullScreenKey(wc: WebContents): void {
+  wc.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || input.key !== 'F11') return
+    event.preventDefault()
+    toggleFullScreen()
+  })
+}
+
+function bindWindowEvents(): void {
+  const sync = (): void => {
+    scheduleLayout()
+    pushState()
+  }
+  win.on('resize', scheduleLayout)
+  win.on('maximize', sync)
+  win.on('unmaximize', sync)
+  win.on('enter-full-screen', sync)
+  win.on('leave-full-screen', sync)
+}
+
 function bindTargetEvents(): void {
   const wc = targetView.webContents
 
@@ -146,7 +206,16 @@ function bindTargetEvents(): void {
 
 function createWindow(): void {
   Menu.setApplicationMenu(null)
-  win = new BaseWindow({ width: 1600, height: 950, title: 'AFT', icon: iconPath })
+  win = new BaseWindow({
+    width: 1600,
+    height: 950,
+    minWidth: 900,
+    minHeight: 600,
+    title: 'AFT',
+    icon: iconPath,
+    frame: false,
+    backgroundColor: FRAME_COLOR
+  })
 
   chatView = new WebContentsView({
     webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true }
@@ -159,7 +228,9 @@ function createWindow(): void {
   win.contentView.addChildView(chatView)
   win.contentView.addChildView(targetView)
   layout()
-  win.on('resize', scheduleLayout)
+  bindWindowEvents()
+  bindFullScreenKey(chatView.webContents)
+  bindFullScreenKey(targetView.webContents)
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     chatView.webContents.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -206,6 +277,8 @@ app.whenReady().then(() => {
   )
 
   ipcMain.on('aft:nav', (_e, kind: NavKind) => navigate(kind))
+
+  ipcMain.on('aft:window', (_e, action: WindowAction) => windowAction(action))
 
   ipcMain.on('aft:chat', (_e, open: boolean) => {
     const next = Boolean(open)

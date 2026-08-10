@@ -47,6 +47,8 @@ export interface ExecuteResult {
 
 export type NavKind = 'back' | 'forward' | 'reload' | 'home' | 'stop'
 
+export type WindowAction = 'minimize' | 'maximize' | 'close' | 'fullscreen'
+
 export interface BrowserState {
   url: string
   title: string
@@ -55,4 +57,6 @@ export interface BrowserState {
   loading: boolean
   chatOpen: boolean
   vision: boolean
+  maximized: boolean
+  fullscreen: boolean
 }

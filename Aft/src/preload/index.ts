@@ -7,6 +7,7 @@ const api = {
   scan: (level: number) => ipcRenderer.invoke('aft:scan', level),
   coverage: () => ipcRenderer.invoke('aft:coverage'),
   nav: (kind: string): void => ipcRenderer.send('aft:nav', kind),
+  window: (action: string): void => ipcRenderer.send('aft:window', action),
   setChat: (open: boolean): void => ipcRenderer.send('aft:chat', open),
   requestState: (): void => ipcRenderer.send('aft:state'),
   onState: (fn: (state: unknown) => void): (() => void) => {
