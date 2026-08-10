@@ -1,5 +1,5 @@
-import { app, BaseWindow, WebContentsView, ipcMain, Menu } from 'electron'
-import type { WebContents } from 'electron'
+import { app, BaseWindow, WebContentsView, ipcMain, Menu, screen } from 'electron'
+import type { Rectangle, WebContents } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
@@ -8,10 +8,10 @@ import { AgentAction, BrowserState, ExecuteResult, NavKind, WindowAction } from 
 import type { CoverageSummary, ScanLevel } from './discovery'
 
 const FRAME = 40
-const DIVIDER = 0.2
+const DIVIDER = 1
 const CHAT_WIDTH = 320
-const STAGE_RADIUS = 10
-const FRAME_COLOR = '#0d0d0d'
+const STAGE_RADIUS = 0
+const FRAME_COLOR = '#1e1f22'
 const HOME_URL = 'https://www.google.com'
 const iconPath = app.isPackaged
   ? join(process.resourcesPath, 'build', 'icon.png')
@@ -36,19 +36,36 @@ function chatBlock(total: number): number {
   return Math.max(0, Math.min(wanted, usable))
 }
 
+function visibleArea(): Rectangle {
+  const bounds = win.getContentBounds()
+  if (!win.isMaximized()) return { x: 0, y: 0, width: bounds.width, height: bounds.height }
+
+  const work = screen.getDisplayMatching(bounds).workArea
+  const left = Math.max(0, work.x - bounds.x)
+  const top = Math.max(0, work.y - bounds.y)
+  const right = Math.max(0, bounds.x + bounds.width - (work.x + work.width))
+  const bottom = Math.max(0, bounds.y + bounds.height - (work.y + work.height))
+
+  return {
+    x: left,
+    y: top,
+    width: Math.max(0, bounds.width - left - right),
+    height: Math.max(0, bounds.height - top - bottom)
+  }
+}
+
 function layout(): void {
   if (!win || win.isDestroyed()) return
-  const { width, height } = win.getContentBounds()
-  const x = FRAME + chatBlock(width)
-  const y = FRAME
+  const area = visibleArea()
+  const x = area.x + FRAME + chatBlock(area.width)
+  const y = area.y + FRAME
 
-  chatView.setBounds({ x: 0, y: 0, width, height })
-  targetView.setBorderRadius(chatOpen ? 0 : STAGE_RADIUS)
+  chatView.setBounds(area)
   targetView.setBounds({
     x,
     y,
-    width: Math.max(0, width - FRAME - x),
-    height: Math.max(0, height - FRAME - y)
+    width: Math.max(0, area.x + area.width - FRAME - x),
+    height: Math.max(0, area.y + area.height - FRAME - y)
   })
 }
 
@@ -227,6 +244,7 @@ function createWindow(): void {
   })
 
   chatView.setBackgroundColor(FRAME_COLOR)
+  targetView.setBorderRadius(STAGE_RADIUS)
 
   win.contentView.addChildView(chatView)
   win.contentView.addChildView(targetView)
