@@ -8,7 +8,7 @@ import { AgentAction, BrowserState, ExecuteResult, NavKind, WindowAction } from 
 import type { CoverageSummary, ScanLevel } from './discovery'
 
 const FRAME = 40
-const DIVIDER = 1
+const DIVIDER = 0
 const CHAT_WIDTH = 320
 const STAGE_RADIUS = 0
 const FRAME_COLOR = '#1e1f22'
