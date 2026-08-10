@@ -8,9 +8,9 @@ import { AgentAction, BrowserState, ExecuteResult, NavKind, WindowAction } from 
 import type { CoverageSummary, ScanLevel } from './discovery'
 
 const CHAT_WIDTH = 360
-const CHAT_GAP = 6
+const CHAT_GAP = 1
 const FRAME_SIZE = 34
-const STAGE_RADIUS = 8
+const STAGE_RADIUS = 6
 const FRAME_COLOR = '#0d0d0d'
 const HOME_URL = 'https://www.google.com'
 const iconPath = app.isPackaged
@@ -44,6 +44,7 @@ function layout(): void {
   const y = FRAME_SIZE
 
   chatView.setBounds({ x: 0, y: 0, width, height })
+  targetView.setBorderRadius(chatOpen ? 0 : STAGE_RADIUS)
   targetView.setBounds({
     x,
     y,
@@ -227,7 +228,6 @@ function createWindow(): void {
   })
 
   chatView.setBackgroundColor(FRAME_COLOR)
-  targetView.setBorderRadius(STAGE_RADIUS)
 
   win.contentView.addChildView(chatView)
   win.contentView.addChildView(targetView)
