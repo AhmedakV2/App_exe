@@ -18,10 +18,118 @@ body {
     sans-serif;
 }
 
-.app {
+body {
+  background: #0d0d0d;
+}
+
+.frame {
   display: flex;
+  flex-direction: column;
   height: 100%;
   width: 100%;
+  background: #0d0d0d;
+  border: 1px solid #2f2f2f;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 44px;
+  height: 44px;
+  background: #141414;
+  border-bottom: 1px solid #242424;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-right: 4px;
+  color: #ef6c1a;
+}
+
+.topbar-drag {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+}
+
+.topbar-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 11px monospace;
+  letter-spacing: 1px;
+  color: #6d6d6d;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px 0 8px;
+  -webkit-app-region: no-drag;
+}
+
+.win-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  background: transparent;
+  color: #8a8a8a;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    color 90ms linear,
+    background 90ms linear;
+}
+
+.win-btn:hover {
+  color: #f0f0f0;
+  background: #262626;
+}
+
+.win-btn:active {
+  background: #2f2f2f;
+}
+
+.win-btn.danger:hover {
+  color: #fff;
+  background: #d13438;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.stage {
+  flex: 1;
+  min-width: 0;
+  background: #0d0d0d;
 }
 
 .rail {
@@ -85,8 +193,15 @@ body {
   cursor: default;
 }
 
+.topbar .rail-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+
 .panel {
-  flex: 1;
+  flex: 0 0 400px;
+  width: 400px;
   min-width: 0;
   display: flex;
   flex-direction: column;

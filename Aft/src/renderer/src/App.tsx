@@ -1,5 +1,11 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react'
-import type { AgentAction, BrowserState, ExecuteResult, NavKind } from '../../main/browser/types'
+import type {
+  AgentAction,
+  BrowserState,
+  ExecuteResult,
+  NavKind,
+  WindowAction
+} from '../../main/browser/types'
 
 type ParsedCommand = { kind: 'help' } | { kind: 'action'; action: AgentAction } | null
 type LineKind = 'in' | 'ok' | 'err' | 'el'
@@ -83,8 +89,30 @@ const GLYPHS: Record<string, React.JSX.Element> = {
       <path d="M6 11l6-6 6 6" />
     </>
   ),
-  collapse: <path d="M15 18l-6-6 6-6" />
+  collapse: <path d="M15 18l-6-6 6-6" />,
+  minimize: <path d="M5 12h14" />,
+  maximize: <rect x="5" y="5" width="14" height="14" rx="2" />,
+  restore: (
+    <>
+      <path d="M8 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" />
+      <rect x="4" y="8" width="12" height="12" rx="2" />
+    </>
+  ),
+  close: (
+    <>
+      <path d="M18 6L6 18" />
+      <path d="M6 6l12 12" />
+    </>
+  )
 }
+
+const Logo = memo(function Logo(): React.JSX.Element {
+  return (
+    <svg width="22" height="22" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+      <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
+    </svg>
+  )
+})
 
 const Glyph = memo(function Glyph({ name, size = 17 }: { name: string; size?: number }) {
   return (
@@ -124,6 +152,25 @@ const RailButton = memo(function RailButton({
   )
 })
 
+const WinButton = memo(function WinButton({
+  name,
+  title,
+  onClick,
+  danger
+}: {
+  name: string
+  title: string
+  onClick: () => void
+  danger?: boolean
+}) {
+  const cls = danger ? 'win-btn danger' : 'win-btn'
+  return (
+    <button className={cls} title={title} onClick={onClick} type="button">
+      <Glyph name={name} size={15} />
+    </button>
+  )
+})
+
 const Row = memo(function Row({ line }: { line: Line }) {
   return (
     <div className="row" style={{ color: COLORS[line.kind] }}>
@@ -139,7 +186,9 @@ const EMPTY_STATE: BrowserState = {
   canGoForward: false,
   loading: false,
   chatOpen: true,
-  vision: false
+  vision: false,
+  maximized: false,
+  fullscreen: false
 }
 
 export default function App(): React.JSX.Element {
@@ -196,6 +245,14 @@ export default function App(): React.JSX.Element {
     () => nav(state.loading ? 'stop' : 'reload'),
     [nav, state.loading]
   )
+
+  const winAction = useCallback((action: WindowAction): void => {
+    window.aft.window(action)
+  }, [])
+
+  const minimizeWindow = useCallback(() => winAction('minimize'), [winAction])
+  const maximizeWindow = useCallback(() => winAction('maximize'), [winAction])
+  const closeWindow = useCallback(() => winAction('close'), [winAction])
 
   const toggleChat = useCallback((): void => {
     setChatOpen((prev) => {
@@ -267,70 +324,94 @@ export default function App(): React.JSX.Element {
   )
 
   return (
-    <div className="app">
-      <aside className="rail">
-        <RailButton
-          name="chat"
-          title={chatOpen ? 'Agent chat kapat' : 'Agent chat ac'}
-          onClick={toggleChat}
-          active={chatOpen}
-        />
+    <div className="frame">
+      <header className="topbar">
+        <div className="topbar-left">
+          <span className="logo" title="AFT">
+            <Logo />
+          </span>
 
-        <span className="rail-sep" />
+          <RailButton name="back" title="Geri" onClick={goBack} disabled={!state.canGoBack} />
+          <RailButton
+            name="forward"
+            title="Ileri"
+            onClick={goForward}
+            disabled={!state.canGoForward}
+          />
+          <RailButton
+            name={state.loading ? 'stop' : 'reload'}
+            title={state.loading ? 'Durdur' : 'Yenile'}
+            onClick={refreshPage}
+          />
+          <RailButton name="home" title="Ana sayfa" onClick={goHome} />
+        </div>
 
-        <RailButton name="back" title="Geri" onClick={goBack} disabled={!state.canGoBack} />
-        <RailButton
-          name="forward"
-          title="Ileri"
-          onClick={goForward}
-          disabled={!state.canGoForward}
-        />
-        <RailButton
-          name={state.loading ? 'stop' : 'reload'}
-          title={state.loading ? 'Durdur' : 'Yenile'}
-          onClick={refreshPage}
-        />
-        <RailButton name="home" title="Ana sayfa" onClick={goHome} />
+        <div className="topbar-drag" onDoubleClick={maximizeWindow}>
+          <span className="topbar-title">{state.title || 'AFT'}</span>
+        </div>
 
-        <span className="rail-grow" />
+        <div className="topbar-right">
+          <WinButton name="minimize" title="Simge durumuna kucult" onClick={minimizeWindow} />
+          <WinButton
+            name={state.maximized ? 'restore' : 'maximize'}
+            title={state.maximized ? 'Onceki boyut' : 'Tam ekran yap'}
+            onClick={maximizeWindow}
+          />
+          <WinButton name="close" title="Kapat" onClick={closeWindow} danger />
+        </div>
+      </header>
 
-        <RailButton
-          name={state.vision ? 'eye' : 'eyeOff'}
-          title={state.vision ? 'Gorusu kapat' : 'Gorusu ac'}
-          onClick={() => void toggleVision()}
-          active={state.vision}
-        />
-      </aside>
+      <div className="body">
+        <aside className="rail">
+          <RailButton
+            name="chat"
+            title={chatOpen ? 'Agent chat kapat' : 'Agent chat ac'}
+            onClick={toggleChat}
+            active={chatOpen}
+          />
 
-      {chatOpen && (
-        <section className="panel">
-          <header className="panel-head">
-            <span className="brand">AGENT CHAT</span>
-            <button className="collapse" title="Chati kapat" onClick={toggleChat} type="button">
-              <Glyph name="collapse" size={15} />
-            </button>
-          </header>
+          <span className="rail-grow" />
 
-          <div className="log" ref={logRef} onScroll={onLogScroll}>
-            {lines.map((line) => (
-              <Row key={line.id} line={line} />
-            ))}
-          </div>
+          <RailButton
+            name={state.vision ? 'eye' : 'eyeOff'}
+            title={state.vision ? 'Gorusu kapat' : 'Gorusu ac'}
+            onClick={() => void toggleVision()}
+            active={state.vision}
+          />
+        </aside>
 
-          <div className="input">
-            <input
-              value={cmd}
-              onChange={onChange}
-              onKeyDown={onKeyDown}
-              placeholder=" Komutlar için 'a' yaz."
-              spellCheck={false}
-            />
-            <button onClick={() => void run()} type="button">
-              <Glyph name="send" size={16} />
-            </button>
-          </div>
-        </section>
-      )}
+        {chatOpen && (
+          <section className="panel">
+            <header className="panel-head">
+              <span className="brand">AGENT CHAT</span>
+              <button className="collapse" title="Chati kapat" onClick={toggleChat} type="button">
+                <Glyph name="collapse" size={15} />
+              </button>
+            </header>
+
+            <div className="log" ref={logRef} onScroll={onLogScroll}>
+              {lines.map((line) => (
+                <Row key={line.id} line={line} />
+              ))}
+            </div>
+
+            <div className="input">
+              <input
+                value={cmd}
+                onChange={onChange}
+                onKeyDown={onKeyDown}
+                placeholder=" Komutlar için 'a' yaz."
+                spellCheck={false}
+              />
+              <button onClick={() => void run()} type="button">
+                <Glyph name="send" size={16} />
+              </button>
+            </div>
+          </section>
+        )}
+
+        <div className="stage" />
+      </div>
     </div>
   )
 }
