@@ -108,13 +108,13 @@ const GLYPHS: Record<string, React.JSX.Element> = {
 
 const Logo = memo(function Logo(): React.JSX.Element {
   return (
-    <svg width="16" height="16" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+    <svg width="18" height="18" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
       <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
     </svg>
   )
 })
 
-const Glyph = memo(function Glyph({ name, size = 13 }: { name: string; size?: number }) {
+const Glyph = memo(function Glyph({ name, size = 14 }: { name: string; size?: number }) {
   return (
     <svg
       width={size}
@@ -312,9 +312,9 @@ export default function App(): React.JSX.Element {
   )
 
   return (
-    <div className="frame">
-      <header className="topbar">
-        <div className="topbar-left">
+    <div className="shell">
+      <header className="shell-bar">
+        <div className="bar-left">
           <span className="logo" title="AFT">
             <Logo />
           </span>
@@ -340,11 +340,11 @@ export default function App(): React.JSX.Element {
           <IconButton name="home" title="Ana sayfa" onClick={goHome} />
         </div>
 
-        <div className="topbar-drag" onDoubleClick={maximizeWindow}>
-          <span className="topbar-title">{state.title || 'AFT'}</span>
+        <div className="bar-drag" onDoubleClick={maximizeWindow}>
+          <span className="bar-title">{state.title || 'AFT'}</span>
         </div>
 
-        <div className="topbar-right">
+        <div className="bar-right">
           <IconButton name="minimize" title="Simge durumuna kucult" onClick={minimizeWindow} />
           <IconButton
             name={state.maximized ? 'restore' : 'maximize'}
@@ -355,18 +355,18 @@ export default function App(): React.JSX.Element {
         </div>
       </header>
 
-      <div className="main">
-        <div className="side">
-          <IconButton
-            name="chat"
-            title={chatOpen ? 'Agent chat kapat' : 'Agent chat ac'}
-            onClick={toggleChat}
-            active={chatOpen}
-          />
-        </div>
+      <aside className="shell-side">
+        <IconButton
+          name="chat"
+          title={chatOpen ? 'Agent chat kapat' : 'Agent chat ac'}
+          onClick={toggleChat}
+          active={chatOpen}
+        />
+      </aside>
 
-        <div className="content">
-          {chatOpen && (
+      <div className="workspace">
+        {chatOpen && (
+          <>
             <section className="panel">
               <header className="panel-head">
                 <span className="brand">AGENT CHAT</span>
@@ -394,10 +394,12 @@ export default function App(): React.JSX.Element {
                 </button>
               </div>
             </section>
-          )}
 
-          <div className="stage" />
-        </div>
+            <span className="divider" />
+          </>
+        )}
+
+        <div className="stage" />
       </div>
     </div>
   )
