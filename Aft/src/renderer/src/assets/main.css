@@ -55,7 +55,7 @@ body { background: #111; color: #eee; font: 13px system-ui, sans-serif; }
   gap: 6px;
   padding: 0 10px;
   height: 53px;
-  border-top: 2px solid #404652;
+  border-top: 2px solid #121212;
 }
 .input input {
   flex: 1 ; background: #1c1c1c; color: #eee; border: 1px solid #3a3a3a;
