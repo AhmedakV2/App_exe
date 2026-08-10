@@ -7,9 +7,9 @@ import { BrowserController } from './browser/BrowserController'
 import { AgentAction, BrowserState, ExecuteResult, NavKind, WindowAction } from './browser/types'
 import type { CoverageSummary, ScanLevel } from './discovery'
 
-const CHAT_WIDTH = 360
+const CHAT_WIDTH = 300
 const CHAT_GAP = 1
-const FRAME_SIZE = 34
+const FRAME_SIZE = 28
 const STAGE_RADIUS = 6
 const FRAME_COLOR = '#0d0d0d'
 const HOME_URL = 'https://www.google.com'

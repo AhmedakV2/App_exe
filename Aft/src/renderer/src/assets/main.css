@@ -8,9 +8,9 @@
   --faint: #5c5c5c;
   --accent: #ef6c1a;
   --danger: #d13438;
-  --frame-size: 34px;
-  --radius-outer: 12px;
-  --radius-inner: 8px;
+  --frame-size: 28px;
+  --radius-outer: 10px;
+  --radius-inner: 6px;
 }
 
 * {
@@ -62,7 +62,7 @@ button {
   display: flex;
   align-items: center;
   gap: 1px;
-  padding-left: 5px;
+  padding-left: 3px;
   -webkit-app-region: no-drag;
 }
 
@@ -70,9 +70,9 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  margin-right: 5px;
+  width: 22px;
+  height: 22px;
+  margin-right: 3px;
   color: var(--accent);
 }
 
@@ -102,7 +102,7 @@ button {
   display: flex;
   align-items: center;
   gap: 1px;
-  padding-right: 5px;
+  padding-right: 3px;
   -webkit-app-region: no-drag;
 }
 
@@ -111,8 +111,8 @@ button {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   background: transparent;
   color: var(--muted);
   border: 0;
@@ -171,7 +171,7 @@ button {
   align-items: center;
   flex: 0 0 var(--frame-size);
   width: var(--frame-size);
-  padding-top: 2px;
+  padding-top: 1px;
   -webkit-app-region: drag;
 }
 
@@ -193,8 +193,8 @@ button {
 }
 
 .panel {
-  flex: 0 0 360px;
-  width: 360px;
+  flex: 0 0 300px;
+  width: 300px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -208,10 +208,10 @@ button {
 .panel-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 0 0 30px;
-  height: 30px;
-  padding: 0 6px 0 10px;
+  gap: 6px;
+  flex: 0 0 26px;
+  height: 26px;
+  padding: 0 3px 0 8px;
 }
 
 .brand {
@@ -232,8 +232,8 @@ button {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   background: transparent;
   color: var(--muted);
   border: 0;
@@ -255,7 +255,7 @@ button {
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
-  padding: 2px 12px 8px;
+  padding: 0 8px 6px;
   font:
     12px/1.55 ui-monospace,
     monospace;
@@ -292,15 +292,15 @@ button {
 .composer {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex: 0 0 auto;
-  padding: 6px 8px 8px;
+  padding: 4px 6px 6px;
 }
 
 .composer input {
   flex: 1;
   min-width: 0;
-  height: 30px;
+  height: 26px;
   background: var(--surface-soft);
   color: var(--text);
   border: 0;
@@ -326,8 +326,8 @@ button {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   background: var(--surface-soft);
   color: var(--muted);
   border: 0;
