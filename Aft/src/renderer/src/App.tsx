@@ -1,10 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react'
-import type { ExecuteResult, AgentAction } from '../../main/browser/types'
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react'
+import type { AgentAction, BrowserState, ExecuteResult, NavKind } from '../../main/browser/types'
 
 type ParsedCommand = { kind: 'help' } | { kind: 'action'; action: AgentAction } | null
-type Line = { kind: 'in' | 'ok' | 'err' | 'el'; text: string }
+type LineKind = 'in' | 'ok' | 'err' | 'el'
+type Line = { id: number; kind: LineKind; text: string }
 
 const MAX_LINES = 300
+const PIN_SLACK = 48
+
+const COLORS: Record<LineKind, string> = {
+  err: '#ff6b6b',
+  in: '#ef6c1a',
+  el: '#8a8a8a',
+  ok: '#cfcfcf'
+}
 
 const COMMANDS: Record<string, { usage: string; build: (a: string[]) => AgentAction }> = {
   go: { usage: 'go <url>', build: (a) => ({ action: 'go_to_url', url: a[0] }) },
@@ -30,40 +39,203 @@ const COMMANDS: Record<string, { usage: string; build: (a: string[]) => AgentAct
     build: (a) => ({ action: 'press_key', key: a[1], index: a[0] ? Number(a[0]) : undefined })
   }
 }
+
+const GLYPHS: Record<string, React.JSX.Element> = {
+  chat: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,
+  back: <path d="M15 18l-6-6 6-6" />,
+  forward: <path d="M9 18l6-6-6-6" />,
+  reload: (
+    <>
+      <path d="M3 12a9 9 0 0 1 15.3-6.4" />
+      <path d="M18 4v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15.3 6.4" />
+      <path d="M6 20v-5h5" />
+    </>
+  ),
+  stop: (
+    <>
+      <path d="M18 6L6 18" />
+      <path d="M6 6l12 12" />
+    </>
+  ),
+  home: (
+    <>
+      <path d="M3 11l9-8 9 8" />
+      <path d="M5 10v10h14V10" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  eyeOff: (
+    <>
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <path d="M1 1l22 22" />
+    </>
+  ),
+  send: (
+    <>
+      <path d="M12 19V5" />
+      <path d="M6 11l6-6 6 6" />
+    </>
+  ),
+  collapse: <path d="M15 18l-6-6 6-6" />
+}
+
+const Glyph = memo(function Glyph({ name, size = 17 }: { name: string; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {GLYPHS[name]}
+    </svg>
+  )
+})
+
+const RailButton = memo(function RailButton({
+  name,
+  title,
+  onClick,
+  active,
+  disabled
+}: {
+  name: string
+  title: string
+  onClick: () => void
+  active?: boolean
+  disabled?: boolean
+}) {
+  const cls = active ? 'rail-btn on' : 'rail-btn'
+  return (
+    <button className={cls} title={title} onClick={onClick} disabled={disabled} type="button">
+      <Glyph name={name} />
+    </button>
+  )
+})
+
+const Row = memo(function Row({ line }: { line: Line }) {
+  return (
+    <div className="row" style={{ color: COLORS[line.kind] }}>
+      {line.text}
+    </div>
+  )
+})
+
+const EMPTY_STATE: BrowserState = {
+  url: '',
+  title: '',
+  canGoBack: false,
+  canGoForward: false,
+  loading: false,
+  chatOpen: true,
+  vision: false
+}
+
 export default function App(): React.JSX.Element {
   const [cmd, setCmd] = useState('')
-  const [vision, setVision] = useState(false)
   const [lines, setLines] = useState<Line[]>([])
-  const logRef = useRef<HTMLDivElement | null>(null)
-  const [navBusy, setNavBusy] = useState(false)
+  const [chatOpen, setChatOpen] = useState(true)
+  const [state, setState] = useState<BrowserState>(EMPTY_STATE)
 
-  const push = (kind: Line['kind'], text: string): void =>
-    setLines((p) => [...p, { kind, text }].slice(-MAX_LINES))
+  const logRef = useRef<HTMLDivElement | null>(null)
+  const pinnedRef = useRef(true)
+  const seqRef = useRef(0)
+  const cmdRef = useRef('')
+
+  const push = useCallback((kind: LineKind, text: string): void => {
+    seqRef.current += 1
+    const line: Line = { id: seqRef.current, kind, text }
+    setLines((prev) => {
+      const next = prev.length >= MAX_LINES ? prev.slice(prev.length - MAX_LINES + 1) : prev.slice()
+      next.push(line)
+      return next
+    })
+  }, [])
 
   useEffect(() => {
+    const off = window.aft.onState((next) => {
+      setState(next)
+      setChatOpen(next.chatOpen)
+    })
+    window.aft.requestState()
+    return off
+  }, [])
+
+  useEffect(() => {
+    if (!chatOpen || !pinnedRef.current) return
     const log = logRef.current
     if (!log) return
     log.scrollTop = log.scrollHeight
-  }, [lines])
+  }, [lines, chatOpen])
 
-  function parse(input: string): ParsedCommand {
+  const onLogScroll = useCallback((): void => {
+    const log = logRef.current
+    if (!log) return
+    pinnedRef.current = log.scrollHeight - log.scrollTop - log.clientHeight <= PIN_SLACK
+  }, [])
+
+  const nav = useCallback((kind: NavKind): void => {
+    window.aft.nav(kind)
+  }, [])
+
+  const goBack = useCallback(() => nav('back'), [nav])
+  const goForward = useCallback(() => nav('forward'), [nav])
+  const goHome = useCallback(() => nav('home'), [nav])
+  const refreshPage = useCallback(
+    () => nav(state.loading ? 'stop' : 'reload'),
+    [nav, state.loading]
+  )
+
+  const toggleChat = useCallback((): void => {
+    setChatOpen((prev) => {
+      const next = !prev
+      window.aft.setChat(next)
+      return next
+    })
+  }, [])
+
+  const toggleVision = useCallback(async (): Promise<void> => {
+    const next = !state.vision
+    setState((prev) => ({ ...prev, vision: next }))
+    try {
+      const res: ExecuteResult = await window.aft.setVision(next)
+      if (!res.ok) push('err', res.result)
+    } catch (err) {
+      push('err', 'KOPRU HATASI: ' + (err as Error).message)
+    }
+  }, [push, state.vision])
+
+  const parse = useCallback((input: string): ParsedCommand => {
     const [head = '', ...rest] = input.trim().split(/\s+/)
     const key = head.toLowerCase()
     if (key === 'a') return { kind: 'help' }
-
     const entry = COMMANDS[key]
     return entry ? { kind: 'action', action: entry.build(rest) } : null
-  }
+  }, [])
 
-  function report(res: ExecuteResult): void {
-    push(res.ok ? 'ok' : 'err', res.result)
-  }
+  const run = useCallback(async (): Promise<void> => {
+    const input = cmdRef.current.trim()
+    if (!input) return
 
-  async function run(): Promise<void> {
-    const parsed = parse(cmd)
-    if (!parsed) return push('err', 'Bilinmeyen komut. Liste icin: action')
+    const parsed = parse(input)
+    if (!parsed) {
+      push('err', 'Bilinmeyen komut. Liste icin: a')
+      return
+    }
 
-    push('in', '> ' + cmd)
+    push('in', '> ' + input)
+    cmdRef.current = ''
     setCmd('')
 
     if (parsed.kind === 'help') {
@@ -73,175 +245,92 @@ export default function App(): React.JSX.Element {
     }
 
     try {
-      report(await window.aft.execute(parsed.action))
+      const res = await window.aft.execute(parsed.action)
+      push(res.ok ? 'ok' : 'err', res.result)
     } catch (err) {
       push('err', 'KOPRU HATASI: ' + (err as Error).message)
     }
-  }
+  }, [parse, push])
 
-  async function toggleVision(): Promise<void> {
-    const next = !vision
-    setVision(next)
-    try {
-      await window.aft.setVision(next)
-    } catch (err) {
-      push('err', 'KOPRU HATASI: ' + (err as Error).message)
-    }
-  }
+  const onChange = useCallback((e: React.ChangeEvent<HTMLInputElement>): void => {
+    cmdRef.current = e.target.value
+    setCmd(e.target.value)
+  }, [])
 
-  async function runNav(label: string, fn: () => Promise<ExecuteResult>): Promise<void> {
-    if (navBusy) return
-    setNavBusy(true)
-    push('in', '> ' + label)
-
-    try {
-      report(await fn())
-    } catch (err) {
-      push('err', 'KOPRU HATASI: ' + (err as Error).message)
-    } finally {
-      setNavBusy(false)
-    }
-  }
-
-  async function goHome(): Promise<void> {
-    await runNav('home', () => window.aft.home())
-  }
-
-  async function goBack(): Promise<void> {
-    await runNav('back', () => window.aft.back())
-  }
-
-  async function goForward(): Promise<void> {
-    await runNav('forward', () => window.aft.forward())
-  }
-
-  async function reloadPage(): Promise<void> {
-    await runNav('reload', () => window.aft.reload())
-  }
-
-  const color = (k: Line['kind']): string =>
-    k === 'err' ? '#ff6b6b' : k === 'in' ? '#ef6c1a' : k === 'el' ? '#8a8a8a' : '#cfcfcf'
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>): void => {
+      if (e.key !== 'Enter') return
+      e.preventDefault()
+      void run()
+    },
+    [run]
+  )
 
   return (
-    <div className="shell">
-      <div className="bar">
-        <span className="brand">AGENT CHAT</span>
-        <button className="icon" onClick={goBack} disabled={navBusy} title="Geri">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-
-        <button className="icon" onClick={goForward} disabled={navBusy} title="Ileri">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M9 18l6-6-6-6" />
-          </svg>
-        </button>
-
-        <button className="icon" onClick={reloadPage} disabled={navBusy} title="Yenile">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M3 12a9 9 0 0 1 15.3-6.4" />
-            <path d="M18 4v5h-5" />
-            <path d="M21 12a9 9 0 0 1-15.3 6.4" />
-          </svg>
-        </button>
-        <button className="icon" onClick={goHome} disabled={navBusy} title="Google'a don">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M3 11l9-8 9 8" />
-            <path d="M5 10v10h14V10" />
-          </svg>
-        </button>
-        <button
-          className={vision ? 'icon on' : 'icon'}
-          onClick={toggleVision}
-          title={vision ? 'Gorusu kapat' : 'Gorusu ac'}
-        >
-          {vision ? (
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-          ) : (
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-              <path d="M1 1l22 22" />
-            </svg>
-          )}
-        </button>
-      </div>
-
-      <div className="log" ref={logRef}>
-        {lines.map((l, i) => (
-          <div key={i} style={{ color: color(l.kind) }}>
-            {l.text}
-          </div>
-        ))}
-      </div>
-
-      <div className="input">
-        <input
-          value={cmd}
-          onChange={(e) => setCmd(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && run()}
-          placeholder=" Komutlar için 'a' yaz."
+    <div className="app">
+      <aside className="rail">
+        <RailButton
+          name="chat"
+          title={chatOpen ? 'Agent chat kapat' : 'Agent chat ac'}
+          onClick={toggleChat}
+          active={chatOpen}
         />
-        <button onClick={run}>
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M12 19V5" />
-            <path d="M6 11l6-6 6 6" />
-          </svg>
-        </button>
-      </div>
+
+        <span className="rail-sep" />
+
+        <RailButton name="back" title="Geri" onClick={goBack} disabled={!state.canGoBack} />
+        <RailButton
+          name="forward"
+          title="Ileri"
+          onClick={goForward}
+          disabled={!state.canGoForward}
+        />
+        <RailButton
+          name={state.loading ? 'stop' : 'reload'}
+          title={state.loading ? 'Durdur' : 'Yenile'}
+          onClick={refreshPage}
+        />
+        <RailButton name="home" title="Ana sayfa" onClick={goHome} />
+
+        <span className="rail-grow" />
+
+        <RailButton
+          name={state.vision ? 'eye' : 'eyeOff'}
+          title={state.vision ? 'Gorusu kapat' : 'Gorusu ac'}
+          onClick={() => void toggleVision()}
+          active={state.vision}
+        />
+      </aside>
+
+      {chatOpen && (
+        <section className="panel">
+          <header className="panel-head">
+            <span className="brand">AGENT CHAT</span>
+            <button className="collapse" title="Chati kapat" onClick={toggleChat} type="button">
+              <Glyph name="collapse" size={15} />
+            </button>
+          </header>
+
+          <div className="log" ref={logRef} onScroll={onLogScroll}>
+            {lines.map((line) => (
+              <Row key={line.id} line={line} />
+            ))}
+          </div>
+
+          <div className="input">
+            <input
+              value={cmd}
+              onChange={onChange}
+              onKeyDown={onKeyDown}
+              placeholder=" Komutlar için 'a' yaz."
+              spellCheck={false}
+            />
+            <button onClick={() => void run()} type="button">
+              <Glyph name="send" size={16} />
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

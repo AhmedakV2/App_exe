@@ -31,6 +31,9 @@ const NAMED_KEYS: Record<string, KeyEvent> = {
   arrowright: { windowsVirtualKeyCode: 39, key: 'ArrowRight', code: 'ArrowRight' }
 }
 
+const LOAD_TIMEOUT = 12000
+const SYNC_DELAY = 260
+
 export class BrowserController {
   private readonly engine: DiscoveryEngine
   private readonly overlay: Overlay
@@ -38,6 +41,7 @@ export class BrowserController {
   private vision = false
   private level: ScanLevel = 1
   private actionQueue: Promise<void> = Promise.resolve()
+  private syncTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly view: WebContentsView) {
     this.engine = new DiscoveryEngine(view.webContents)
@@ -65,6 +69,7 @@ export class BrowserController {
   }
 
   dispose(): void {
+    this.cancelSync()
     this.graph = null
     this.engine.dispose()
   }
@@ -132,40 +137,77 @@ export class BrowserController {
     })
   }
 
-  async back(): Promise<{ result: string; page: PageState }> {
-    return this.enqueue(async () => {
-      if (!this.view.webContents.navigationHistory.canGoBack())
-        throw new Error('Geri gidilecek sayfa yok')
-
-      const loaded = this.waitForLoad()
-      this.view.webContents.navigationHistory.goBack()
-      await loaded
-
-      return this.finish('Geri gidildi', 120)
-    })
+  canGoBack(): boolean {
+    return this.view.webContents.navigationHistory.canGoBack()
   }
 
-  async forward(): Promise<{ result: string; page: PageState }> {
-    return this.enqueue(async () => {
-      if (!this.view.webContents.navigationHistory.canGoForward())
-        throw new Error('Ileri gidilecek sayfa yok')
-
-      const loaded = this.waitForLoad()
-      this.view.webContents.navigationHistory.goForward()
-      await loaded
-
-      return this.finish('Ileri gidildi', 120)
-    })
+  canGoForward(): boolean {
+    return this.view.webContents.navigationHistory.canGoForward()
   }
 
-  async reload(): Promise<{ result: string; page: PageState }> {
-    return this.enqueue(async () => {
-      const loaded = this.waitForLoad()
-      this.view.webContents.reloadIgnoringCache()
-      await loaded
+  isLoading(): boolean {
+    return this.view.webContents.isLoading()
+  }
 
-      return this.finish('Sayfa yenilendi', 120)
-    })
+  url(): string {
+    return this.view.webContents.getURL()
+  }
+
+  title(): string {
+    return this.view.webContents.getTitle()
+  }
+
+  back(): boolean {
+    if (!this.canGoBack()) return false
+    this.detachGraph()
+    this.view.webContents.navigationHistory.goBack()
+    return true
+  }
+
+  forward(): boolean {
+    if (!this.canGoForward()) return false
+    this.detachGraph()
+    this.view.webContents.navigationHistory.goForward()
+    return true
+  }
+
+  reload(): boolean {
+    this.detachGraph()
+    this.view.webContents.reload()
+    return true
+  }
+
+  stop(): boolean {
+    this.view.webContents.stop()
+    return true
+  }
+
+  home(url: string): boolean {
+    this.detachGraph()
+    void this.view.webContents.loadURL(url).catch(() => undefined)
+    return true
+  }
+
+  sync(): void {
+    this.engine.invalidate()
+    if (!this.vision) return
+    this.cancelSync()
+    this.syncTimer = setTimeout(() => {
+      this.syncTimer = null
+      void this.enqueue(() => this.refresh(this.level, true)).catch(() => undefined)
+    }, SYNC_DELAY)
+  }
+
+  private detachGraph(): void {
+    this.cancelSync()
+    this.graph = null
+    this.engine.invalidate()
+  }
+
+  private cancelSync(): void {
+    if (!this.syncTimer) return
+    clearTimeout(this.syncTimer)
+    this.syncTimer = null
   }
 
   private async refresh(level: ScanLevel, force: boolean): Promise<PageState> {
@@ -176,8 +218,9 @@ export class BrowserController {
 
   private async navigate(url: string): Promise<string> {
     if (!/^https?:\/\//.test(url)) throw new Error('Gecersiz URL: ' + url)
+    this.detachGraph()
     const loaded = this.waitForLoad()
-    await this.view.webContents.loadURL(url)
+    void this.view.webContents.loadURL(url).catch(() => undefined)
     await loaded
     this.invalidate()
     return 'Acilan sayfa: ' + this.view.webContents.getURL()
@@ -308,24 +351,27 @@ export class BrowserController {
     return next
   }
 
-  private waitForLoad(): Promise<void> {
+  private waitForLoad(timeout = LOAD_TIMEOUT): Promise<void> {
     return new Promise((resolve) => {
       const wc = this.view.webContents
+      let timer: ReturnType<typeof setTimeout> | null = null
+
       const done = (): void => {
+        if (timer) clearTimeout(timer)
+        timer = null
         wc.off('did-finish-load', done)
         wc.off('did-fail-load', done)
+        wc.off('did-stop-loading', done)
+        wc.off('destroyed', done)
         resolve()
       }
 
-      wc.once('did-finish-load', done)
-      wc.once('did-fail-load', done)
+      timer = setTimeout(done, timeout)
+      wc.on('did-finish-load', done)
+      wc.on('did-fail-load', done)
+      wc.on('did-stop-loading', done)
+      wc.once('destroyed', done)
     })
-  }
-
-  private async finish(result: string, delay = 120): Promise<{ result: string; page: PageState }> {
-    await this.settle(delay)
-    this.invalidate()
-    return { result, page: await this.refresh(this.level, true) }
   }
 
   private settle(ms = 120): Promise<void> {
