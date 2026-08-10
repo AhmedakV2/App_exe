@@ -28,7 +28,8 @@ body {
   height: 100%;
   width: 100%;
   background: #0d0d0d;
-  border: 1px solid #2f2f2f;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .topbar {
@@ -36,8 +37,7 @@ body {
   align-items: center;
   flex: 0 0 44px;
   height: 44px;
-  background: #141414;
-  border-bottom: 1px solid #242424;
+  background: transparent;
   -webkit-app-region: drag;
   user-select: none;
 }
@@ -119,11 +119,18 @@ body {
   background: #d13438;
 }
 
-.body {
-  display: flex;
+.body-wrap {
   flex: 1;
   min-height: 0;
+  padding: 0 44px 44px;
+}
+
+.body {
+  display: flex;
+  height: 100%;
   width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .stage {
@@ -141,14 +148,6 @@ body {
   gap: 8px;
   padding: 10px 0;
   background: #141414;
-  border-right: 1px solid #242424;
-}
-
-.rail-sep {
-  width: 24px;
-  height: 1px;
-  background: #2c2c2c;
-  margin: 2px 0;
 }
 
 .rail-grow {
@@ -206,7 +205,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #111;
+  background: #141414;
   contain: strict;
 }
 
@@ -216,8 +215,7 @@ body {
   gap: 8px;
   height: 46px;
   padding: 0 10px;
-  background: #161616;
-  border-bottom: 1px solid #2a2a2a;
+  background: #141414;
 }
 
 .brand {
@@ -287,7 +285,6 @@ body {
   gap: 6px;
   padding: 0 10px;
   height: 53px;
-  border-top: 2px solid #121212;
 }
 
 .input input {

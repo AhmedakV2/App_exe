@@ -343,6 +343,12 @@ export default function App(): React.JSX.Element {
             title={state.loading ? 'Durdur' : 'Yenile'}
             onClick={refreshPage}
           />
+          <RailButton
+            name={state.vision ? 'eye' : 'eyeOff'}
+            title={state.vision ? 'Gorusu kapat' : 'Gorusu ac'}
+            onClick={() => void toggleVision()}
+            active={state.vision}
+          />
           <RailButton name="home" title="Ana sayfa" onClick={goHome} />
         </div>
 
@@ -361,56 +367,51 @@ export default function App(): React.JSX.Element {
         </div>
       </header>
 
-      <div className="body">
-        <aside className="rail">
-          <RailButton
-            name="chat"
-            title={chatOpen ? 'Agent chat kapat' : 'Agent chat ac'}
-            onClick={toggleChat}
-            active={chatOpen}
-          />
+      <div className="body-wrap">
+        <div className="body">
+          <aside className="rail">
+            <RailButton
+              name="chat"
+              title={chatOpen ? 'Agent chat kapat' : 'Agent chat ac'}
+              onClick={toggleChat}
+              active={chatOpen}
+            />
 
-          <span className="rail-grow" />
+            <span className="rail-grow" />
+          </aside>
 
-          <RailButton
-            name={state.vision ? 'eye' : 'eyeOff'}
-            title={state.vision ? 'Gorusu kapat' : 'Gorusu ac'}
-            onClick={() => void toggleVision()}
-            active={state.vision}
-          />
-        </aside>
+          {chatOpen && (
+            <section className="panel">
+              <header className="panel-head">
+                <span className="brand">AGENT CHAT</span>
+                <button className="collapse" title="Chati kapat" onClick={toggleChat} type="button">
+                  <Glyph name="collapse" size={15} />
+                </button>
+              </header>
 
-        {chatOpen && (
-          <section className="panel">
-            <header className="panel-head">
-              <span className="brand">AGENT CHAT</span>
-              <button className="collapse" title="Chati kapat" onClick={toggleChat} type="button">
-                <Glyph name="collapse" size={15} />
-              </button>
-            </header>
+              <div className="log" ref={logRef} onScroll={onLogScroll}>
+                {lines.map((line) => (
+                  <Row key={line.id} line={line} />
+                ))}
+              </div>
 
-            <div className="log" ref={logRef} onScroll={onLogScroll}>
-              {lines.map((line) => (
-                <Row key={line.id} line={line} />
-              ))}
-            </div>
+              <div className="input">
+                <input
+                  value={cmd}
+                  onChange={onChange}
+                  onKeyDown={onKeyDown}
+                  placeholder=" Komutlar için 'a' yaz."
+                  spellCheck={false}
+                />
+                <button onClick={() => void run()} type="button">
+                  <Glyph name="send" size={16} />
+                </button>
+              </div>
+            </section>
+          )}
 
-            <div className="input">
-              <input
-                value={cmd}
-                onChange={onChange}
-                onKeyDown={onKeyDown}
-                placeholder=" Komutlar için 'a' yaz."
-                spellCheck={false}
-              />
-              <button onClick={() => void run()} type="button">
-                <Glyph name="send" size={16} />
-              </button>
-            </div>
-          </section>
-        )}
-
-        <div className="stage" />
+          <div className="stage" />
+        </div>
       </div>
     </div>
   )

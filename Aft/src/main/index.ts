@@ -9,8 +9,8 @@ import type { CoverageSummary, ScanLevel } from './discovery'
 
 const RAIL_WIDTH = 56
 const CHAT_WIDTH = 400
-const FRAME_BORDER = 1
-const TOPBAR_HEIGHT = 44
+const FRAME_SIZE = 44
+const STAGE_RADIUS = 10
 const FRAME_COLOR = '#0d0d0d'
 const HOME_URL = 'https://www.google.com'
 const iconPath = app.isPackaged
@@ -31,7 +31,7 @@ function preloadPath(): string {
 }
 
 function sideWidth(total: number): number {
-  const usable = Math.max(0, total - FRAME_BORDER * 2)
+  const usable = Math.max(0, total - FRAME_SIZE * 2)
   const wanted = chatOpen ? RAIL_WIDTH + CHAT_WIDTH : RAIL_WIDTH
   return Math.max(0, Math.min(wanted, usable))
 }
@@ -40,15 +40,15 @@ function layout(): void {
   if (!win || win.isDestroyed()) return
   const { width, height } = win.getContentBounds()
   const side = sideWidth(width)
-  const x = FRAME_BORDER + side
-  const y = FRAME_BORDER + TOPBAR_HEIGHT
+  const x = FRAME_SIZE + side
+  const y = FRAME_SIZE
 
   chatView.setBounds({ x: 0, y: 0, width, height })
   targetView.setBounds({
     x,
     y,
-    width: Math.max(0, width - FRAME_BORDER - x),
-    height: Math.max(0, height - FRAME_BORDER - y)
+    width: Math.max(0, width - FRAME_SIZE - x),
+    height: Math.max(0, height - FRAME_SIZE - y)
   })
 }
 
@@ -214,6 +214,7 @@ function createWindow(): void {
     title: 'AFT',
     icon: iconPath,
     frame: false,
+    roundedCorners: true,
     backgroundColor: FRAME_COLOR
   })
 
@@ -224,6 +225,9 @@ function createWindow(): void {
   targetView = new WebContentsView({
     webPreferences: { sandbox: true, contextIsolation: true, partition: 'persist:aft-agent' }
   })
+
+  chatView.setBackgroundColor(FRAME_COLOR)
+  targetView.setBorderRadius(STAGE_RADIUS)
 
   win.contentView.addChildView(chatView)
   win.contentView.addChildView(targetView)
