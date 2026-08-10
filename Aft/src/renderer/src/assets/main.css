@@ -1,5 +1,5 @@
 :root {
-  --frame: 32px;
+  --frame: 40px;
   --divider: 1px;
   --frame-bg: #0d0d0d;
   --divider-bg: #262626;
@@ -12,8 +12,8 @@
   --accent: #ef6c1a;
   --danger: #d13438;
   --radius-outer: 10px;
-  --radius-inner: 6px;
-  --control: 26px;
+  --radius-inner: 10px;
+  --control: 38px;
 }
 
 * {

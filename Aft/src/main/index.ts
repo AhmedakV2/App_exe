@@ -7,10 +7,10 @@ import { BrowserController } from './browser/BrowserController'
 import { AgentAction, BrowserState, ExecuteResult, NavKind, WindowAction } from './browser/types'
 import type { CoverageSummary, ScanLevel } from './discovery'
 
-const FRAME = 32
-const DIVIDER = 1
+const FRAME = 40
+const DIVIDER = 0.2
 const CHAT_WIDTH = 320
-const STAGE_RADIUS = 6
+const STAGE_RADIUS = 10
 const FRAME_COLOR = '#0d0d0d'
 const HOME_URL = 'https://www.google.com'
 const iconPath = app.isPackaged
