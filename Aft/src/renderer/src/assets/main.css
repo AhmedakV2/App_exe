@@ -1,6 +1,7 @@
 :root {
   --frame: 40px;
   --line: 1px;
+  --hairline: 0.5px;
   --line-color: #393b40;
   --chrome: #1e1f22;
   --void: #1e1f22;
@@ -186,13 +187,6 @@ button {
   width: 100%;
 }
 
-.divider {
-  flex: 0 0 var(--line);
-  width: var(--line);
-  height: 100%;
-  background: var(--line-color);
-}
-
 .stage {
   flex: 1;
   min-width: 0;
@@ -207,6 +201,7 @@ button {
   flex-direction: column;
   height: 100%;
   background: var(--chrome);
+  border-right: var(--hairline) solid var(--line-color);
   contain: strict;
 }
 

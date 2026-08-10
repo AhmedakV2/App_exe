@@ -373,37 +373,33 @@ export default function App(): React.JSX.Element {
 
       <div className="workspace">
         {chatOpen && (
-          <>
-            <section className="panel">
-              <header className="panel-head">
-                <span className="brand">AGENT CHAT</span>
-                <button className="collapse" title="Chati kapat" onClick={toggleChat} type="button">
-                  <Glyph name="collapse" size={15} />
-                </button>
-              </header>
+          <section className="panel">
+            <header className="panel-head">
+              <span className="brand">AGENT CHAT</span>
+              <button className="collapse" title="Chati kapat" onClick={toggleChat} type="button">
+                <Glyph name="collapse" size={15} />
+              </button>
+            </header>
 
-              <div className="log" ref={logRef} onScroll={onLogScroll}>
-                {lines.map((line) => (
-                  <Row key={line.id} line={line} />
-                ))}
-              </div>
+            <div className="log" ref={logRef} onScroll={onLogScroll}>
+              {lines.map((line) => (
+                <Row key={line.id} line={line} />
+              ))}
+            </div>
 
-              <div className="composer">
-                <input
-                  value={cmd}
-                  onChange={onChange}
-                  onKeyDown={onKeyDown}
-                  placeholder="Komutlar için 'a' yaz."
-                  spellCheck={false}
-                />
-                <button className="send" onClick={() => void run()} type="button">
-                  <Glyph name="send" size={16} />
-                </button>
-              </div>
-            </section>
-
-            <span className="divider" />
-          </>
+            <div className="composer">
+              <input
+                value={cmd}
+                onChange={onChange}
+                onKeyDown={onKeyDown}
+                placeholder="Komutlar için 'a' yaz."
+                spellCheck={false}
+              />
+              <button className="send" onClick={() => void run()} type="button">
+                <Glyph name="send" size={16} />
+              </button>
+            </div>
+          </section>
         )}
 
         <div className="stage" />
