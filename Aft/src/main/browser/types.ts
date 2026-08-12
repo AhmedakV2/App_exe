@@ -1,4 +1,4 @@
-import type { ActionOutcome } from '../action/types'
+import type { ActionOutcome } from '../action'
 
 export interface PageElement {
   i: number

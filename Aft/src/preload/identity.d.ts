@@ -1,14 +1,14 @@
-import type { DescriptorSummary } from '../main/identity/DescriptorStore'
-import type { HealingProposal } from '../main/identity/types'
-import type { ValidationReport } from '../main/model/validate'
-import type { ConsumerKind } from '../main/model/schema'
+import type { DescriptorSummary } from '../main/identity'
+import type { HealingProposal } from '../main/identity'
+import type { ValidationReport } from '../main/model'
+import type { ConsumerKind } from '../main/model'
 import type {
   CapturePayload,
   ChannelResult,
   ProjectionPayload,
   ResolvePayload,
   StatsPayload
-} from '../main/bridge/types'
+} from '../main/bridge'
 
 declare global {
   interface Window {
