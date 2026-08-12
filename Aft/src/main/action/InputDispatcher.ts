@@ -54,6 +54,12 @@ this.dispatchEvent(new Event('input', { bubbles: true }));
 this.dispatchEvent(new Event('change', { bubbles: true }));
 }`
 
+const READ_VALUE_FN = `function(){
+if ('value' in this) return String(this.value);
+if (this.isContentEditable) return String(this.textContent || '');
+return '';
+}`
+
 const SELECT_FN = `function(value){
 if (this.tagName !== 'SELECT') return false;
 var found = Array.prototype.find.call(this.options, function(option){
@@ -101,9 +107,32 @@ export class InputDispatcher {
 
   async typeText(text: string, delayMs: number): Promise<void> {
     for (const character of Array.from(text)) {
-      await this.tp.send('Input.insertText', { text: character })
+      await this.typeCharacter(character)
       if (delayMs > 0) await delay(delayMs)
     }
+  }
+
+  private async typeCharacter(character: string): Promise<void> {
+    const definition = printable(character)
+    if (!definition || !definition.code) {
+      await this.tp.send('Input.insertText', { text: character })
+      return
+    }
+
+    await this.tp.send('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      windowsVirtualKeyCode: definition.windowsVirtualKeyCode,
+      key: definition.key,
+      code: definition.code,
+      text: definition.text,
+      unmodifiedText: definition.text
+    })
+    await this.tp.send('Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      windowsVirtualKeyCode: definition.windowsVirtualKeyCode,
+      key: definition.key,
+      code: definition.code
+    })
   }
 
   async press(name: string): Promise<void> {
@@ -140,6 +169,16 @@ export class InputDispatcher {
 
   async directSetValue(sessionId: string, objectId: string, value: string): Promise<void> {
     await this.call(sessionId, objectId, SET_VALUE_FN, [{ value }])
+  }
+
+  async readValue(sessionId: string, objectId: string): Promise<string | null> {
+    const result = await this.tp.trySend<{ result?: { value?: unknown } }>(
+      'Runtime.callFunctionOn',
+      { objectId, functionDeclaration: READ_VALUE_FN, returnByValue: true },
+      sessionId
+    )
+    const value = result?.result?.value
+    return typeof value === 'string' ? value : null
   }
 
   async selectOption(sessionId: string, objectId: string, value: string): Promise<boolean> {
@@ -193,13 +232,22 @@ export class InputDispatcher {
 
 function printable(name: string): KeyDefinition | null {
   if (Array.from(name).length !== 1) return null
-  const code = name.toUpperCase().charCodeAt(0)
+  const upper = name.toUpperCase()
+  const point = upper.charCodeAt(0)
+
   return {
-    windowsVirtualKeyCode: code,
+    windowsVirtualKeyCode: point,
     key: name,
-    code: 'Key' + name.toUpperCase(),
+    code: codeOf(name, upper),
     text: name
   }
+}
+
+function codeOf(name: string, upper: string): string {
+  if (name >= '0' && name <= '9') return 'Digit' + name
+  if (upper >= 'A' && upper <= 'Z') return 'Key' + upper
+  if (name === ' ') return 'Space'
+  return ''
 }
 
 function buttonMask(button: string): number {

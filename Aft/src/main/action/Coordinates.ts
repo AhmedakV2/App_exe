@@ -21,8 +21,8 @@ export interface ViewBounds {
 }
 export function docToView(rect: Rect, scroll: Point, frameOffset: Point): Rect {
   return {
-    x: rect.x + scroll.x - frameOffset.x,
-    y: rect.y + scroll.y - frameOffset.y,
+    x: rect.x - scroll.x + frameOffset.x,
+    y: rect.y - scroll.y + frameOffset.y,
     w: rect.w,
     h: rect.h
   }
@@ -34,6 +34,12 @@ export function viewToDoc(rect: Rect, scroll: Point, frameOffset: Point): Rect {
     w: rect.w,
     h: rect.h
   }
+}
+export function viewToPage(point: Point, scroll: Point): Point {
+  return { x: point.x + scroll.x, y: point.y + scroll.y }
+}
+export function pageToView(point: Point, scroll: Point): Point {
+  return { x: point.x - scroll.x, y: point.y - scroll.y }
 }
 export function viewToScreen(point: Point, bounds: ViewBounds, dpr: number): Point {
   return {
@@ -102,4 +108,3 @@ function clamp(value: number, min: number, max: number): number {
 function round(value: number): number {
   return Math.round(value * 100) / 100
 }
-

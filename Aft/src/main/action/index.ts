@@ -3,6 +3,8 @@ export { ActionError, classify, describeCode } from './errors'
 export {
   docToView,
   viewToDoc,
+  viewToPage,
+  pageToView,
   viewToScreen,
   centerOf,
   probePoints,
@@ -15,5 +17,5 @@ export {
 export { Actionability, type ActionabilityTarget } from './Actionability'
 export { InputDispatcher } from './InputDispatcher'
 export { NavigationWaiter } from './NavigationWaiter'
-export { DialogManager, type FileChooserRequest } from './DialogManager'
+export { DialogManager, FILE_CHOOSER_TIMEOUT_MS, type FileChooserRequest } from './DialogManager'
 export { ActionEngine, type ActionEngineOptions, type DescriptorLookup } from './ActionEngine'

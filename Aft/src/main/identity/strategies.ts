@@ -121,13 +121,33 @@ const textContent: Strategy = {
     const tag = record.parts['tag'] ?? ''
     const exact = index.byText(text)
     if (exact.length) return cap(exact)
+    if (text.length < 4) return []
 
-    return cap(
-      index
-        .byTag(tag)
-        .filter((element) => normalizeText(element.text, 64).includes(text) && text.length >= 4)
-    )
+    return cap(index.byTag(tag).filter((element) => normalizeText(element.text, 64).includes(text)))
   }
+}
+
+const pathIndexes = new WeakMap<ModelIndex, Map<string, Map<string, ElementModel[]>>>()
+
+function pathIndex(index: ModelIndex, tag: string): Map<string, ElementModel[]> {
+  let byTag = pathIndexes.get(index)
+  if (!byTag) {
+    byTag = new Map<string, Map<string, ElementModel[]>>()
+    pathIndexes.set(index, byTag)
+  }
+  const cached = byTag.get(tag)
+  if (cached) return cached
+
+  const built = new Map<string, ElementModel[]>()
+  for (const element of index.byTag(tag)) {
+    const path = structuralPath(element, index)
+    if (!path) continue
+    const bucket = built.get(path)
+    if (bucket) bucket.push(element)
+    else built.set(path, [element])
+  }
+  byTag.set(tag, built)
+  return built
 }
 
 const structure: Strategy = {
@@ -146,7 +166,8 @@ const structure: Strategy = {
   match(record, index) {
     const path = record.parts['path'] ?? ''
     const tag = record.parts['tag'] ?? ''
-    return cap(index.byTag(tag).filter((element) => structuralPath(element, index) === path))
+    if (!path || !tag) return []
+    return cap(pathIndex(index, tag).get(path) ?? [])
   }
 }
 

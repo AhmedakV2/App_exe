@@ -1,6 +1,6 @@
 export { DiscoveryEngine } from './DiscoveryEngine'
 export { ElementGraph } from './ElementGraph'
-export { Transport, ProtocolError } from './Transport'
+export { Transport, ProtocolError, COMMAND_TIMEOUT_MS } from './Transport'
 export { StabilityWaiter, delay } from './StabilityWaiter'
 export { FrameRegistry, type FrameRecord } from './FrameRegistry'
 export { captureSession, type DocSnap, type DocNode, type SessionSnap } from './SnapshotCollector'

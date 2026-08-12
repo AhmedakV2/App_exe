@@ -3,6 +3,7 @@ import type { Rectangle, WebContents } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
+import { mountIdentity, unmountIdentity } from './bridge'
 import { BrowserController } from './browser/BrowserController'
 import { AgentAction, BrowserState, ExecuteResult, NavKind, WindowAction } from './browser/types'
 import type { CoverageSummary, ScanLevel } from './discovery'
@@ -104,12 +105,18 @@ function pushState(): void {
 }
 
 function respond(
-  handler: () => Promise<{ result: string; page: ExecuteResult['page'] }>
+  handler: () => Promise<Omit<ExecuteResult, 'ok' | 'vision'> & { ok?: boolean }>
 ): Promise<ExecuteResult> {
   return handler().then(
     (out) => {
       pushState()
-      return { ok: true, result: out.result, page: out.page, vision: controller.isVisionOn() }
+      return {
+        ok: out.ok ?? true,
+        result: out.result,
+        page: out.page,
+        outcome: out.outcome,
+        vision: controller.isVisionOn()
+      }
     },
     (err: unknown) => {
       pushState()
@@ -117,6 +124,7 @@ function respond(
         ok: false,
         result: err instanceof Error ? err.message : String(err),
         page: null,
+        outcome: null,
         vision: controller.isVisionOn()
       }
     }
@@ -263,9 +271,14 @@ function createWindow(): void {
   controller.attach()
   bindTargetEvents()
 
+  void mountIdentity(controller).catch(() => undefined)
   void targetView.webContents.loadURL(HOME_URL).catch(() => undefined)
 
-  win.on('closed', () => controller.dispose())
+  win.on('closed', () => {
+    void unmountIdentity()
+      .catch(() => undefined)
+      .finally(() => controller.dispose())
+  })
   win.show()
 }
 
@@ -281,7 +294,7 @@ app.whenReady().then(() => {
       const target = normalizeLevel(level)
       controller.setLevel(target)
       const page = await controller.scan(target)
-      return { result: 'Tarama tamam: seviye ' + target, page }
+      return { result: 'Tarama tamam: seviye ' + target, page, outcome: null }
     })
   )
 
@@ -293,7 +306,7 @@ app.whenReady().then(() => {
   ipcMain.handle('aft:vision', (_e, on: boolean): Promise<ExecuteResult> =>
     respond(async () => {
       const page = await controller.setVision(on)
-      return { result: on ? 'Gorus acildi' : 'Gorus kapatildi', page }
+      return { result: on ? 'Gorus acildi' : 'Gorus kapatildi', page, outcome: null }
     })
   )
 

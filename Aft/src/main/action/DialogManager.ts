@@ -3,12 +3,20 @@ import type { DialogPolicy, DialogRecord, DownloadRecord } from './types'
 
 const HISTORY_CAP = 50
 
+const CHOOSER_TIMEOUT_MS = 4000
+
+function pause(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export interface FileChooserRequest {
   backendNodeId: number
   sessionId: string
   mode: string
   at: number
 }
+
+export const FILE_CHOOSER_TIMEOUT_MS = CHOOSER_TIMEOUT_MS
 
 export class DialogManager {
   private readonly dialogs: DialogRecord[] = []
@@ -77,6 +85,20 @@ export class DialogManager {
 
   chooserRequest(): FileChooserRequest | null {
     return this.lastChooser
+  }
+
+  async awaitChooser(since: number, timeoutMs: number): Promise<FileChooserRequest | null> {
+    const deadline = Date.now() + timeoutMs
+
+    while (Date.now() < deadline) {
+      const chooser = this.lastChooser
+      if (chooser && chooser.at >= since) {
+        this.lastChooser = null
+        return chooser
+      }
+      await pause(30)
+    }
+    return null
   }
 
   dispose(): void {
