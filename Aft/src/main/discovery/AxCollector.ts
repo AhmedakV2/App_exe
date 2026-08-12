@@ -24,16 +24,25 @@ export type AxMap = Map<string, AxInfo>
 
 export async function collectAx(tp: Transport, sessionIds: string[]): Promise<AxMap> {
   const out: AxMap = new Map()
-  for (const sessionId of sessionIds) {
-    await tp.trySend('Accessibility.enable', {}, sessionId)
-    const res = await tp.trySend<{ nodes: AxNode[] }>('Accessibility.getFullAXTree', {}, sessionId)
-    if (!res?.nodes) continue
-    for (const node of res.nodes) {
+  const trees = await Promise.all(sessionIds.map((sessionId) => collectOne(tp, sessionId)))
+
+  for (const tree of trees) {
+    if (!tree) continue
+    for (const node of tree.nodes) {
       if (typeof node.backendDOMNodeId !== 'number') continue
-      out.set(sessionId + ':' + node.backendDOMNodeId, toInfo(node))
+      out.set(tree.sessionId + ':' + node.backendDOMNodeId, toInfo(node))
     }
   }
   return out
+}
+
+async function collectOne(
+  tp: Transport,
+  sessionId: string
+): Promise<{ sessionId: string; nodes: AxNode[] } | null> {
+  await tp.trySend('Accessibility.enable', {}, sessionId)
+  const res = await tp.trySend<{ nodes: AxNode[] }>('Accessibility.getFullAXTree', {}, sessionId)
+  return res?.nodes ? { sessionId, nodes: res.nodes } : null
 }
 
 function toInfo(node: AxNode): AxInfo {

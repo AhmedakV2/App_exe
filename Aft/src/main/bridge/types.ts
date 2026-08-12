@@ -1,8 +1,8 @@
-import type { ConsumerKind } from '../model/schema'
-import type { ConsumerProjection } from '../model/projection'
-import type { ValidationReport } from '../model/validate'
-import type { DescriptorSummary } from '../identity/DescriptorStore'
-import type { Descriptor, HealingProposal, Resolution, StrategyStat } from '../identity/types'
+import type { ConsumerKind } from '../model'
+import type { ConsumerProjection } from '../model'
+import type { ValidationReport } from '../model'
+import type { DescriptorSummary } from '../identity'
+import type { Descriptor, HealingProposal, Resolution, StrategyStat } from '../identity'
 
 export type IdentityChannelName =
   | 'aft:identity:capture'

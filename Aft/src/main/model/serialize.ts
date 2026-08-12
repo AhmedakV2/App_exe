@@ -169,7 +169,8 @@ function buildGeometry(node: GraphNode): Geometry {
 
 function buildVisibility(node: GraphNode): Visibility {
   const state: VisibilityState = !node.visible ? 'hidden' : node.inViewport ? 'visible' : 'clipped'
-  const raw = Number(node.style['opacity'])
+  const declared = node.style['opacity'] ?? ''
+  const raw = declared === '' ? 1 : Number(declared)
 
   return {
     state,

@@ -13,13 +13,18 @@ export class ProtocolError extends Error {
 
 export type EventHandler = (params: Record<string, unknown>, sessionId: string) => void
 
+export const COMMAND_TIMEOUT_MS = 15000
+
 export class Transport {
   private readonly handlers = new Map<string, Set<EventHandler>>()
   private readonly parents = new Map<string, string>()
   private readonly order: string[] = ['']
   private ready = false
 
-  constructor(private readonly wc: WebContents) {}
+  constructor(
+    private readonly wc: WebContents,
+    private readonly timeoutMs: number = COMMAND_TIMEOUT_MS
+  ) {}
 
   get sessions(): string[] {
     return this.order.slice()
@@ -69,13 +74,35 @@ export class Transport {
 
   async send<T>(method: string, params: object = {}, sessionId = ''): Promise<T> {
     try {
-      const res = sessionId
-        ? await this.wc.debugger.sendCommand(method, params, sessionId)
-        : await this.wc.debugger.sendCommand(method, params)
-      return res as T
+      const command = sessionId
+        ? this.wc.debugger.sendCommand(method, params, sessionId)
+        : this.wc.debugger.sendCommand(method, params)
+      return (await this.deadline(command, method, sessionId)) as T
     } catch (e) {
+      if (e instanceof ProtocolError) throw e
       throw new ProtocolError(method, sessionId, e instanceof Error ? e.message : String(e))
     }
+  }
+
+  private deadline(command: Promise<unknown>, method: string, sessionId: string): Promise<unknown> {
+    if (this.timeoutMs <= 0) return command
+
+    return new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new ProtocolError(method, sessionId, 'zaman asimi ' + this.timeoutMs + ' ms'))
+      }, this.timeoutMs)
+
+      command.then(
+        (value) => {
+          clearTimeout(timer)
+          resolve(value)
+        },
+        (error: unknown) => {
+          clearTimeout(timer)
+          reject(error instanceof Error ? error : new Error(String(error)))
+        }
+      )
+    })
   }
 
   async trySend<T>(method: string, params: object = {}, sessionId = ''): Promise<T | null> {

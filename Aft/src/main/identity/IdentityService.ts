@@ -32,6 +32,7 @@ export class IdentityService {
   private readonly resolver: Resolver
   private readonly healer: Healer
   private readonly resolveOptions: Partial<ResolveOptions>
+  private readonly indexes = new WeakMap<ElementGraph, ModelIndex>()
 
   constructor(options: IdentityOptions) {
     this.history = new HistoryStore(options.historyPath)
@@ -45,7 +46,12 @@ export class IdentityService {
   }
 
   index(graph: ElementGraph): ModelIndex {
-    return new ModelIndex(assertSnapshot(toSnapshot(graph)))
+    const cached = this.indexes.get(graph)
+    if (cached) return cached
+
+    const index = new ModelIndex(assertSnapshot(toSnapshot(graph)))
+    this.indexes.set(graph, index)
+    return index
   }
 
   captureByRef(graph: ElementGraph, ref: string): CaptureResult {

@@ -156,7 +156,7 @@ export function projectScoped(index: ModelIndex, refs: readonly string[]): Consu
   return {
     ...base,
     elements,
-    truncated: elements.length < base.elements.length,
+    truncated: base.truncated,
     estimatedTokens: elements.reduce((total, element) => total + estimateTokens(element), 0)
   }
 }

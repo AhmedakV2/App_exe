@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { join } from 'node:path'
+import type { DescriptorLookup } from '../action'
 import type { ElementGraph } from '../discovery'
 import { DescriptorStore } from '../identity'
 import { DEFAULT_HEALING, type HealingPolicy } from '../identity'
@@ -122,6 +123,24 @@ export class IdentityChannel {
     this.cachedIndex = null
   }
 
+  lookup(descriptorId: string): DescriptorLookup | null {
+    const descriptor = this.descriptors.get(descriptorId)
+    const graph = this.getGraph()
+    if (!descriptor || !graph) return null
+
+    const outcome = this.service.resolve(descriptor, this.indexOf(graph))
+    if (outcome.healed) this.descriptors.replace(descriptorId, outcome.descriptor)
+
+    const candidate = outcome.resolution.candidate
+    if (!candidate) return null
+
+    return {
+      ref: candidate.ref,
+      confidence: outcome.resolution.confidence,
+      ambiguous: outcome.resolution.ambiguous
+    }
+  }
+
   async dispose(): Promise<void> {
     if (this.registered) {
       for (const channel of CHANNELS) ipcMain.removeHandler(channel)
@@ -165,10 +184,10 @@ export class IdentityChannel {
   }
 
   private project(kind: ConsumerKind): ProjectionPayload {
-    const snapshot = this.snapshotOf(this.requireGraph())
+    const index = this.indexOf(this.requireGraph())
     return {
-      projection: project(new ModelIndex(snapshot), kind),
-      validation: validateSnapshot(snapshot)
+      projection: project(index, kind),
+      validation: validateSnapshot(index.snapshot)
     }
   }
 
@@ -199,8 +218,7 @@ export class IdentityChannel {
   }
 
   private snapshotOf(graph: ElementGraph): ReturnType<typeof toSnapshot> {
-    if (this.cachedGraph === graph && this.cachedIndex) return this.cachedIndex.snapshot
-    return toSnapshot(graph)
+    return this.indexOf(graph).snapshot
   }
 
   private requireGraph(): ElementGraph {

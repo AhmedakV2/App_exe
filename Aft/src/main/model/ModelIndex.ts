@@ -11,6 +11,8 @@ const ANCESTOR_LIMIT = 64
 
 const NEIGHBOUR_LIMIT = 24
 
+const GRID_CELL = 128
+
 export class ModelIndex {
   private readonly byRef = new Map<string, ElementModel>()
   private readonly byOrdinal = new Map<number, ElementModel>()
@@ -20,18 +22,25 @@ export class ModelIndex {
   private readonly byAccessibleName = new Map<string, ElementModel[]>()
   private readonly bySignature = new Map<string, ElementModel[]>()
   private readonly byTagName = new Map<string, ElementModel[]>()
+  private readonly byCell = new Map<string, ElementModel[]>()
+  private readonly typeRank = new Map<string, number>()
   private readonly addressableList: ElementModel[] = []
+  private readonly elementList: ElementModel[] = []
+  private readonly interactiveList: ElementModel[] = []
 
   constructor(readonly snapshot: GraphSnapshot) {
     for (const frame of snapshot.frames) this.byFrame.set(frame.frameId, frame)
 
     for (const element of snapshot.elements) {
       this.byRef.set(element.identity.ref, element)
+      if (element.interactivity.interactive) this.interactiveList.push(element)
       if (element.identity.ordinal >= 0) {
         this.byOrdinal.set(element.identity.ordinal, element)
         this.addressableList.push(element)
+        this.indexCell(element)
       }
       if (element.nodeType !== 1) continue
+      this.elementList.push(element)
       this.indexAttributes(element)
       this.indexText(element)
       push(this.byTagName, element.tag, element)
@@ -53,16 +62,16 @@ export class ModelIndex {
     return { width: this.snapshot.viewport.width, height: this.snapshot.viewport.height }
   }
 
-  elements(): ElementModel[] {
-    return this.snapshot.elements.filter((element) => element.nodeType === 1)
+  elements(): readonly ElementModel[] {
+    return this.elementList
   }
 
-  addressable(): ElementModel[] {
-    return this.addressableList.slice()
+  addressable(): readonly ElementModel[] {
+    return this.addressableList
   }
 
-  interactive(): ElementModel[] {
-    return this.snapshot.elements.filter((element) => element.interactivity.interactive)
+  interactive(): readonly ElementModel[] {
+    return this.interactiveList
   }
 
   blindSpots(): BlindSpotModel[] {
@@ -129,15 +138,19 @@ export class ModelIndex {
   }
 
   typeOrdinal(element: ElementModel): number {
+    const cached = this.typeRank.get(element.identity.ref)
+    if (cached !== undefined) return cached
+
     const parent = this.parent(element)
     if (!parent) return 1
-    let rank = 0
+
+    const counters = new Map<string, number>()
     for (const child of this.children(parent)) {
-      if (child.tag !== element.tag) continue
-      rank++
-      if (child.identity.ref === element.identity.ref) return rank
+      const next = (counters.get(child.tag) ?? 0) + 1
+      counters.set(child.tag, next)
+      this.typeRank.set(child.identity.ref, next)
     }
-    return rank || 1
+    return this.typeRank.get(element.identity.ref) ?? 1
   }
 
   closestForm(element: ElementModel): ElementModel | undefined {
@@ -175,23 +188,39 @@ export class ModelIndex {
   near(element: ElementModel, radius: number, limit = NEIGHBOUR_LIMIT): ElementModel[] {
     const anchor = element.geometry.viewport
     if (!anchor) return []
-    const scored: { element: ElementModel; distance: number }[] = []
 
-    for (const candidate of this.addressableList) {
-      if (candidate.identity.ref === element.identity.ref) continue
-      const rect = candidate.geometry.viewport
-      if (!rect) continue
-      const distance = gap(anchor, rect)
-      if (distance > radius) continue
-      scored.push({ element: candidate, distance })
+    const scored: { element: ElementModel; distance: number }[] = []
+    const seen = new Set<string>([element.identity.ref])
+
+    for (const cell of cellsFor(anchor, radius)) {
+      const bucket = this.byCell.get(cell)
+      if (!bucket) continue
+      for (const candidate of bucket) {
+        const ref = candidate.identity.ref
+        if (seen.has(ref)) continue
+        seen.add(ref)
+        const rect = candidate.geometry.viewport
+        if (!rect) continue
+        const distance = gap(anchor, rect)
+        if (distance > radius) continue
+        scored.push({ element: candidate, distance })
+      }
     }
 
-    scored.sort((a, b) => a.distance - b.distance)
+    scored.sort(
+      (a, b) => a.distance - b.distance || a.element.identity.ordinal - b.element.identity.ordinal
+    )
     return scored.slice(0, limit).map((entry) => entry.element)
   }
 
   query(predicate: (element: ElementModel) => boolean): ElementModel[] {
     return this.snapshot.elements.filter(predicate)
+  }
+
+  private indexCell(element: ElementModel): void {
+    const rect = element.geometry.viewport
+    if (!rect) return
+    for (const cell of cellsFor(rect, 0)) push(this.byCell, cell, element)
   }
 
   private indexAttributes(element: ElementModel): void {
@@ -222,6 +251,23 @@ function push(map: Map<string, ElementModel[]>, key: string, element: ElementMod
   const bucket = map.get(key)
   if (bucket) bucket.push(element)
   else map.set(key, [element])
+}
+
+function cellsFor(rect: Rect, margin: number): string[] {
+  const out: string[] = []
+  const x0 = Math.floor((rect.x - margin) / GRID_CELL)
+  const y0 = Math.floor((rect.y - margin) / GRID_CELL)
+  const x1 = Math.floor((rect.x + rect.w + margin) / GRID_CELL)
+  const y1 = Math.floor((rect.y + rect.h + margin) / GRID_CELL)
+  const limit = 4096
+
+  for (let x = x0; x <= x1; x++) {
+    for (let y = y0; y <= y1; y++) {
+      out.push(x + ':' + y)
+      if (out.length >= limit) return out
+    }
+  }
+  return out
 }
 
 function gap(a: Rect, b: Rect): number {

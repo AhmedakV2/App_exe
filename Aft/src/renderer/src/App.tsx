@@ -43,7 +43,20 @@ const COMMANDS: Record<string, { usage: string; build: (a: string[]) => AgentAct
   press: {
     usage: 'press <index> <key>',
     build: (a) => ({ action: 'press_key', key: a[1], index: a[0] ? Number(a[0]) : undefined })
-  }
+  },
+  sel: {
+    usage: 'sel <index> <deger>',
+    build: (a) => ({
+      action: 'select_option',
+      index: Number(a[0]),
+      optionValue: a.slice(1).join(' ')
+    })
+  },
+  upload: {
+    usage: 'upload <index> <dosya...>',
+    build: (a) => ({ action: 'upload', index: Number(a[0]), files: a.slice(1) })
+  },
+  wait: { usage: 'wait', build: () => ({ action: 'wait' }) }
 }
 
 const GLYPHS: Record<string, React.JSX.Element> = {
@@ -168,6 +181,37 @@ const Row = memo(function Row({ line }: { line: Line }) {
     </div>
   )
 })
+
+function diagnose(result: ExecuteResult): string[] {
+  const outcome = result.outcome
+  if (!outcome) return []
+
+  const lines: string[] = []
+  if (!result.ok && outcome.code) lines.push('kod: ' + outcome.code)
+  if (result.ok && outcome.mode === 'direct-call') lines.push('yol: dogrudan cagri')
+
+  const report = outcome.actionability
+  if (!result.ok && report) {
+    lines.push(
+      'hazirlik: ' +
+        report.reason +
+        ' (gorunur ' +
+        report.visible +
+        ', etkin ' +
+        report.enabled +
+        ', kararli ' +
+        report.stable +
+        ', ustu acik ' +
+        report.unobstructed +
+        ')'
+    )
+  }
+  for (const dialog of outcome.dialogs) lines.push('diyalog: ' + dialog.type + ' ' + dialog.policy)
+  for (const download of outcome.downloads) {
+    lines.push('indirme: ' + download.fileName + ' ' + download.state)
+  }
+  return lines
+}
 
 const EMPTY_STATE: BrowserState = {
   url: '',
@@ -299,6 +343,7 @@ export default function App(): React.JSX.Element {
     try {
       const res = await window.aft.execute(parsed.action)
       push(res.ok ? 'ok' : 'err', res.result)
+      for (const detail of diagnose(res)) push('el', '  ' + detail)
     } catch (err) {
       push('err', 'KOPRU HATASI: ' + (err as Error).message)
     }
