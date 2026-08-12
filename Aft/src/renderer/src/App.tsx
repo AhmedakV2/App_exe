@@ -1,5 +1,11 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react'
-import type { AgentAction, BrowserState, ExecuteResult, NavKind } from '../../main/browser/types'
+import type {
+  AgentAction,
+  BrowserState,
+  ExecuteResult,
+  NavKind,
+  WindowAction
+} from '../../main/browser/types'
 
 type ParsedCommand = { kind: 'help' } | { kind: 'action'; action: AgentAction } | null
 type LineKind = 'in' | 'ok' | 'err' | 'el'
@@ -37,7 +43,20 @@ const COMMANDS: Record<string, { usage: string; build: (a: string[]) => AgentAct
   press: {
     usage: 'press <index> <key>',
     build: (a) => ({ action: 'press_key', key: a[1], index: a[0] ? Number(a[0]) : undefined })
-  }
+  },
+  sel: {
+    usage: 'sel <index> <deger>',
+    build: (a) => ({
+      action: 'select_option',
+      index: Number(a[0]),
+      optionValue: a.slice(1).join(' ')
+    })
+  },
+  upload: {
+    usage: 'upload <index> <dosya...>',
+    build: (a) => ({ action: 'upload', index: Number(a[0]), files: a.slice(1) })
+  },
+  wait: { usage: 'wait', build: () => ({ action: 'wait' }) }
 }
 
 const GLYPHS: Record<string, React.JSX.Element> = {
@@ -83,10 +102,39 @@ const GLYPHS: Record<string, React.JSX.Element> = {
       <path d="M6 11l6-6 6 6" />
     </>
   ),
-  collapse: <path d="M15 18l-6-6 6-6" />
+  collapse: <path d="M15 18l-6-6 6-6" />,
+  minimize: <path d="M5 12h14" />,
+  maximize: <rect x="5" y="5" width="14" height="14" rx="2" />,
+  restore: (
+    <>
+      <path d="M8 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" />
+      <rect x="4" y="8" width="12" height="12" rx="2" />
+    </>
+  ),
+  close: (
+    <>
+      <path d="M18 6L6 18" />
+      <path d="M6 6l12 12" />
+    </>
+  )
 }
 
-const Glyph = memo(function Glyph({ name, size = 17 }: { name: string; size?: number }) {
+const Logo = memo(function Logo(): React.JSX.Element {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 512 512"
+      fill="currentColor"
+      aria-hidden="true"
+      role="img"
+    >
+      <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
+    </svg>
+  )
+})
+
+const Glyph = memo(function Glyph({ name, size = 18 }: { name: string; size?: number }) {
   return (
     <svg
       width={size}
@@ -103,20 +151,22 @@ const Glyph = memo(function Glyph({ name, size = 17 }: { name: string; size?: nu
   )
 })
 
-const RailButton = memo(function RailButton({
+const IconButton = memo(function IconButton({
   name,
   title,
   onClick,
   active,
-  disabled
+  disabled,
+  danger
 }: {
   name: string
   title: string
   onClick: () => void
   active?: boolean
   disabled?: boolean
+  danger?: boolean
 }) {
-  const cls = active ? 'rail-btn on' : 'rail-btn'
+  const cls = 'icon-btn' + (active ? ' on' : '') + (danger ? ' danger' : '')
   return (
     <button className={cls} title={title} onClick={onClick} disabled={disabled} type="button">
       <Glyph name={name} />
@@ -132,6 +182,37 @@ const Row = memo(function Row({ line }: { line: Line }) {
   )
 })
 
+function diagnose(result: ExecuteResult): string[] {
+  const outcome = result.outcome
+  if (!outcome) return []
+
+  const lines: string[] = []
+  if (!result.ok && outcome.code) lines.push('kod: ' + outcome.code)
+  if (result.ok && outcome.mode === 'direct-call') lines.push('yol: dogrudan cagri')
+
+  const report = outcome.actionability
+  if (!result.ok && report) {
+    lines.push(
+      'hazirlik: ' +
+        report.reason +
+        ' (gorunur ' +
+        report.visible +
+        ', etkin ' +
+        report.enabled +
+        ', kararli ' +
+        report.stable +
+        ', ustu acik ' +
+        report.unobstructed +
+        ')'
+    )
+  }
+  for (const dialog of outcome.dialogs) lines.push('diyalog: ' + dialog.type + ' ' + dialog.policy)
+  for (const download of outcome.downloads) {
+    lines.push('indirme: ' + download.fileName + ' ' + download.state)
+  }
+  return lines
+}
+
 const EMPTY_STATE: BrowserState = {
   url: '',
   title: '',
@@ -139,7 +220,9 @@ const EMPTY_STATE: BrowserState = {
   canGoForward: false,
   loading: false,
   chatOpen: true,
-  vision: false
+  vision: false,
+  maximized: false,
+  fullscreen: false
 }
 
 export default function App(): React.JSX.Element {
@@ -197,6 +280,14 @@ export default function App(): React.JSX.Element {
     [nav, state.loading]
   )
 
+  const winAction = useCallback((action: WindowAction): void => {
+    window.aft.window(action)
+  }, [])
+
+  const minimizeWindow = useCallback(() => winAction('minimize'), [winAction])
+  const maximizeWindow = useCallback(() => winAction('maximize'), [winAction])
+  const closeWindow = useCallback(() => winAction('close'), [winAction])
+
   const toggleChat = useCallback((): void => {
     setChatOpen((prev) => {
       const next = !prev
@@ -210,7 +301,12 @@ export default function App(): React.JSX.Element {
     setState((prev) => ({ ...prev, vision: next }))
     try {
       const res: ExecuteResult = await window.aft.setVision(next)
-      if (!res.ok) push('err', res.result)
+      if (!res.ok) {
+        push('err', res.result)
+        return
+      }
+      const snap: ExecuteResult = await window.aft.execute({ action: 'snapshot' })
+      push(snap.ok ? 'ok' : 'err', snap.result)
     } catch (err) {
       push('err', 'KOPRU HATASI: ' + (err as Error).message)
     }
@@ -247,6 +343,7 @@ export default function App(): React.JSX.Element {
     try {
       const res = await window.aft.execute(parsed.action)
       push(res.ok ? 'ok' : 'err', res.result)
+      for (const detail of diagnose(res)) push('el', '  ' + detail)
     } catch (err) {
       push('err', 'KOPRU HATASI: ' + (err as Error).message)
     }
@@ -267,70 +364,91 @@ export default function App(): React.JSX.Element {
   )
 
   return (
-    <div className="app">
-      <aside className="rail">
-        <RailButton
+    <div className="shell">
+      <header className="shell-bar">
+        <div className="bar-left">
+          <span className="logo" title="AFT">
+            <Logo />
+          </span>
+
+          <IconButton name="back" title="Geri" onClick={goBack} disabled={!state.canGoBack} />
+          <IconButton
+            name="forward"
+            title="Ileri"
+            onClick={goForward}
+            disabled={!state.canGoForward}
+          />
+          <IconButton
+            name={state.loading ? 'stop' : 'reload'}
+            title={state.loading ? 'Durdur' : 'Yenile'}
+            onClick={refreshPage}
+          />
+          <IconButton
+            name={state.vision ? 'eye' : 'eyeOff'}
+            title={state.vision ? 'Gorusu kapat' : 'Gorusu ac'}
+            onClick={() => void toggleVision()}
+            active={state.vision}
+          />
+          <IconButton name="home" title="Ana sayfa" onClick={goHome} />
+        </div>
+
+        <div className="bar-drag" onDoubleClick={maximizeWindow}>
+          <span className="bar-title">{state.title || 'AFT'}</span>
+        </div>
+
+        <div className="bar-right">
+          <IconButton name="minimize" title="Simge durumuna kucult" onClick={minimizeWindow} />
+          <IconButton
+            name={state.maximized ? 'restore' : 'maximize'}
+            title={state.maximized ? 'Onceki boyut' : 'Ekrani kapla'}
+            onClick={maximizeWindow}
+          />
+          <IconButton name="close" title="Kapat" onClick={closeWindow} danger />
+        </div>
+      </header>
+
+      <aside className="shell-side">
+        <IconButton
           name="chat"
           title={chatOpen ? 'Agent chat kapat' : 'Agent chat ac'}
           onClick={toggleChat}
           active={chatOpen}
         />
-
-        <span className="rail-sep" />
-
-        <RailButton name="back" title="Geri" onClick={goBack} disabled={!state.canGoBack} />
-        <RailButton
-          name="forward"
-          title="Ileri"
-          onClick={goForward}
-          disabled={!state.canGoForward}
-        />
-        <RailButton
-          name={state.loading ? 'stop' : 'reload'}
-          title={state.loading ? 'Durdur' : 'Yenile'}
-          onClick={refreshPage}
-        />
-        <RailButton name="home" title="Ana sayfa" onClick={goHome} />
-
-        <span className="rail-grow" />
-
-        <RailButton
-          name={state.vision ? 'eye' : 'eyeOff'}
-          title={state.vision ? 'Gorusu kapat' : 'Gorusu ac'}
-          onClick={() => void toggleVision()}
-          active={state.vision}
-        />
       </aside>
 
-      {chatOpen && (
-        <section className="panel">
-          <header className="panel-head">
-            <span className="brand">AGENT CHAT</span>
-            <button className="collapse" title="Chati kapat" onClick={toggleChat} type="button">
-              <Glyph name="collapse" size={15} />
-            </button>
-          </header>
+      <div className="workspace">
+        {chatOpen && (
+          <section className="panel">
+            <header className="panel-head">
+              <span className="brand">AGENT CHAT</span>
+              <button className="collapse" title="Chati kapat" onClick={toggleChat} type="button">
+                <Glyph name="collapse" size={15} />
+              </button>
+            </header>
 
-          <div className="log" ref={logRef} onScroll={onLogScroll}>
-            {lines.map((line) => (
-              <Row key={line.id} line={line} />
-            ))}
-          </div>
+            <div className="log" ref={logRef} onScroll={onLogScroll}>
+              {lines.map((line) => (
+                <Row key={line.id} line={line} />
+              ))}
+            </div>
 
-          <div className="input">
-            <input
-              value={cmd}
-              onChange={onChange}
-              onKeyDown={onKeyDown}
-              placeholder=" Komutlar için 'a' yaz."
-              spellCheck={false}
-            />
-            <button onClick={() => void run()} type="button">
-              <Glyph name="send" size={16} />
-            </button>
-          </div>
-        </section>
-      )}
+            <div className="composer">
+              <input
+                value={cmd}
+                onChange={onChange}
+                onKeyDown={onKeyDown}
+                placeholder="Komutlar için 'a' yaz."
+                spellCheck={false}
+              />
+              <button className="send" onClick={() => void run()} type="button">
+                <Glyph name="send" size={16} />
+              </button>
+            </div>
+          </section>
+        )}
+
+        <div className="stage" />
+      </div>
     </div>
   )
 }

@@ -10,6 +10,7 @@ import { Transport } from './Transport'
 import {
   DEFAULT_SCAN,
   SCHEMA_VERSION,
+  type BlindSpot,
   type CoverageSummary,
   type GraphNode,
   type ScanOptions,
@@ -17,10 +18,12 @@ import {
 } from './types'
 
 interface LayoutMetrics {
-  cssLayoutViewport: { clientWidth: number; clientHeight: number }
-  cssVisualViewport: { pageX: number; pageY: number }
-  cssContentSize: { width: number; height: number }
+  cssLayoutViewport?: { clientWidth: number; clientHeight: number }
+  cssVisualViewport?: { pageX: number; pageY: number }
+  cssContentSize?: { width: number; height: number }
 }
+
+const EXPAND_LIMIT = 12
 
 export class DiscoveryEngine {
   private readonly tp: Transport
@@ -86,19 +89,23 @@ export class DiscoveryEngine {
       return this.last
     }
 
-    const viewport = await this.readViewport(root.sessionId, quiet.reading.dpr)
     const usesAx = options.level >= 1
     const results: BuildResult[] = []
 
-    const first = await this.pass(viewport, usesAx, options)
-    results.push(first)
+    const first = await this.pass(usesAx, options, quiet.reading.dpr)
+    results.push(first.result)
+    let viewport = first.viewport
 
     let passes = 1
     if (options.level >= 2) {
-      passes += await this.lazyPasses(results, viewport, usesAx, options, quiet.reading.sy)
+      const lazy = await this.lazyPasses(results, usesAx, options, quiet.reading)
+      passes += lazy.passes
+      viewport = lazy.viewport ?? viewport
     }
     if (options.level >= 3) {
-      passes += await this.expandPasses(results, viewport, usesAx, options)
+      const expand = await this.expandPasses(results, usesAx, options, quiet.reading.dpr)
+      passes += expand.passes
+      viewport = expand.viewport ?? viewport
     }
 
     const merged = mergeResults(results)
@@ -115,19 +122,21 @@ export class DiscoveryEngine {
       options.occlusionBudget
     )
 
+    const tally = count(nodes)
+    const frames = this.frames.all()
+
     const coverage: CoverageSummary = {
       version: SCHEMA_VERSION,
       level: options.level,
       reused: false,
       passes,
       nodes: nodes.length,
-      elements: nodes.filter((node) => node.nodeType === 1).length,
-      interactive: nodes.filter((node) => node.interactive).length,
-      inViewport: nodes.filter((node) => node.inViewport).length,
-      shadowRoots: nodes.filter((node) => node.isShadowRoot).length,
-      frames: this.frames.all().length,
-      framesFailed:
-        this.frames.all().filter((frame) => frame.failed).length + this.frames.failedCount,
+      elements: tally.elements,
+      interactive: tally.interactive,
+      inViewport: tally.inViewport,
+      shadowRoots: tally.shadowRoots,
+      frames: frames.length,
+      framesFailed: frames.filter((frame) => frame.failed).length + this.frames.failedCount,
       blindSpots: merged.blindSpots.length,
       occlusionChecked: occlusion.checked,
       occlusionSkipped: occlusion.skipped,
@@ -143,7 +152,7 @@ export class DiscoveryEngine {
       quiet.reading.ok ? quiet.reading.url : this.wc.getURL(),
       quiet.reading.ok ? quiet.reading.title : this.wc.getTitle(),
       viewport,
-      this.frames.all(),
+      frames,
       merged.blindSpots,
       coverage
     )
@@ -154,31 +163,37 @@ export class DiscoveryEngine {
   }
 
   private async pass(
-    viewport: Viewport,
     usesAx: boolean,
-    options: ScanOptions
-  ): Promise<BuildResult> {
-    const snaps: SessionSnap[] = []
-    for (const sessionId of this.tp.sessions) {
-      const snap = await captureSession(this.tp, sessionId)
-      if (snap) snaps.push(snap)
+    options: ScanOptions,
+    dpr: number
+  ): Promise<{ result: BuildResult; viewport: Viewport }> {
+    const sessions = this.tp.sessions
+    const [captured, ax, viewport] = await Promise.all([
+      Promise.all(sessions.map((sessionId) => captureSession(this.tp, sessionId))),
+      usesAx ? collectAx(this.tp, sessions) : Promise.resolve(new Map()),
+      this.readViewport(this.frames.root().sessionId, dpr)
+    ])
+
+    const snaps = captured.filter((snap): snap is SessionSnap => snap !== null)
+    return {
+      result: buildGraph(snaps, this.frames, ax, viewport, options.viewportMargin),
+      viewport
     }
-    const ax = usesAx ? await collectAx(this.tp, this.tp.sessions) : new Map()
-    return buildGraph(snaps, this.frames, ax, viewport, options.viewportMargin)
   }
 
   private async lazyPasses(
     results: BuildResult[],
-    viewport: Viewport,
     usesAx: boolean,
     options: ScanOptions,
-    originalScrollY: number
-  ): Promise<number> {
+    origin: { sy: number; dpr: number }
+  ): Promise<{ passes: number; viewport: Viewport | null }> {
     const root = this.frames.root()
     let done = 0
+    let viewport: Viewport | null = null
+
     for (let i = 0; i < options.lazyPasses; i++) {
       const before = await this.waiter.read(root.sessionId, root.frameId)
-      if (before.sy + before.h >= before.ph - 4) break
+      if (!before.ok || before.sy + before.h >= before.ph - 4) break
       await this.waiter.scrollBy(root.sessionId, root.frameId, Math.round(before.h * 0.9))
       await this.waiter.waitForQuiet(
         root.sessionId,
@@ -186,34 +201,39 @@ export class DiscoveryEngine {
         options.quietMs,
         options.quietTimeoutMs
       )
-      results.push(await this.pass(viewport, usesAx, options))
+      const next = await this.pass(usesAx, options, origin.dpr)
+      results.push(next.result)
+      viewport = next.viewport
       done++
     }
+
     if (done > 0) {
-      await this.waiter.scrollTo(root.sessionId, root.frameId, 0, originalScrollY)
+      await this.waiter.scrollTo(root.sessionId, root.frameId, 0, origin.sy)
       await this.waiter.waitForQuiet(
         root.sessionId,
         root.frameId,
         options.quietMs,
         options.quietTimeoutMs
       )
-      results.push(await this.pass(viewport, usesAx, options))
+      const restored = await this.pass(usesAx, options, origin.dpr)
+      results.push(restored.result)
+      viewport = restored.viewport
       done++
     }
-    return done
+    return { passes: done, viewport }
   }
 
   private async expandPasses(
     results: BuildResult[],
-    viewport: Viewport,
     usesAx: boolean,
-    options: ScanOptions
-  ): Promise<number> {
+    options: ScanOptions,
+    dpr: number
+  ): Promise<{ passes: number; viewport: Viewport | null }> {
     const latest = results[results.length - 1]
     const targets = latest.nodes
       .filter((node) => node.visible && node.attrs['aria-expanded'] === 'false')
-      .slice(0, 12)
-    if (targets.length === 0) return 0
+      .slice(0, EXPAND_LIMIT)
+    if (targets.length === 0) return { passes: 0, viewport: null }
 
     for (const node of targets) await this.clickNode(node)
     const root = this.frames.root()
@@ -223,8 +243,9 @@ export class DiscoveryEngine {
       options.quietMs,
       options.quietTimeoutMs
     )
-    results.push(await this.pass(viewport, usesAx, options))
-    return 1
+    const next = await this.pass(usesAx, options, dpr)
+    results.push(next.result)
+    return { passes: 1, viewport: next.viewport }
   }
 
   private async clickNode(node: GraphNode): Promise<void> {
@@ -246,12 +267,12 @@ export class DiscoveryEngine {
   private async readViewport(sessionId: string, dpr: number): Promise<Viewport> {
     const metrics = await this.tp.trySend<LayoutMetrics>('Page.getLayoutMetrics', {}, sessionId)
     return {
-      width: metrics?.cssLayoutViewport.clientWidth ?? 0,
-      height: metrics?.cssLayoutViewport.clientHeight ?? 0,
-      scrollX: Math.round(metrics?.cssVisualViewport.pageX ?? 0),
-      scrollY: Math.round(metrics?.cssVisualViewport.pageY ?? 0),
-      pageWidth: Math.round(metrics?.cssContentSize.width ?? 0),
-      pageHeight: Math.round(metrics?.cssContentSize.height ?? 0),
+      width: metrics?.cssLayoutViewport?.clientWidth ?? 0,
+      height: metrics?.cssLayoutViewport?.clientHeight ?? 0,
+      scrollX: Math.round(metrics?.cssVisualViewport?.pageX ?? 0),
+      scrollY: Math.round(metrics?.cssVisualViewport?.pageY ?? 0),
+      pageWidth: Math.round(metrics?.cssContentSize?.width ?? 0),
+      pageHeight: Math.round(metrics?.cssContentSize?.height ?? 0),
       dpr: dpr || 1
     }
   }
@@ -263,6 +284,7 @@ function mergeResults(results: BuildResult[]): BuildResult {
   const lookup = new Map(authoritative.lookup)
   const nodes = authoritative.nodes.slice()
   const blindSpots = authoritative.blindSpots.slice()
+  const seenSpots = new Set(blindSpots.map(spotKey))
 
   for (let i = 0; i < results.length - 1; i++) {
     for (const node of results[i].nodes) {
@@ -274,13 +296,38 @@ function mergeResults(results: BuildResult[]): BuildResult {
       nodes.push(node)
     }
     for (const spot of results[i].blindSpots) {
-      if (!blindSpots.some((item) => item.kind === spot.kind && item.key === spot.key)) {
-        blindSpots.push(spot)
-      }
+      const key = spotKey(spot)
+      if (seenSpots.has(key)) continue
+      seenSpots.add(key)
+      blindSpots.push(spot)
     }
   }
 
   return { nodes, lookup, blindSpots }
+}
+
+function spotKey(spot: BlindSpot): string {
+  return spot.kind + '' + spot.key + '' + spot.frameId
+}
+
+function count(nodes: GraphNode[]): {
+  elements: number
+  interactive: number
+  inViewport: number
+  shadowRoots: number
+} {
+  let elements = 0
+  let interactive = 0
+  let inViewport = 0
+  let shadowRoots = 0
+
+  for (const node of nodes) {
+    if (node.nodeType === 1) elements++
+    if (node.interactive) interactive++
+    if (node.inViewport) inViewport++
+    if (node.isShadowRoot) shadowRoots++
+  }
+  return { elements, interactive, inViewport, shadowRoots }
 }
 
 function assignIndexes(nodes: GraphNode[]): void {

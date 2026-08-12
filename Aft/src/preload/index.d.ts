@@ -1,4 +1,4 @@
-import type { BrowserState, ExecuteResult, NavKind } from '../main/browser/types'
+import type { BrowserState, ExecuteResult, NavKind, WindowAction } from '../main/browser/types'
 import type { CoverageSummary } from '../main/discovery'
 
 declare global {
@@ -9,6 +9,7 @@ declare global {
       scan: (level: number) => Promise<ExecuteResult>
       coverage: () => Promise<CoverageSummary | null>
       nav: (kind: NavKind) => void
+      window: (action: WindowAction) => void
       setChat: (open: boolean) => void
       requestState: () => void
       onState: (fn: (state: BrowserState) => void) => () => void

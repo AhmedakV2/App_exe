@@ -153,4 +153,3 @@ function toCandidate(
     occluded: node.occluded
   }
 }
-

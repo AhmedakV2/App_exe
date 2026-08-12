@@ -170,42 +170,53 @@ export function ambiguous(node: GraphNode): boolean {
   return node.tag === 'div' || node.tag === 'span' || node.tag === 'li' || node.tag === 'td'
 }
 
+const PROBE_CONCURRENCY = 16
+
 export async function probeListeners(
   tp: Transport,
   nodes: GraphNode[],
   budget: number
 ): Promise<{ probed: number; skipped: number }> {
+  const ordered = nodes
+    .slice()
+    .sort((a, b) => Number(b.inViewport) - Number(a.inViewport) || a.depth - b.depth)
+
+  const selected = ordered.slice(0, Math.max(0, budget))
   let probed = 0
-  let skipped = 0
-  for (const node of nodes) {
-    if (probed >= budget) {
-      skipped++
-      continue
-    }
-    const resolved = await tp.trySend<{ object?: { objectId?: string } }>(
-      'DOM.resolveNode',
-      { backendNodeId: node.backendNodeId },
-      node.sessionId
-    )
-    const objectId = resolved?.object?.objectId
-    if (!objectId) {
-      skipped++
-      continue
-    }
-    probed++
-    const listeners = await tp.trySend<{ listeners: { type: string }[] }>(
-      'DOMDebugger.getEventListeners',
-      { objectId, depth: 0 },
-      node.sessionId
-    )
-    await tp.trySend('Runtime.releaseObject', { objectId }, node.sessionId)
-    const hit = (listeners?.listeners ?? []).some((entry) => LISTENER_TYPES.has(entry.type))
-    if (hit) {
-      node.interactive = true
-      node.reasons = node.reasons.concat('listener')
+  let skipped = ordered.length - selected.length
+
+  for (let start = 0; start < selected.length; start += PROBE_CONCURRENCY) {
+    const chunk = selected.slice(start, start + PROBE_CONCURRENCY)
+    const outcomes = await Promise.all(chunk.map((node) => probeOne(tp, node)))
+    for (const outcome of outcomes) {
+      if (outcome) probed++
+      else skipped++
     }
   }
   return { probed, skipped }
+}
+
+async function probeOne(tp: Transport, node: GraphNode): Promise<boolean> {
+  const resolved = await tp.trySend<{ object?: { objectId?: string } }>(
+    'DOM.resolveNode',
+    { backendNodeId: node.backendNodeId },
+    node.sessionId
+  )
+  const objectId = resolved?.object?.objectId
+  if (!objectId) return false
+
+  const listeners = await tp.trySend<{ listeners: { type: string }[] }>(
+    'DOMDebugger.getEventListeners',
+    { objectId, depth: 0 },
+    node.sessionId
+  )
+  await tp.trySend('Runtime.releaseObject', { objectId }, node.sessionId)
+
+  if ((listeners?.listeners ?? []).some((entry) => LISTENER_TYPES.has(entry.type))) {
+    node.interactive = true
+    node.reasons = node.reasons.concat('listener')
+  }
+  return true
 }
 
 function isCoverer(node: GraphNode): boolean {
