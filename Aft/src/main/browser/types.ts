@@ -66,6 +66,8 @@ export interface BrowserState {
   canGoForward: boolean
   loading: boolean
   chatOpen: boolean
+  terminalOpen: boolean
+  terminalHeight: number
   vision: boolean
   maximized: boolean
   fullscreen: boolean

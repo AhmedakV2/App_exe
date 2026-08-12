@@ -159,7 +159,7 @@ export class BrowserController {
     if (request.action === 'snapshot') {
       return {
         ok: true,
-        result: 'Sayfa tarandi',
+        result: 'Sayfa tarandı',
         page: await this.refresh(this.level, true),
         outcome: null
       }
@@ -271,11 +271,11 @@ function describe(request: AgentAction, outcome: ActionOutcome): string {
 
   switch (request.action) {
     case 'go_to_url':
-      return 'Acilan sayfa: ' + (outcome.navigation?.url || request.url || '')
+      return 'Açılan sayfa: ' + (outcome.navigation?.url || request.url || '')
     case 'scroll':
-      return 'Kaydirildi: ' + (request.deltaY ?? 0) + 'px'
+      return 'Kaydırıldı: ' + (request.deltaY ?? 0) + 'px'
     case 'press_key':
-      return (request.key ?? '') + ' tusuna basildi'
+      return (request.key ?? '') + ' tuşuna basıldı'
     case 'type':
     case 'clear_type':
       return outcome.message + detail + ' "' + (request.text ?? '') + '"'
