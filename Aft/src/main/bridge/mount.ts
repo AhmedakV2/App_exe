@@ -4,17 +4,23 @@ import { IdentityChannel } from './IdentityChannel'
 
 let channel: IdentityChannel | null = null
 
+let bound: BrowserController | null = null
+
 export async function mountIdentity(controller: BrowserController): Promise<IdentityChannel> {
   if (channel) return channel
 
-  channel = new IdentityChannel({
+  const created = new IdentityChannel({
     userDataDir: app.getPath('userData'),
     getGraph: () => controller.currentGraph()
   })
 
-  await channel.start()
-  channel.register()
-  return channel
+  await created.start()
+  created.register()
+  controller.setDescriptorResolver((descriptorId) => created.lookup(descriptorId))
+
+  channel = created
+  bound = controller
+  return created
 }
 
 export function identityChannel(): IdentityChannel | null {
@@ -23,6 +29,10 @@ export function identityChannel(): IdentityChannel | null {
 
 export async function unmountIdentity(): Promise<void> {
   if (!channel) return
-  await channel.dispose()
+  bound?.setDescriptorResolver(null)
+  bound = null
+
+  const active = channel
   channel = null
+  await active.dispose()
 }

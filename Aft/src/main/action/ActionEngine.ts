@@ -2,7 +2,7 @@ import type { ElementGraph } from '../discovery'
 import type { Transport } from '../discovery'
 import type { GraphNode, Point } from '../discovery'
 import { Actionability, type ActionabilityTarget } from './Actionability'
-import { DialogManager } from './DialogManager'
+import { DialogManager, FILE_CHOOSER_TIMEOUT_MS } from './DialogManager'
 import { InputDispatcher } from './InputDispatcher'
 import { NavigationWaiter } from './NavigationWaiter'
 import { ActionError, classify } from './errors'
@@ -176,14 +176,17 @@ export class ActionEngine {
     let message = ''
     let mode: InputMode = preferred
 
-    const navigation = await this.navigation.observe(async () => {
-      const result = await run()
-      mode = result.mode
-      message = result.message
-    }, this.settings.navigation)
+    try {
+      const navigation = await this.navigation.observe(async () => {
+        const result = await run()
+        mode = result.mode
+        message = result.message
+      }, this.settings.navigation)
 
-    await this.release(node.sessionId, objectId)
-    return { mode, navigation, message }
+      return { mode, navigation, message }
+    } finally {
+      await this.release(node.sessionId, objectId)
+    }
   }
 
   private async clickLike(
@@ -201,12 +204,12 @@ export class ActionEngine {
       } catch (error) {
         if (!this.settings.fallbackToDirect || button === 'right') throw error
       }
-    }
-    if (!this.settings.fallbackToDirect)
+    } else if (preferred === 'real-input' && !this.settings.fallbackToDirect) {
       throw new ActionError('element-not-ready', 'girdi olayi gonderilemedi')
+    }
 
     await this.input.directClick(node.sessionId, objectId)
-    return { mode: 'direct-call', message: 'Yedek yol ile tiklandi' }
+    return { mode: 'direct-call', message: 'Dogrudan cagri ile tiklandi' }
   }
 
   private async doubleClick(
@@ -216,11 +219,15 @@ export class ActionEngine {
     preferred: InputMode
   ): Promise<{ mode: InputMode; message: string }> {
     if (preferred === 'real-input' && point) {
-      await this.input.doubleClick(point)
-      return { mode: 'real-input', message: 'Cift tiklandi' }
+      try {
+        await this.input.doubleClick(point)
+        return { mode: 'real-input', message: 'Cift tiklandi' }
+      } catch (error) {
+        if (!this.settings.fallbackToDirect) throw error
+      }
     }
     await this.input.directClick(node.sessionId, objectId)
-    return { mode: 'direct-call', message: 'Yedek yol ile tiklandi' }
+    return { mode: 'direct-call', message: 'Dogrudan cagri ile tiklandi' }
   }
 
   private async type(
@@ -238,17 +245,25 @@ export class ActionEngine {
     await this.input.focus(node.sessionId, objectId)
     if (clearFirst) await this.input.clear(node.sessionId, objectId)
 
+    const before = clearFirst ? '' : ((await this.input.readValue(node.sessionId, objectId)) ?? '')
+
     if (preferred === 'real-input') {
       try {
         await this.input.typeText(text, this.settings.typeDelayMs)
-        return { mode: 'real-input', message: 'Metin yazildi' }
+        const landed = await this.input.readValue(node.sessionId, objectId)
+        if (landed === null || landed === before + text) {
+          return { mode: 'real-input', message: 'Metin yazildi' }
+        }
+        if (!this.settings.fallbackToDirect) {
+          throw new ActionError('element-not-ready', 'girdi olaylari metne donusmedi')
+        }
       } catch (error) {
         if (!this.settings.fallbackToDirect) throw error
       }
     }
 
-    await this.input.directSetValue(node.sessionId, objectId, text)
-    return { mode: 'direct-call', message: 'Yedek yol ile yazildi' }
+    await this.input.directSetValue(node.sessionId, objectId, before + text)
+    return { mode: 'direct-call', message: 'Dogrudan cagri ile yazildi' }
   }
 
   private async select(
@@ -277,11 +292,13 @@ export class ActionEngine {
       return { mode: 'direct-call', message: 'Dosya atandi' }
     }
 
-    this.dialogs.expectFiles(files)
     if (!point) throw new ActionError('element-not-ready', 'nokta hesaplanamadi')
+
+    const since = Date.now()
+    this.dialogs.expectFiles(files)
     await this.input.click(point)
 
-    const chooser = this.dialogs.chooserRequest()
+    const chooser = await this.dialogs.awaitChooser(since, FILE_CHOOSER_TIMEOUT_MS)
     if (!chooser) throw new ActionError('dialog-blocked', 'dosya secici acilmadi')
     return { mode: 'real-input', message: 'Dosya secici karsilandi' }
   }

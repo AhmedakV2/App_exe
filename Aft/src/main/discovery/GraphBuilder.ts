@@ -6,6 +6,8 @@ import type { BlindSpot, GraphNode, Point, Rect, ShadowStep, Viewport } from './
 
 const TEXT_CAP = 160
 
+export const OVERLAY_ID = '__aft_overlay'
+
 interface DocRef {
   sessionId: string
   doc: DocSnap
@@ -50,9 +52,10 @@ export function buildGraph(
     const ref = docByFrame.get(frame.frameId)
     if (!owner || !ref) continue
     const root = firstElement(ref, lookup)
-    if (!root) continue
+    if (!root || root.key === owner.key) continue
+    if (root.parentKey === owner.key) continue
     root.parentKey = owner.key
-    if (!owner.childKeys.includes(root.key)) owner.childKeys.push(root.key)
+    owner.childKeys.push(root.key)
   }
 
   for (const frame of frames.ordered()) {
@@ -125,6 +128,7 @@ function emitDoc(
     const item = stack.pop()
     if (!item) break
     const raw = doc.nodes[item.index]
+    if (raw.attrs['id'] === OVERLAY_ID) continue
     const key = ref.sessionId + ':' + raw.backendNodeId
     keys[item.index] = key
 
@@ -137,10 +141,10 @@ function emitDoc(
 
     const parentKey = raw.parentIndex >= 0 ? keys[raw.parentIndex] : null
     const current = lookup.get(key)
-    if (current && parentKey) {
+    if (current && parentKey && current.parentKey !== parentKey) {
       current.parentKey = parentKey
       const parent = lookup.get(parentKey)
-      if (parent && !parent.childKeys.includes(key)) parent.childKeys.push(key)
+      if (parent) parent.childKeys.push(key)
     }
 
     const nextShadow = raw.shadowRootType

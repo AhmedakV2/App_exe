@@ -56,7 +56,6 @@ export class CaseRunner {
     const resolveStart = Date.now()
     this.resolveAll(metrics, descriptors, target)
     metrics.resolveMs = Date.now() - resolveStart
-    metrics.totalMs = metrics.discoveryMs + metrics.resolveMs
 
     return metrics
   }

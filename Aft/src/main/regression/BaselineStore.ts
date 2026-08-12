@@ -76,7 +76,7 @@ export class BaselineStore {
         const previous = before[field]
         const next = result.metrics[field]
         const delta = round(next - previous)
-        if (delta ===0 ) continue
+        if (delta === 0) continue
         deltas.push({
           caseId: result.caseId,
           field,
@@ -105,6 +105,6 @@ function regressed(
   if (worse <= 0) return false
   if (RATE_FIELDS.has(field)) return worse > maxDelta
   if (field === 'discoveryMs') return worse > Math.max(250, before * DURATION_TOLERANCE)
-  if (field == 'validationErrors') return true
+  if (field === 'validationErrors') return true
   return worse > Math.max(1, before * COUNT_TOLERANCE)
 }

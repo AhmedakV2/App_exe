@@ -40,8 +40,9 @@ export class FixtureServer {
       }
 
       stat(target)
-        .then((info) => {
+        .then(async (info) => {
           const file = info.isDirectory() ? join(target, 'index.html') : target
+          if (info.isDirectory()) await stat(file)
           response.writeHead(200, {
             'content-type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
             'cache-control': 'no-store'
@@ -50,7 +51,10 @@ export class FixtureServer {
             .on('error', () => response.destroy())
             .pipe(response)
         })
-        .catch(() => response.writeHead(404).end())
+        .catch(() => {
+          if (!response.headersSent) response.writeHead(404)
+          response.end()
+        })
     })
 
     await new Promise<void>((done, fail) => {
@@ -88,7 +92,12 @@ export class FixtureServer {
 }
 
 function safeJoin(root: string, url: string): string | null {
-  const path = decodeURIComponent(url.split('?')[0] ?? '/')
+  let path: string
+  try {
+    path = decodeURIComponent(url.split('?')[0] ?? '/')
+  } catch {
+    return null
+  }
   const target = resolve(join(root, normalize(path)))
   return target === root || target.startsWith(root + sep) ? target : null
 }

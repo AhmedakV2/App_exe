@@ -21,6 +21,7 @@ export class ModelStore {
   private readonly memory = new Map<string, GraphSnapshot>()
   private readonly order: string[] = []
   private ready: Promise<void> | null = null
+  private sequence = 0
 
   constructor(
     private readonly directory: string,
@@ -29,7 +30,7 @@ export class ModelStore {
 
   async put(snapshot: GraphSnapshot): Promise<string> {
     assertSnapshot(snapshot)
-    const id = idFor(snapshot)
+    const id = idFor(snapshot, this.sequence++)
 
     this.memory.set(id, snapshot)
     this.order.push(id)
@@ -117,6 +118,10 @@ export class ModelStore {
   }
 }
 
-function idFor(snapshot: GraphSnapshot): string {
-  return String(snapshot.capturedAt) + '-' + digest([snapshot.origin.url, snapshot.elements.length])
+function idFor(snapshot: GraphSnapshot, sequence: number): string {
+  return (
+    String(snapshot.capturedAt) +
+    '-' +
+    digest([snapshot.origin.url, snapshot.elements.length, sequence])
+  )
 }

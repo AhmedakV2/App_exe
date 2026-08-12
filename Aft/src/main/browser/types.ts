@@ -1,3 +1,5 @@
+import type { ActionOutcome } from '../action/types'
+
 export interface PageElement {
   i: number
   tag: string
@@ -28,14 +30,21 @@ export type ActionName =
   | 'mouse_move'
   | 'clear_type'
   | 'press_key'
+  | 'select_option'
+  | 'upload'
+  | 'wait'
 
 export interface AgentAction {
   action: ActionName
   index?: number
+  descriptorId?: string
   text?: string
   url?: string
   deltaY?: number
   key?: string
+  optionValue?: string
+  files?: string[]
+  force?: boolean
 }
 
 export interface ExecuteResult {
@@ -43,6 +52,7 @@ export interface ExecuteResult {
   result: string
   page: PageState | null
   vision: boolean
+  outcome: ActionOutcome | null
 }
 
 export type NavKind = 'back' | 'forward' | 'reload' | 'home' | 'stop'

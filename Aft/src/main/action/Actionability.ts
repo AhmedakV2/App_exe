@@ -16,8 +16,12 @@ interface RemoteState {
   focusable: boolean
 }
 
-interface RemoteObject {
-  object?: { objectId?: string; value?: unknown }
+interface ResolvedNode {
+  object?: { objectId?: string }
+}
+
+interface CallResult {
+  result?: { value?: unknown }
 }
 
 const STATE_FN = `function(){
@@ -43,7 +47,21 @@ return {
 
 const SCROLL_FN = `function(){ this.scrollIntoView({ block: 'center', inline: 'center' }) }`
 
-const CONTAINS_FN = `function(other){ return this === other || this.contains(other) }`
+const HIT_FN = `function(x, y){
+var root = this.getRootNode();
+var host = root && typeof root.elementFromPoint === 'function' ? root : document;
+var hit = host.elementFromPoint(x, y);
+if (!hit) return false;
+if (hit === this || this.contains(hit)) return true;
+var cursor = hit;
+var guard = 0;
+while (cursor && guard < 64) {
+  if (cursor === this) return true;
+  cursor = cursor.parentNode && cursor.parentNode.host ? cursor.parentNode.host : cursor.parentElement;
+  guard++;
+}
+return hit.contains(this) === true;
+}`
 
 export interface ActionabilityTarget {
   sessionId: string
@@ -132,6 +150,9 @@ export class Actionability {
     }
 
     report.waitedMs = Date.now() - started
+    if (!report.point && report.rect) {
+      report.point = clampPoint(centerOf(report.rect), target.viewport)
+    }
     return report
   }
 
@@ -145,7 +166,7 @@ export class Actionability {
   }
 
   private async resolve(target: ActionabilityTarget): Promise<string | null> {
-    const resolved = await this.tp.trySend<RemoteObject>(
+    const resolved = await this.tp.trySend<ResolvedNode>(
       'DOM.resolveNode',
       { backendNodeId: target.backendNodeId },
       target.sessionId
@@ -154,12 +175,12 @@ export class Actionability {
   }
 
   private async read(sessionId: string, objectId: string): Promise<RemoteState | null> {
-    const result = await this.tp.trySend<RemoteObject>(
+    const result = await this.tp.trySend<CallResult>(
       'Runtime.callFunctionOn',
       { objectId, functionDeclaration: STATE_FN, returnByValue: true },
       sessionId
     )
-    const value = result?.object?.value
+    const value = result?.result?.value
     return value && typeof value === 'object' ? (value as RemoteState) : null
   }
 
@@ -170,35 +191,23 @@ export class Actionability {
   ): Promise<{ clear: boolean; point: Point | null }> {
     for (const candidate of probePoints(rect)) {
       const point = clampPoint(candidate, target.viewport)
-      const located = await this.tp.trySend<{ backendNodeId?: number }>(
-        'DOM.getNodeForLocation',
-        { x: Math.round(point.x), y: Math.round(point.y), includeUserAgentShadowDOM: true },
-        ''
-      )
+      const local = {
+        x: point.x - target.frameOffset.x,
+        y: point.y - target.frameOffset.y
+      }
 
-      if (!located?.backendNodeId) return { clear: true, point }
-      if (located.backendNodeId === target.backendNodeId) return { clear: true, point }
-
-      const hit = await this.tp.trySend<RemoteObject>(
-        'DOM.resolveNode',
-        { backendNodeId: located.backendNodeId },
-        target.sessionId
-      )
-      const hitId = hit?.object?.objectId
-      if (!hitId) continue
-
-      const contains = await this.tp.trySend<RemoteObject>(
+      const hit = await this.tp.trySend<CallResult>(
         'Runtime.callFunctionOn',
         {
           objectId,
-          functionDeclaration: CONTAINS_FN,
-          arguments: [{ objectId: hitId }],
+          functionDeclaration: HIT_FN,
+          arguments: [{ value: local.x }, { value: local.y }],
           returnByValue: true
         },
         target.sessionId
       )
-      await this.release(target.sessionId, hitId)
-      if (contains?.object?.value === true) return { clear: true, point }
+
+      if (hit?.result?.value === true) return { clear: true, point }
     }
 
     return { clear: false, point: clampPoint(centerOf(rect), target.viewport) }

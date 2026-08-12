@@ -8,6 +8,7 @@ import type { Harness } from './types'
 
 const VIEWPORT = { width: 1440, height: 900 }
 const SETTLE_MS = 120
+const RELOAD_TIMEOUT = 20000
 
 export class ElectronHarness implements Harness {
   private readonly view: WebContentsView
@@ -40,12 +41,19 @@ export class ElectronHarness implements Harness {
   async reset(): Promise<void> {
     const wc = this.view.webContents
     const done = new Promise<void>((resolve) => {
-      const handler = (): void => {
-        wc.removeListener('did-finish-load', handler)
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const finish = (): void => {
+        if (timer) clearTimeout(timer)
+        timer = null
+        wc.removeListener('did-finish-load', finish)
+        wc.removeListener('did-fail-load', finish)
         resolve()
       }
-      wc.on('did-finish-load', handler)
+      timer = setTimeout(finish, RELOAD_TIMEOUT)
+      wc.on('did-finish-load', finish)
+      wc.on('did-fail-load', finish)
     })
+
     wc.reload()
     this.engine.invalidate()
     await done
@@ -53,6 +61,11 @@ export class ElectronHarness implements Harness {
   }
   async dispose(): Promise<void> {
     this.engine.dispose()
+    const wc = this.view.webContents
+    if (!wc.isDestroyed()) {
+      wc.removeAllListeners()
+      wc.close()
+    }
     await this.fixtures?.stop()
   }
 }

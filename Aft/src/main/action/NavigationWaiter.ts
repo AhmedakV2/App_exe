@@ -8,6 +8,13 @@ import {
 
 const LOAD_EVENTS: ReadonlySet<string> = new Set(['load', 'networkIdle', 'firstMeaningfulPaint'])
 
+interface NavigationSignal {
+  wait: (graceMs: number) => Promise<NavigationKind>
+  loaded: (timeoutMs: number) => Promise<boolean>
+  url: () => string
+  stop: () => void
+}
+
 export class NavigationWaiter {
   private pendingRequests = 0
   private lastActivityAt = Date.now()
@@ -39,10 +46,12 @@ export class NavigationWaiter {
   }
 
   async enable(): Promise<void> {
-    for (const sessionId of this.tp.sessions) {
-      await this.tp.trySend('Network.enable', {}, sessionId)
-      await this.tp.trySend('Page.setLifecycleEventsEnabled', { enabled: true }, sessionId)
-    }
+    await Promise.all(
+      this.tp.sessions.map(async (sessionId) => {
+        await this.tp.trySend('Network.enable', {}, sessionId)
+        await this.tp.trySend('Page.setLifecycleEventsEnabled', { enabled: true }, sessionId)
+      })
+    )
     this.install()
   }
 
@@ -54,10 +63,17 @@ export class NavigationWaiter {
     const started = Date.now()
     const signal = this.listen()
 
-    await trigger()
+    try {
+      await trigger()
+    } catch (error) {
+      signal.stop()
+      throw error
+    }
+
     const kind = await signal.wait(options.inDocumentGraceMs)
 
     if (kind === 'none') {
+      signal.stop()
       return {
         kind,
         url: '',
@@ -67,7 +83,10 @@ export class NavigationWaiter {
       }
     }
 
-    const loaded = kind === 'document' ? await this.waitForLoad(options.lifecycleTimeoutMs) : true
+    let loaded = true
+    if (kind === 'document') loaded = await signal.loaded(options.lifecycleTimeoutMs)
+    else signal.stop()
+
     const idle = await this.waitForIdle(options.networkIdleMs, options.networkTimeoutMs)
 
     return {
@@ -85,15 +104,17 @@ export class NavigationWaiter {
     this.pendingRequests = 0
   }
 
-  private listen(): { wait: (graceMs: number) => Promise<NavigationKind>; url: () => string } {
+  private listen(): NavigationSignal {
     let kind: NavigationKind = 'none'
     let url = ''
+    let settled = false
 
     const offDocument = this.tp.on('Page.frameNavigated', (params) => {
       const frame = params.frame as { parentId?: string; url?: string } | undefined
       if (!frame || frame.parentId) return
       kind = 'document'
       url = frame.url ?? ''
+      settled = false
     })
 
     const offInDocument = this.tp.on('Page.navigatedWithinDocument', (params) => {
@@ -102,32 +123,31 @@ export class NavigationWaiter {
       url = String(params.url ?? '')
     })
 
+    const offLifecycle = this.tp.on('Page.lifecycleEvent', (params) => {
+      if (LOAD_EVENTS.has(String(params.name ?? ''))) settled = true
+    })
+
+    const stop = (): void => {
+      offDocument()
+      offInDocument()
+      offLifecycle()
+    }
+
     return {
       wait: async (graceMs: number): Promise<NavigationKind> => {
         const deadline = Date.now() + graceMs
         while (Date.now() < deadline && kind === 'none') await sleep(30)
-        offDocument()
-        offInDocument()
         return kind
       },
-      url: (): string => url
+      loaded: async (timeoutMs: number): Promise<boolean> => {
+        const deadline = Date.now() + timeoutMs
+        while (Date.now() < deadline && !settled) await sleep(30)
+        stop()
+        return settled
+      },
+      url: (): string => url,
+      stop
     }
-  }
-
-  private waitForLoad(timeoutMs: number): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
-      const timer = setTimeout(() => {
-        off()
-        resolve(false)
-      }, timeoutMs)
-
-      const off = this.tp.on('Page.lifecycleEvent', (params) => {
-        if (!LOAD_EVENTS.has(String(params.name ?? ''))) return
-        clearTimeout(timer)
-        off()
-        resolve(true)
-      })
-    })
   }
 
   private async waitForIdle(idleMs: number, timeoutMs: number): Promise<boolean> {

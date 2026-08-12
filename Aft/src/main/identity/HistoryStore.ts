@@ -94,8 +94,13 @@ export class HistoryStore {
       )
     }
 
-    await mkdir(dirname(this.filePath), { recursive: true })
-    await writeFile(this.filePath, JSON.stringify(payload), 'utf8')
+    try {
+      await mkdir(dirname(this.filePath), { recursive: true })
+      await writeFile(this.filePath, JSON.stringify(payload), 'utf8')
+    } catch (error) {
+      this.dirty = true
+      throw error
+    }
   }
 
   dispose(): void {
