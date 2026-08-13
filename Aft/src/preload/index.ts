@@ -13,6 +13,9 @@ const api = {
   setChat: (open: boolean): void => ipcRenderer.send('aft:chat', open),
   setTerminal: (open: boolean): void => ipcRenderer.send('aft:terminal', open),
   resizeTerminal: (active: boolean): void => ipcRenderer.send('aft:terminal-resize', active),
+  setStage: (rect: unknown): void => ipcRenderer.send('aft:stage', rect),
+  setModal: (open: boolean): void => ipcRenderer.send('aft:modal', open),
+  setChrome: (color: string): void => ipcRenderer.send('aft:chrome', color),
   requestState: (): void => ipcRenderer.send('aft:state'),
   onState: (fn: (state: unknown) => void): (() => void) => {
     const handler = (_e: IpcRendererEvent, state: unknown): void => fn(state)
@@ -26,6 +29,13 @@ const api = {
     ipcRenderer.on('aft:focus-url', handler)
     return (): void => {
       ipcRenderer.removeListener('aft:focus-url', handler)
+    }
+  },
+  onFocusTerminal: (fn: () => void): (() => void) => {
+    const handler = (): void => fn()
+    ipcRenderer.on('aft:focus-terminal', handler)
+    return (): void => {
+      ipcRenderer.removeListener('aft:focus-terminal', handler)
     }
   },
   versions: process.versions
