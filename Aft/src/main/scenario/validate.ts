@@ -1,3 +1,4 @@
+import type { InputMode } from '../action'
 import type { ScanLevel } from '../discovery'
 import type { Descriptor } from '../identity'
 import { digest } from '../model'
@@ -7,12 +8,14 @@ import {
   DEFAULT_DEFAULTS,
   ELEMENT_ASSERTION_KINDS,
   ELEMENT_STEP_KINDS,
+  QUERY_KINDS,
   SCENARIO_VERSION,
   STEP_KINDS,
   type Assertion,
   type AssertionKind,
   type ConditionKind,
   type ExpectedState,
+  type QueryKind,
   type Scenario,
   type ScenarioDefaults,
   type ScenarioIssue,
@@ -20,6 +23,7 @@ import {
   type ScenarioStep,
   type StepCondition,
   type StepKind,
+  type StepQuery,
   type StepTarget
 } from './types'
 
@@ -211,16 +215,28 @@ function normalizeStep(
     retries: clamp(num(source['retries'], defaults.retries), 0, MAX_RETRIES),
     scanLevel:
       source['scanLevel'] === undefined ? null : level(source['scanLevel'], defaults.scanLevel),
+    mode: inputMode(source['mode']),
     continueOnFailure: bool(source['continueOnFailure'], false),
     allowLowConfidence: bool(source['allowLowConfidence'], defaults.allowLowConfidence),
     expectState: normalizeExpected(source['expectState'], defaults.scanLevel)
   }
 }
 
+const QUERY_FIELDS: readonly { field: string; kind: QueryKind }[] = [
+  { field: 'testId', kind: 'test-id' },
+  { field: 'elementId', kind: 'element-id' },
+  { field: 'fieldName', kind: 'field-name' },
+  { field: 'name', kind: 'accessible-name' },
+  { field: 'text', kind: 'text' }
+]
+
+const FLAT_QUERY_FIELDS: readonly string[] = ['testId', 'elementId', 'fieldName']
+
 function normalizeTarget(source: Record<string, unknown>): StepTarget | null {
   const nested = asRecord(source['target'])
   const descriptorId = str(nested['descriptorId'] ?? source['descriptorId'])
   const descriptor = descriptorOf(nested['descriptor'] ?? source['descriptor'])
+  const query = normalizeQuery(nested, source)
   const ordinalRaw = nested['ordinal'] ?? source['ordinal'] ?? nested['index'] ?? source['index']
   const ordinal = typeof ordinalRaw === 'number' && Number.isInteger(ordinalRaw) ? ordinalRaw : -1
   const label = str(nested['label'] ?? source['label'])
@@ -231,6 +247,7 @@ function normalizeTarget(source: Record<string, unknown>): StepTarget | null {
       label: label || descriptor.target.name || descriptor.target.tag,
       descriptorId: descriptor.id,
       descriptor,
+      query: null,
       ordinal
     }
   }
@@ -240,6 +257,17 @@ function normalizeTarget(source: Record<string, unknown>): StepTarget | null {
       label: label || descriptorId,
       descriptorId,
       descriptor: null,
+      query: null,
+      ordinal
+    }
+  }
+  if (query) {
+    return {
+      kind: 'query',
+      label: label || query.kind + ' "' + query.value + '"',
+      descriptorId: '',
+      descriptor: null,
+      query,
       ordinal
     }
   }
@@ -249,10 +277,52 @@ function normalizeTarget(source: Record<string, unknown>): StepTarget | null {
       label: label || 'sira ' + ordinal,
       descriptorId: '',
       descriptor: null,
+      query: null,
       ordinal
     }
   }
   return null
+}
+
+function normalizeQuery(
+  nested: Record<string, unknown>,
+  source: Record<string, unknown>
+): StepQuery | null {
+  const explicit = str(nested['query'])
+  const declared = str(nested['queryKind'])
+  const kind = QUERY_KINDS.includes(declared as QueryKind) ? (declared as QueryKind) : null
+
+  if (kind && explicit) return buildQuery(kind, explicit, nested)
+  if (explicit) return buildQuery('text', explicit, nested)
+
+  for (const entry of QUERY_FIELDS) {
+    const value = str(nested[entry.field])
+    if (value) return buildQuery(entry.kind, value, nested)
+  }
+  for (const entry of QUERY_FIELDS) {
+    if (!FLAT_QUERY_FIELDS.includes(entry.field)) continue
+    const value = str(source[entry.field])
+    if (value) return buildQuery(entry.kind, value, source, true)
+  }
+  return null
+}
+
+function buildQuery(
+  kind: QueryKind,
+  value: string,
+  source: Record<string, unknown>,
+  flat = false
+): StepQuery {
+  const nth = num(source['nth'], -1)
+
+  return {
+    kind,
+    value,
+    attribute: flat ? '' : str(source['attribute']),
+    tag: str(source['tag']).toLowerCase(),
+    role: str(source['role']),
+    nth: Number.isInteger(nth) && nth >= 0 ? nth : -1
+  }
 }
 
 function normalizeAssertion(raw: unknown): Assertion | null {
@@ -345,6 +415,10 @@ function strList(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === 'string')
     : []
+}
+
+function inputMode(value: unknown): InputMode | null {
+  return value === 'real-input' || value === 'direct-call' ? value : null
 }
 
 function clamp(value: number, low: number, high: number): number {

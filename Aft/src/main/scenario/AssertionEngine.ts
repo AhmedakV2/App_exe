@@ -1,5 +1,3 @@
-import { strategyByKind } from '../identity'
-import type { Descriptor } from '../identity'
 import type { ElementModel, ModelIndex } from '../model'
 import type { TargetResolution, TargetResolver } from './TargetResolver'
 import { ELEMENT_ASSERTION_KINDS, type Assertion, type AssertionRecord } from './types'
@@ -38,7 +36,7 @@ export class AssertionEngine {
       return this.build(assertion, present ? 'var' : 'yok', !present, resolution)
     }
     if (assertion.kind === 'element-count') {
-      const actual = countMatches(assertion.target.ordinal, resolution.descriptor, index)
+      const actual = this.resolver.count(assertion.target, index, resolution.descriptor)
       return this.build(assertion, String(actual), actual === assertion.count, resolution)
     }
 
@@ -142,27 +140,6 @@ export class AssertionEngine {
       message: assertion.message || reason || (passed ? 'dogrulandi' : 'beklenen deger tutmadi')
     }
   }
-}
-
-export function countMatches(
-  ordinal: number,
-  descriptor: Descriptor | null,
-  index: ModelIndex
-): number {
-  if (!descriptor) return index.at(ordinal) ? 1 : 0
-
-  const primary = descriptor.strategies
-    .filter((entry) => !entry.dynamic)
-    .sort((a, b) => b.weight - a.weight)[0]
-
-  if (!primary) return 0
-
-  const strategy = strategyByKind(primary.kind)
-  if (!strategy) return 0
-
-  const refs = new Set<string>()
-  for (const element of strategy.match(primary, index)) refs.add(element.identity.ref)
-  return refs.size
 }
 
 export function matches(value: string, pattern: string): boolean {

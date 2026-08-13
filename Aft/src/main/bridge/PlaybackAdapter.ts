@@ -10,6 +10,10 @@ export class PlaybackAdapter implements PlaybackHost {
     private readonly contents: WebContents | null = null
   ) {}
 
+  prepare(): Promise<void> {
+    return this.controller.start()
+  }
+
   execute(request: ActionRequest): Promise<ActionOutcome> {
     return this.controller.dispatch(request)
   }

@@ -4,16 +4,18 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { PlaybackAdapter } from '../bridge/PlaybackAdapter'
 import { BrowserController } from '../browser/BrowserController'
 import { DEFAULT_HEALING, DescriptorStore, IdentityService } from '../identity'
+import { compareRuns, renderConsistency } from './Consistency'
 import { PlaybackEngine } from './PlaybackEngine'
 import { renderText, writeReport } from './Reporter'
 import { ScenarioStore } from './ScenarioStore'
-import { DEFAULT_PLAYBACK, type PlaybackOptions, type StepResult } from './types'
+import { DEFAULT_PLAYBACK, type PlaybackOptions, type RunResult, type StepResult } from './types'
 
 const WINDOW = { width: 1440, height: 900 }
 
 interface Settings {
   file: string
   reportDir: string
+  repeat: number
   options: Partial<PlaybackOptions>
 }
 
@@ -42,14 +44,18 @@ function settings(): Settings {
   const level = Number(flag('level'))
   const wanted = flag('scenario') ?? process.env['AFT_SCENARIO'] ?? ''
 
+  const repeat = Number(flag('repeat'))
+
   return {
     file: wanted ? path(wanted, '') : '',
     reportDir: path(flag('reports'), join(userData, 'playback', 'reports')),
+    repeat: Number.isInteger(repeat) && repeat > 1 ? Math.min(repeat, 20) : 1,
     options: {
       scanLevel:
         level === 0 || level === 1 || level === 2 || level === 3
           ? level
           : DEFAULT_PLAYBACK.scanLevel,
+      inputMode: flag('input-mode') === 'direct-call' ? 'direct-call' : null,
       stopOnFailure: flag('keep-going') === null,
       allowLowConfidence: flag('allow-low-confidence') !== null,
       screenshotOnFailure: flag('screenshot') !== null,
@@ -108,15 +114,30 @@ async function main(): Promise<number> {
   })
 
   try {
-    const run = await engine.run(scenario, {}, (done, total, step) => {
-      process.stdout.write(progress(done, total, step))
-    })
+    const runs: RunResult[] = []
 
-    const written = await writeReport(run, config.reportDir)
-    process.stdout.write('\n' + renderText(run) + '\n\n')
-    for (const file of written) process.stdout.write('Rapor: ' + file + '\n')
+    for (let pass = 1; pass <= config.repeat; pass++) {
+      if (config.repeat > 1) {
+        process.stdout.write('\n--- kosum ' + pass + '/' + config.repeat + ' ---\n')
+      }
 
-    return run.ok ? 0 : 1
+      const run = await engine.run(scenario, {}, (done, total, step) => {
+        process.stdout.write(progress(done, total, step))
+      })
+
+      runs.push(run)
+      const written = await writeReport(run, config.reportDir)
+      process.stdout.write('\n' + renderText(run) + '\n\n')
+      for (const file of written) process.stdout.write('Rapor: ' + file + '\n')
+    }
+
+    if (config.repeat > 1) {
+      const consistency = compareRuns(runs)
+      process.stdout.write('\n' + renderConsistency(consistency) + '\n')
+      if (!consistency.stable) return 1
+    }
+
+    return runs.every((run) => run.ok) ? 0 : 1
   } finally {
     descriptors.dispose()
     await identity.dispose()

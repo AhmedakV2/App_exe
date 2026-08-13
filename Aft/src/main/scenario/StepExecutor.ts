@@ -233,7 +233,8 @@ export class StepExecutor {
       deltaY: step.kind === 'scroll' ? step.deltaY : undefined,
       optionValue: step.optionValue || undefined,
       files: step.files.length ? step.files.slice() : undefined,
-      timeoutMs: step.timeoutMs
+      timeoutMs: step.timeoutMs,
+      mode: step.mode ?? ctx.options.inputMode ?? undefined
     }
   }
 

@@ -59,6 +59,10 @@ export class BrowserController {
     void this.ready().catch(() => undefined)
   }
 
+  start(): Promise<void> {
+    return this.ready()
+  }
+
   invalidate(): void {
     this.engine.invalidate()
   }

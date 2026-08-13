@@ -8,8 +8,15 @@ export {
 } from './migrate'
 export { parseScenario, validateScenario, assertScenario, ScenarioError } from './validate'
 export { ScenarioStore, type ScenarioEntry } from './ScenarioStore'
-export { TargetResolver, type TargetResolution } from './TargetResolver'
-export { AssertionEngine, countMatches, matches, type AssertionOutcome } from './AssertionEngine'
+export { TargetResolver, matchQuery, type TargetResolution } from './TargetResolver'
+export { AssertionEngine, matches, type AssertionOutcome } from './AssertionEngine'
+export {
+  compareRuns,
+  renderConsistency,
+  CONFIDENCE_SPREAD_LIMIT,
+  type ConsistencyReport,
+  type StepConsistency
+} from './Consistency'
 export { verifyState, expectedFromCapture } from './StateVerifier'
 export { RunLog, renderLog } from './RunLog'
 export { ContextStore, buildContext, dumpElements, type ContextInput } from './FailureContext'

@@ -1,6 +1,12 @@
-import type { ActionKind, ActionOutcome, ActionRequest } from '../action'
+import type { ActionKind, ActionOutcome, ActionRequest, InputMode } from '../action'
 import type { BlindSpot, CoverageSummary, ElementGraph, Rect, ScanLevel } from '../discovery'
-import type { Descriptor, MatchState, ResolvedCandidate, StrategyTrace } from '../identity'
+import type {
+  Descriptor,
+  MatchState,
+  ResolvedCandidate,
+  StrategyKind,
+  StrategyTrace
+} from '../identity'
 
 export const SCENARIO_VERSION = 'scenario/1.0.0'
 
@@ -16,7 +22,25 @@ export type StepStatus = 'passed' | 'failed' | 'skipped' | 'errored'
 
 export type RunStatus = 'passed' | 'failed' | 'errored' | 'aborted'
 
-export type TargetKind = 'descriptor' | 'inline-descriptor' | 'ordinal'
+export type TargetKind = 'descriptor' | 'inline-descriptor' | 'query' | 'ordinal'
+
+export type QueryKind = 'test-id' | 'element-id' | 'field-name' | 'accessible-name' | 'text'
+
+export const QUERY_KINDS: readonly QueryKind[] = [
+  'test-id',
+  'element-id',
+  'field-name',
+  'accessible-name',
+  'text'
+]
+
+export const QUERY_STRATEGY: Record<QueryKind, StrategyKind> = {
+  'test-id': 'test-attribute',
+  'element-id': 'element-id',
+  'field-name': 'form-field',
+  'accessible-name': 'accessible-name',
+  text: 'text'
+}
 
 export type AssertionKind =
   | 'element-exists'
@@ -93,11 +117,21 @@ export const ELEMENT_ASSERTION_KINDS: readonly AssertionKind[] = [
   'attribute-equals'
 ]
 
+export interface StepQuery {
+  kind: QueryKind
+  value: string
+  attribute: string
+  tag: string
+  role: string
+  nth: number
+}
+
 export interface StepTarget {
   kind: TargetKind
   label: string
   descriptorId: string
   descriptor: Descriptor | null
+  query: StepQuery | null
   ordinal: number
 }
 
@@ -141,6 +175,7 @@ export interface ScenarioStep {
   timeoutMs: number
   retries: number
   scanLevel: ScanLevel | null
+  mode: InputMode | null
   continueOnFailure: boolean
   allowLowConfidence: boolean
   expectState: ExpectedState | null
@@ -290,11 +325,13 @@ export interface RunResult {
 
 export interface PlaybackOptions {
   scanLevel: ScanLevel
+  prepareTimeoutMs: number
   stepTimeoutMs: number
   retries: number
   stopOnFailure: boolean
   verifyState: boolean
   allowLowConfidence: boolean
+  inputMode: InputMode | null
   screenshotOnFailure: boolean
   contextDir: string
   reportDir: string
@@ -303,11 +340,13 @@ export interface PlaybackOptions {
 
 export const DEFAULT_PLAYBACK: PlaybackOptions = {
   scanLevel: 1,
+  prepareTimeoutMs: 120000,
   stepTimeoutMs: 20000,
   retries: 1,
   stopOnFailure: true,
   verifyState: true,
   allowLowConfidence: false,
+  inputMode: null,
   screenshotOnFailure: false,
   contextDir: '',
   reportDir: '',
@@ -355,6 +394,7 @@ export interface StoredContext {
 }
 
 export interface PlaybackHost {
+  prepare?(): Promise<void>
   execute(request: ActionRequest): Promise<ActionOutcome>
   scan(level: ScanLevel, force: boolean): Promise<ElementGraph>
   currentGraph(): ElementGraph | null

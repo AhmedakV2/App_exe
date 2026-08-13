@@ -106,7 +106,8 @@ export class PlaybackEngine {
     let opened = ''
 
     try {
-      opened = await this.preflight(checked, options)
+      opened = await this.prepare(options)
+      if (!opened) opened = await this.preflight(checked, options)
       if (!opened) {
         const outcome = await this.flow.run(checked, ctx, onProgress)
         steps = outcome.steps
@@ -146,6 +147,24 @@ export class PlaybackEngine {
 
     if (options.reportDir) await writeReport(run, options.reportDir).catch(() => [])
     return run
+  }
+
+  private async prepare(options: PlaybackOptions): Promise<string> {
+    if (!this.host.prepare) return ''
+
+    const started = Date.now()
+    try {
+      await withTimeout(
+        this.host.prepare(),
+        options.prepareTimeoutMs,
+        'surucu hazirligi zaman asimina ugradi'
+      )
+    } catch (error) {
+      return 'Surucu hazirlanamadi: ' + (error instanceof Error ? error.message : String(error))
+    }
+
+    this.log.push('info', '', 'Surucu hazir: ' + (Date.now() - started) + ' ms')
+    return ''
   }
 
   private async preflight(scenario: Scenario, options: PlaybackOptions): Promise<string> {
