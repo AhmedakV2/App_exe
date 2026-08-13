@@ -4,8 +4,11 @@ import type {
   BrowserState,
   ExecuteResult,
   NavKind,
+  StageRect,
   WindowAction
 } from '../../main/browser/types'
+import { THEMES, paintTheme, readTheme, storeTheme, themeOf } from './themes'
+import type { ThemeId } from './themes'
 
 type LineKind = 'in' | 'ok' | 'err' | 'note'
 type Fact = { label: string; ok: boolean }
@@ -32,6 +35,13 @@ const ROLES: Record<LineKind, { label: string; glyph: string }> = {
   err: { label: 'Yapılamadı', glyph: 'alert' },
   note: { label: 'Bilgi', glyph: 'info' }
 }
+
+const SHORTCUTS: { name: string; code: string }[] = [
+  { name: 'Terminali aç / kapat', code: 'Ctrl + K' },
+  { name: 'Adres çubuğuna geç', code: 'Ctrl + L' },
+  { name: 'Tam ekran', code: 'F11' },
+  { name: 'Komut geçmişi', code: '↑ / ↓' }
+]
 
 function num(value: string | undefined): number | null {
   if (value === undefined || value.trim() === '') return null
@@ -210,11 +220,11 @@ const GLYPHS: Record<string, React.JSX.Element> = {
   ),
   collapse: <path d="M15 18l-6-6 6-6" />,
   minimize: <path d="M5 12h14" />,
-  maximize: <rect x="5" y="5" width="14" height="14" rx="2" />,
+  maximize: <rect x="5" y="5" width="14" height="14" />,
   restore: (
     <>
-      <path d="M8 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" />
-      <rect x="4" y="8" width="12" height="12" rx="2" />
+      <path d="M8 8V4h12v12h-4" />
+      <rect x="4" y="8" width="12" height="12" />
     </>
   ),
   close: (
@@ -259,17 +269,14 @@ const GLYPHS: Record<string, React.JSX.Element> = {
       <path d="M12 7.5v.01" />
     </>
   ),
-  lock: (
+  settings: (
     <>
-      <rect x="4" y="11" width="16" height="10" rx="2" />
-      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-    </>
-  ),
-  globe: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M3 12h18" />
-      <path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z" />
+      <path d="M4 7h10" />
+      <path d="M18 7h2" />
+      <path d="M4 17h4" />
+      <path d="M12 17h8" />
+      <rect x="14" y="4" width="4" height="6" />
+      <rect x="8" y="14" width="4" height="6" />
     </>
   )
 }
@@ -335,6 +342,11 @@ function readOutcome(result: ExecuteResult): Extra {
   return { detail: detail.length ? detail : undefined, facts }
 }
 
+function sameRect(a: StageRect | null, b: StageRect): boolean {
+  if (!a) return false
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+}
+
 const Logo = memo(function Logo(): React.JSX.Element {
   return (
     <svg width="18" height="18" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
@@ -358,8 +370,8 @@ const Glyph = memo(function Glyph({
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      strokeLinecap="square"
+      strokeLinejoin="miter"
       aria-hidden="true"
     >
       {GLYPHS[name]}
@@ -474,17 +486,21 @@ export default function App(): React.JSX.Element {
   const [urlDraft, setUrlDraft] = useState('')
   const [elements, setElements] = useState(0)
   const [lastMs, setLastMs] = useState(0)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [theme, setTheme] = useState<ThemeId>(() => readTheme())
 
   const logRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const urlRef = useRef<HTMLInputElement | null>(null)
+  const stageRef = useRef<HTMLDivElement | null>(null)
+  const closeSettingsRef = useRef<HTMLButtonElement | null>(null)
   const pinnedRef = useRef(true)
   const seqRef = useRef(0)
   const cmdRef = useRef('')
   const pendingRef = useRef(false)
   const historyRef = useRef<string[]>([])
   const cursorRef = useRef(-1)
-  const wasOpenRef = useRef(false)
+  const stageRectRef = useRef<StageRect | null>(null)
 
   const terminalOpen = state.terminalOpen
   const terminalHeight = state.terminalHeight
@@ -504,6 +520,28 @@ export default function App(): React.JSX.Element {
     setCmd(value)
   }, [])
 
+  const focusPrompt = useCallback((): void => {
+    const el = inputRef.current
+    if (!el || el.disabled) return
+    if (document.activeElement === el) return
+    el.focus()
+  }, [])
+
+  const reportStage = useCallback((): void => {
+    const el = stageRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const next: StageRect = {
+      x: Math.round(rect.left),
+      y: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height)
+    }
+    if (sameRect(stageRectRef.current, next)) return
+    stageRectRef.current = next
+    window.aft.setStage(next)
+  }, [])
+
   useEffect(() => {
     const off = window.aft.onState((next) => {
       setState(next)
@@ -514,8 +552,41 @@ export default function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    paintTheme(theme)
+    storeTheme(theme)
+    window.aft.setChrome(themeOf(theme).chrome)
+  }, [theme])
+
+  useEffect(() => {
+    const el = stageRef.current
+    if (!el) return
+
+    const observer = new ResizeObserver(() => reportStage())
+    observer.observe(el)
+    observer.observe(document.documentElement)
+    window.addEventListener('resize', reportStage)
+    reportStage()
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', reportStage)
+    }
+  }, [reportStage])
+
+  useEffect(reportStage)
+
+  useEffect(() => {
+    window.aft.setModal(settingsOpen)
+    if (settingsOpen) closeSettingsRef.current?.focus()
+  }, [settingsOpen])
+
+  useEffect(() => {
     return window.aft.onFocusUrl(() => urlRef.current?.focus())
   }, [])
+
+  useEffect(() => {
+    return window.aft.onFocusTerminal(() => focusPrompt())
+  }, [focusPrompt])
 
   useEffect(() => {
     if (!terminalOpen || !pinnedRef.current) return
@@ -525,9 +596,31 @@ export default function App(): React.JSX.Element {
   }, [lines, terminalOpen, terminalHeight])
 
   useEffect(() => {
-    if (terminalOpen && !wasOpenRef.current) inputRef.current?.focus()
-    wasOpenRef.current = terminalOpen
-  }, [terminalOpen])
+    if (!terminalOpen || settingsOpen || urlFocused) return
+
+    const keep = (): void => {
+      const el = inputRef.current
+      if (!el || el.disabled) return
+      const active = document.activeElement
+      if (active === el) return
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return
+      if (active instanceof HTMLSelectElement) return
+      el.focus()
+    }
+
+    keep()
+    const timer = window.setTimeout(keep, 60)
+    window.addEventListener('focus', keep)
+    document.addEventListener('focusin', keep)
+    document.addEventListener('visibilitychange', keep)
+
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('focus', keep)
+      document.removeEventListener('focusin', keep)
+      document.removeEventListener('visibilitychange', keep)
+    }
+  }, [terminalOpen, settingsOpen, urlFocused, pending, state.url, state.loading, terminalHeight])
 
   useEffect(() => {
     if (!resizing) return
@@ -593,6 +686,13 @@ export default function App(): React.JSX.Element {
   const closeTerminal = useCallback((): void => {
     window.aft.setTerminal(false)
   }, [])
+
+  const openSettings = useCallback((): void => setSettingsOpen(true), [])
+
+  const closeSettings = useCallback((): void => {
+    setSettingsOpen(false)
+    window.requestAnimationFrame(() => focusPrompt())
+  }, [focusPrompt])
 
   const clearLog = useCallback((): void => {
     setLines([])
@@ -667,6 +767,7 @@ export default function App(): React.JSX.Element {
 
     if (key === 'cls') {
       clearLog()
+      focusPrompt()
       return
     }
 
@@ -674,12 +775,14 @@ export default function App(): React.JSX.Element {
 
     if (key === 'a' || key === '?') {
       printHelp()
+      focusPrompt()
       return
     }
 
     const entry = ACTION_MAP.get(key)
     if (!entry) {
       push('err', 'Bilinmeyen komut: ' + head, { detail: ['Tüm komutlar için: a'] })
+      focusPrompt()
       return
     }
 
@@ -688,6 +791,7 @@ export default function App(): React.JSX.Element {
       push('err', 'Komut eksik veya geçersiz değer içeriyor.', {
         detail: ['Kullanım: ' + entry.usage]
       })
+      focusPrompt()
       return
     }
 
@@ -706,8 +810,9 @@ export default function App(): React.JSX.Element {
     } finally {
       pendingRef.current = false
       setPending(false)
+      window.requestAnimationFrame(() => focusPrompt())
     }
-  }, [clearLog, printHelp, push, writeCmd])
+  }, [clearLog, focusPrompt, printHelp, push, writeCmd])
 
   const stepHistory = useCallback(
     (direction: number): void => {
@@ -825,7 +930,14 @@ export default function App(): React.JSX.Element {
     [push, urlDraft]
   )
 
-  const secure = state.url.startsWith('https://')
+  const onSheetKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>): void => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      closeSettings()
+    },
+    [closeSettings]
+  )
 
   return (
     <div className={'shell' + (resizing ? ' resizing' : '')}>
@@ -860,9 +972,6 @@ export default function App(): React.JSX.Element {
         <div className="bar-drag" onDoubleClick={maximizeWindow} />
 
         <div className={'omnibox' + (urlFocused ? ' focused' : '')}>
-          <span className={'omni-mark' + (secure ? ' secure' : '')}>
-            <Glyph name={secure ? 'lock' : 'globe'} size={13} />
-          </span>
           <input
             ref={urlRef}
             className="omni-input"
@@ -878,9 +987,7 @@ export default function App(): React.JSX.Element {
           {state.loading ? <span className="omni-load" /> : null}
         </div>
 
-        <div className="bar-drag" onDoubleClick={maximizeWindow}>
-          <span className="bar-title">{state.title}</span>
-        </div>
+        <div className="bar-drag" onDoubleClick={maximizeWindow} />
 
         <div className="bar-right">
           <IconButton
@@ -909,10 +1016,11 @@ export default function App(): React.JSX.Element {
         <span className="side-gap" />
         <IconButton
           name="terminal"
-          title={terminalOpen ? 'Terminali kapat (Ctrl+`)' : 'Terminali aç (Ctrl+`)'}
+          title={terminalOpen ? 'Terminali kapat (Ctrl+K)' : 'Terminali aç (Ctrl+K)'}
           onClick={toggleTerminal}
           active={terminalOpen}
         />
+        <IconButton name="settings" title="Ayarlar" onClick={openSettings} active={settingsOpen} />
       </aside>
 
       <div className="workspace">
@@ -935,7 +1043,7 @@ export default function App(): React.JSX.Element {
               <span className="panel-badge">Ayrıldı</span>
               <p className="panel-lead">Bu panel ajan konuşması için ayrıldı.</p>
               <p className="panel-note">
-                Aksiyon komutları alttaki terminale taşındı. Terminali açmak için Ctrl+` veya
+                Aksiyon komutları alttaki terminale taşındı. Terminali açmak için Ctrl+K veya
                 soldaki terminal düğmesini kullanın.
               </p>
               <button className="panel-action" onClick={openTerminal} type="button">
@@ -947,7 +1055,7 @@ export default function App(): React.JSX.Element {
         ) : null}
 
         <div className="main">
-          <div className="stage" />
+          <div className="stage" ref={stageRef} />
 
           {terminalOpen && terminalHeight > 0 ? (
             <section className="terminal" style={{ height: terminalHeight }}>
@@ -1070,6 +1178,7 @@ export default function App(): React.JSX.Element {
                 />
                 <button
                   className="send"
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => void run()}
                   disabled={pending || !cmd.trim()}
                   title="Çalıştır"
@@ -1084,6 +1193,68 @@ export default function App(): React.JSX.Element {
         </div>
       </div>
 
+      {settingsOpen ? (
+        <div className="sheet" role="dialog" aria-modal="true" aria-label="Ayarlar">
+          <div className="sheet-card" onKeyDown={onSheetKeyDown}>
+            <header className="sheet-head">
+              <span className="sheet-title">AYARLAR</span>
+              <button
+                ref={closeSettingsRef}
+                className="ghost-btn"
+                title="Ayarları kapat"
+                aria-label="Ayarları kapat"
+                onClick={closeSettings}
+                type="button"
+              >
+                <Glyph name="close" size={15} />
+              </button>
+            </header>
+
+            <div className="sheet-body">
+              <section className="sheet-block">
+                <h3 className="sheet-label">Tema</h3>
+                <div className="theme-grid">
+                  {THEMES.map((item) => (
+                    <button
+                      key={item.id}
+                      className={'theme-card' + (item.id === theme ? ' sel' : '')}
+                      onClick={() => setTheme(item.id)}
+                      aria-pressed={item.id === theme}
+                      type="button"
+                    >
+                      <span className="theme-swatch">
+                        {item.swatch.map((color) => (
+                          <span key={color} style={{ background: color }} />
+                        ))}
+                      </span>
+                      <span className="theme-name">{item.label}</span>
+                      <span className="theme-note">{item.note}</span>
+                      {item.id === theme ? (
+                        <span className="theme-mark">
+                          <Glyph name="check" size={12} />
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="sheet-block">
+                <h3 className="sheet-label">Kısayollar</h3>
+                <div className="key-rows">
+                  {SHORTCUTS.map((item) => (
+                    <div key={item.code} className="key-row">
+                      <span className="key-name">{item.name}</span>
+                      <span className="key-code">{item.code}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <footer className="shell-foot">
         <span className={'status-live' + (state.loading ? ' busy' : '')} />
         <span className="status-item">{state.loading ? 'yükleniyor' : 'hazır'}</span>
@@ -1094,7 +1265,7 @@ export default function App(): React.JSX.Element {
         <span className="status-sep" />
         <span className="status-item">görüş {state.vision ? 'açık' : 'kapalı'}</span>
         <span className="status-push" />
-        <span className="status-key">Ctrl+` terminal</span>
+        <span className="status-key">Ctrl+K terminal</span>
         <span className="status-key">Ctrl+L adres</span>
       </footer>
     </div>

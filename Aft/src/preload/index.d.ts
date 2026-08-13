@@ -1,4 +1,10 @@
-import type { BrowserState, ExecuteResult, NavKind, WindowAction } from '../main/browser/types'
+import type {
+  BrowserState,
+  ExecuteResult,
+  NavKind,
+  StageRect,
+  WindowAction
+} from '../main/browser/types'
 import type { CoverageSummary } from '../main/discovery'
 
 declare global {
@@ -13,9 +19,13 @@ declare global {
       setChat: (open: boolean) => void
       setTerminal: (open: boolean) => void
       resizeTerminal: (active: boolean) => void
+      setStage: (rect: StageRect) => void
+      setModal: (open: boolean) => void
+      setChrome: (color: string) => void
       requestState: () => void
       onState: (fn: (state: BrowserState) => void) => () => void
       onFocusUrl: (fn: () => void) => () => void
+      onFocusTerminal: (fn: () => void) => () => void
       versions: NodeJS.ProcessVersions
     }
   }

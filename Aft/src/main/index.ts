@@ -5,11 +5,18 @@ import { existsSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { mountIdentity, mountPlayback, unmountIdentity, unmountPlayback } from './bridge'
 import { BrowserController } from './browser/BrowserController'
-import { AgentAction, BrowserState, ExecuteResult, NavKind, WindowAction } from './browser/types'
+import {
+  AgentAction,
+  BrowserState,
+  ExecuteResult,
+  NavKind,
+  StageRect,
+  WindowAction
+} from './browser/types'
 import type { CoverageSummary, ScanLevel } from './discovery'
 
 const FRAME = 40
-const DIVIDER = 0
+const DIVIDER = 6
 const CHAT_WIDTH = 320
 const STAGE_RADIUS = 0
 const FRAME_COLOR = '#1e1f22'
@@ -34,6 +41,9 @@ let resizeTimer: ReturnType<typeof setInterval> | null = null
 let resizeStartedAt = 0
 let layoutQueued = false
 let stateQueued = false
+let stageRect: StageRect | null = null
+let modalOpen = false
+let pageHold = false
 
 function preloadPath(): string {
   const mjs = join(__dirname, '../preload/index.mjs')
@@ -74,20 +84,88 @@ function visibleArea(): Rectangle {
   }
 }
 
-function layout(): void {
-  if (!win || win.isDestroyed()) return
-  const area = visibleArea()
+function fallbackStage(area: Rectangle): Rectangle {
   const x = area.x + FRAME + chatBlock(area.width)
   const y = area.y + FRAME
-  const bottom = area.y + area.height - FRAME - terminalBlock(area.height)
+  const gap = terminalOpen ? DIVIDER : 0
+  const bottom = area.y + area.height - FRAME - terminalBlock(area.height) - gap
 
-  chatView.setBounds(area)
-  targetView.setBounds({
+  return {
     x,
     y,
     width: Math.max(0, area.x + area.width - FRAME - x),
     height: Math.max(0, bottom - y)
-  })
+  }
+}
+
+function stageBounds(area: Rectangle): Rectangle {
+  if (!stageRect) return fallbackStage(area)
+
+  const x = area.x + stageRect.x
+  const y = area.y + stageRect.y
+
+  return {
+    x,
+    y,
+    width: Math.max(0, Math.min(stageRect.width, area.x + area.width - x)),
+    height: Math.max(0, Math.min(stageRect.height, area.y + area.height - y))
+  }
+}
+
+function layout(): void {
+  if (!win || win.isDestroyed()) return
+  const area = visibleArea()
+  chatView.setBounds(area)
+  targetView.setBounds(stageBounds(area))
+}
+
+function readRect(value: unknown): StageRect | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Record<string, unknown>
+  const x = Number(raw.x)
+  const y = Number(raw.y)
+  const width = Number(raw.width)
+  const height = Number(raw.height)
+
+  if (![x, y, width, height].every((part) => Number.isFinite(part))) return null
+
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.max(0, Math.round(width)),
+    height: Math.max(0, Math.round(height))
+  }
+}
+
+function setStage(value: unknown): void {
+  const rect = readRect(value)
+  if (!rect) return
+  const current = stageRect
+  if (
+    current &&
+    current.x === rect.x &&
+    current.y === rect.y &&
+    current.width === rect.width &&
+    current.height === rect.height
+  ) {
+    return
+  }
+  stageRect = rect
+  layout()
+}
+
+function setModal(open: boolean): void {
+  if (open === modalOpen) return
+  modalOpen = open
+  if (!targetView || targetView.webContents.isDestroyed()) return
+  targetView.setVisible(!open)
+  if (!open) layout()
+}
+
+function setChrome(color: unknown): void {
+  if (typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color)) return
+  if (win && !win.isDestroyed()) win.setBackgroundColor(color)
+  if (chatView && !chatView.webContents.isDestroyed()) chatView.setBackgroundColor(color)
 }
 
 function scheduleLayout(): void {
@@ -125,6 +203,19 @@ function focusChat(): void {
   chatView.webContents.focus()
 }
 
+function focusTerminal(): void {
+  if (!terminalOpen || modalOpen) return
+  if (!chatView || chatView.webContents.isDestroyed()) return
+  pageHold = false
+  chatView.webContents.focus()
+  chatView.webContents.send('aft:focus-terminal')
+}
+
+function focusTerminalOnLoad(): void {
+  if (pageHold) return
+  focusTerminal()
+}
+
 function setChat(open: boolean): void {
   if (open === chatOpen) return
   chatOpen = open
@@ -139,7 +230,7 @@ function setTerminal(open: boolean, focus: boolean): void {
     layout()
     pushState()
   }
-  if (open && focus) focusChat()
+  if (open && focus) focusTerminal()
 }
 
 function applyCursorHeight(): void {
@@ -197,6 +288,7 @@ function respond(
   return handler().then(
     (out) => {
       pushState()
+      focusTerminal()
       return {
         ok: out.ok ?? true,
         result: out.result,
@@ -207,6 +299,7 @@ function respond(
     },
     (err: unknown) => {
       pushState()
+      focusTerminal()
       return {
         ok: false,
         result: err instanceof Error ? err.message : String(err),
@@ -242,6 +335,7 @@ function navigate(kind: NavKind): void {
       break
   }
   pushState()
+  focusTerminal()
 }
 
 function toggleFullScreen(): void {
@@ -288,7 +382,7 @@ function bindShortcuts(wc: WebContents): void {
     if (!input.control || input.alt || input.meta) return
     const key = input.key.toLowerCase()
 
-    if (key === '`') {
+    if (key === 'k') {
       event.preventDefault()
       setTerminal(!terminalOpen, true)
       return
@@ -306,12 +400,28 @@ function bindShortcuts(wc: WebContents): void {
   })
 }
 
+function bindPageFocus(): void {
+  targetView.webContents.on('input-event', (_event, input) => {
+    if (input.type === 'mouseDown' || input.type === 'keyDown') pageHold = true
+  })
+
+  chatView.webContents.on('input-event', (_event, input) => {
+    if (input.type === 'mouseDown' || input.type === 'keyDown') pageHold = false
+  })
+
+  chatView.webContents.on('did-finish-load', () => {
+    layout()
+    pushState()
+    focusTerminal()
+  })
+}
+
 function bindWindowEvents(): void {
   const sync = (): void => {
     scheduleLayout()
     pushState()
   }
-  win.on('resize', scheduleLayout)
+  win.on('resize', sync)
   win.on('maximize', sync)
   win.on('unmaximize', sync)
   win.on('enter-full-screen', sync)
@@ -329,8 +439,12 @@ function bindTargetEvents(): void {
 
   wc.on('did-start-loading', pushState)
   wc.on('did-stop-loading', pushState)
-  wc.on('did-navigate', pushState)
   wc.on('page-title-updated', pushState)
+
+  wc.on('did-navigate', () => {
+    pushState()
+    focusTerminalOnLoad()
+  })
 
   wc.on('did-navigate-in-page', () => {
     controller.sync()
@@ -341,6 +455,7 @@ function bindTargetEvents(): void {
     controller.attach()
     controller.sync()
     pushState()
+    focusTerminalOnLoad()
   })
 
   wc.on('did-fail-load', pushState)
@@ -356,7 +471,7 @@ function createWindow(): void {
     title: 'AFT',
     icon: iconPath,
     frame: false,
-    roundedCorners: true,
+    roundedCorners: false,
     backgroundColor: FRAME_COLOR
   })
 
@@ -377,6 +492,7 @@ function createWindow(): void {
   bindWindowEvents()
   bindShortcuts(chatView.webContents)
   bindShortcuts(targetView.webContents)
+  bindPageFocus()
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     chatView.webContents.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -451,6 +567,12 @@ app.whenReady().then(() => {
     if (active) startResize()
     else stopResize()
   })
+
+  ipcMain.on('aft:stage', (_e, rect: unknown) => setStage(rect))
+
+  ipcMain.on('aft:modal', (_e, open: boolean) => setModal(Boolean(open)))
+
+  ipcMain.on('aft:chrome', (_e, color: unknown) => setChrome(color))
 
   ipcMain.on('aft:state', () => pushState())
 

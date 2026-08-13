@@ -55,6 +55,13 @@ export interface ExecuteResult {
   outcome: ActionOutcome | null
 }
 
+export interface StageRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export type NavKind = 'back' | 'forward' | 'reload' | 'home' | 'stop'
 
 export type WindowAction = 'minimize' | 'maximize' | 'close' | 'fullscreen'
