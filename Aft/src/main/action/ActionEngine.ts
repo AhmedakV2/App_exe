@@ -38,6 +38,7 @@ export class ActionEngine {
   private readonly getGraph: () => ElementGraph | null
   private readonly lookup: ((descriptorId: string) => DescriptorLookup | null) | null
   private queue: Promise<unknown> = Promise.resolve()
+  private started: Promise<void> | null = null
 
   constructor(
     private readonly tp: Transport,
@@ -52,14 +53,24 @@ export class ActionEngine {
     this.lookup = config.resolveDescriptor ?? null
   }
 
-  async start(): Promise<void> {
-    await this.tp.start()
-    await this.navigation.enable()
-    await this.dialogs.install(
-      this.settings.dialogPolicy,
-      this.settings.promptText,
-      this.settings.downloadPath
-    )
+  start(): Promise<void> {
+    if (!this.started) this.started = this.install()
+    return this.started
+  }
+
+  private async install(): Promise<void> {
+    try {
+      await this.tp.start()
+      await this.navigation.enable()
+      await this.dialogs.install(
+        this.settings.dialogPolicy,
+        this.settings.promptText,
+        this.settings.downloadPath
+      )
+    } catch (error) {
+      this.started = null
+      throw error
+    }
   }
 
   execute(request: ActionRequest): Promise<ActionOutcome> {
@@ -73,6 +84,7 @@ export class ActionEngine {
   }
 
   dispose(): void {
+    this.started = null
     this.navigation.dispose()
     this.dialogs.dispose()
   }
@@ -241,7 +253,7 @@ export class ActionEngine {
     const text = request.text ?? ''
     if (!text && !clearFirst) throw new ActionError('invalid-request', 'metin bos')
 
-    if (point) await this.input.click(point)
+    if (point && preferred === 'real-input') await this.input.click(point)
     await this.input.focus(node.sessionId, objectId)
     if (clearFirst) await this.input.clear(node.sessionId, objectId)
 

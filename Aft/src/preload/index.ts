@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import './identity'
+import './playback'
 
 const api = {
   execute: (action: unknown) => ipcRenderer.invoke('aft:execute', action),

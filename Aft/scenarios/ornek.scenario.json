@@ -1,0 +1,93 @@
+{
+  "version": "scenario/1.0.0",
+  "id": "ornek-kayit",
+  "title": "Ornek kayit akisi",
+  "description": "Elle yazilan senaryo dosyasi icin referans bicim",
+  "baseUrl": "https://ornek.test/",
+  "defaults": {
+    "scanLevel": 1,
+    "stepTimeoutMs": 20000,
+    "retries": 1,
+    "stopOnFailure": true,
+    "verifyState": true,
+    "allowLowConfidence": false
+  },
+  "steps": [
+    {
+      "id": "acilis",
+      "kind": "navigate",
+      "title": "Formu ac",
+      "url": "kayit.html"
+    },
+    {
+      "id": "baslik",
+      "kind": "assert",
+      "title": "Baslik dogrulamasi",
+      "assert": "title-contains",
+      "expected": "Kayit"
+    },
+    {
+      "id": "form",
+      "kind": "group",
+      "title": "Form alanlari",
+      "steps": [
+        {
+          "id": "ad",
+          "kind": "clear-type",
+          "title": "Ad alanini doldur",
+          "target": { "fieldName": "ad" },
+          "text": "Ahmet"
+        },
+        {
+          "id": "eposta",
+          "kind": "clear-type",
+          "title": "Eposta alanini doldur",
+          "target": { "elementId": "eposta" },
+          "text": "ahmet@ornek.test"
+        },
+        {
+          "id": "sehir",
+          "kind": "select-option",
+          "title": "Sehir sec",
+          "target": { "fieldName": "sehir" },
+          "optionValue": "ist"
+        },
+        {
+          "id": "sozlesme",
+          "kind": "click",
+          "title": "Sozlesmeyi isaretle",
+          "target": { "fieldName": "sozlesme" }
+        }
+      ]
+    },
+    {
+      "id": "gonder",
+      "kind": "click",
+      "title": "Formu gonder",
+      "target": { "testId": "gonder" },
+      "condition": { "kind": "previous-passed" }
+    },
+    {
+      "id": "sonuc-adres",
+      "kind": "assert",
+      "title": "Sonuc adresi",
+      "assert": "url-matches",
+      "expected": "*tamam.html*"
+    },
+    {
+      "id": "sonuc-metni",
+      "kind": "assert",
+      "title": "Sonuc metni",
+      "assert": "text-equals",
+      "target": { "elementId": "sonuc" },
+      "expected": "kayit alindi"
+    },
+    {
+      "id": "form-yok",
+      "kind": "assert",
+      "title": "Form artik yok",
+      "assert": "element-absent",
+      "target": { "testId": "gonder" }
+    }
+  ]
+}
