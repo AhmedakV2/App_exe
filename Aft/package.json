@@ -14,6 +14,8 @@
     "start": "electron-vite preview",
     "regression": "electron-vite build && electron ./out/main/regression.js",
     "smoke": "electron-vite build && electron ./out/main/smoke.js",
+    "playback": "electron-vite build && electron ./out/main/playback.js",
+    "playback:verify": "electron-vite build && electron ./out/main/playback-verify.js",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",

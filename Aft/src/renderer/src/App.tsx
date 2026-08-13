@@ -1,63 +1,189 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from 'react'
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AgentAction,
   BrowserState,
+  DragAxis,
   ExecuteResult,
   NavKind,
+  StageBox,
   WindowAction
 } from '../../main/browser/types'
+import { THEMES, paintTheme, readTheme, storeTheme, themeOf } from './themes'
+import type { ThemeId } from './themes'
 
-type ParsedCommand = { kind: 'help' } | { kind: 'action'; action: AgentAction } | null
-type LineKind = 'in' | 'ok' | 'err' | 'el'
-type Line = { id: number; kind: LineKind; text: string }
+type LineKind = 'in' | 'ok' | 'err' | 'note'
+type Fact = { label: string; ok: boolean }
+type Line = {
+  id: number
+  kind: LineKind
+  text: string
+  time: string
+  ms?: number
+  facts?: Fact[]
+  detail?: string[]
+}
+type Extra = { ms?: number; facts?: Fact[]; detail?: string[] }
+type Entry = { key: string; usage: string; hint: string }
+type ActionEntry = Entry & { build: (args: string[]) => AgentAction | null }
 
-const MAX_LINES = 300
+const MAX_LINES = 400
 const PIN_SLACK = 48
+const MAX_SUGGESTIONS = 6
 
-const COLORS: Record<LineKind, string> = {
-  err: '#ff6b6b',
-  in: '#ef6c1a',
-  el: '#8a8a8a',
-  ok: '#cfcfcf'
+const CHAT_KEY = 'aft:chat-width'
+const TERM_KEY = 'aft:term-height'
+const CHAT_SIZE = 320
+const TERM_SIZE = 268
+const CHAT_MIN = 220
+const TERM_MIN = 120
+const CHAT_MAX_RATIO = 0.6
+const TERM_MAX_RATIO = 0.72
+
+const ROLES: Record<LineKind, { label: string; glyph: string }> = {
+  in: { label: 'Komut', glyph: 'prompt' },
+  ok: { label: 'Tamamlandı', glyph: 'check' },
+  err: { label: 'Yapılamadı', glyph: 'alert' },
+  note: { label: 'Bilgi', glyph: 'info' }
 }
 
-const COMMANDS: Record<string, { usage: string; build: (a: string[]) => AgentAction }> = {
-  go: { usage: 'go <url>', build: (a) => ({ action: 'go_to_url', url: a[0] }) },
-  click: { usage: 'click <index>', build: (a) => ({ action: 'click', index: Number(a[0]) }) },
-  dbclick: {
-    usage: 'dbclick <index>',
-    build: (a) => ({ action: 'double_click', index: Number(a[0]) })
-  },
-  rclick: {
-    usage: 'rclick <index>',
-    build: (a) => ({ action: 'right_click', index: Number(a[0]) })
-  },
-  type: {
-    usage: 'type <index> <metin>',
-    build: (a) => ({ action: 'type', index: Number(a[0]), text: a.slice(1).join(' ') })
-  },
-  clear: { usage: 'clear <index>', build: (a) => ({ action: 'clear_type', index: Number(a[0]) }) },
-  move: { usage: 'move <index>', build: (a) => ({ action: 'mouse_move', index: Number(a[0]) }) },
-  scroll: { usage: 'scroll <deltaY>', build: (a) => ({ action: 'scroll', deltaY: Number(a[0]) }) },
-  snap: { usage: 'snap', build: () => ({ action: 'snapshot' }) },
-  press: {
-    usage: 'press <index> <key>',
-    build: (a) => ({ action: 'press_key', key: a[1], index: a[0] ? Number(a[0]) : undefined })
-  },
-  sel: {
-    usage: 'sel <index> <deger>',
-    build: (a) => ({
-      action: 'select_option',
-      index: Number(a[0]),
-      optionValue: a.slice(1).join(' ')
-    })
-  },
-  upload: {
-    usage: 'upload <index> <dosya...>',
-    build: (a) => ({ action: 'upload', index: Number(a[0]), files: a.slice(1) })
-  },
-  wait: { usage: 'wait', build: () => ({ action: 'wait' }) }
+const SHORTCUTS: { name: string; code: string }[] = [
+  { name: 'Terminali aç / kapat', code: 'Ctrl + K' },
+  { name: 'Adres çubuğuna geç', code: 'Ctrl + L' },
+  { name: 'Tam ekran', code: 'F11' },
+  { name: 'Komut geçmişi', code: '↑ / ↓' }
+]
+
+function num(value: string | undefined): number | null {
+  if (value === undefined || value.trim() === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
+
+const ACTIONS: ActionEntry[] = [
+  {
+    key: 'go',
+    usage: 'go <adres>',
+    hint: 'Verilen adrese gider',
+    build: (a) => (a[0] ? { action: 'go_to_url', url: toUrl(a.join(' ')) } : null)
+  },
+  {
+    key: 'click',
+    usage: 'click <no>',
+    hint: 'Öğeye tıklar',
+    build: (a) => {
+      const index = num(a[0])
+      return index === null ? null : { action: 'click', index }
+    }
+  },
+  {
+    key: 'dbclick',
+    usage: 'dbclick <no>',
+    hint: 'Öğeye çift tıklar',
+    build: (a) => {
+      const index = num(a[0])
+      return index === null ? null : { action: 'double_click', index }
+    }
+  },
+  {
+    key: 'rclick',
+    usage: 'rclick <no>',
+    hint: 'Öğeye sağ tıklar',
+    build: (a) => {
+      const index = num(a[0])
+      return index === null ? null : { action: 'right_click', index }
+    }
+  },
+  {
+    key: 'type',
+    usage: 'type <no> <metin>',
+    hint: 'Alana metin yazar',
+    build: (a) => {
+      const index = num(a[0])
+      const text = a.slice(1).join(' ')
+      return index === null || !text ? null : { action: 'type', index, text }
+    }
+  },
+  {
+    key: 'clear',
+    usage: 'clear <no>',
+    hint: 'Alanı temizler',
+    build: (a) => {
+      const index = num(a[0])
+      return index === null ? null : { action: 'clear_type', index }
+    }
+  },
+  {
+    key: 'move',
+    usage: 'move <no>',
+    hint: 'İmleci öğenin üzerine taşır',
+    build: (a) => {
+      const index = num(a[0])
+      return index === null ? null : { action: 'mouse_move', index }
+    }
+  },
+  {
+    key: 'scroll',
+    usage: 'scroll <piksel>',
+    hint: 'Sayfayı dikey kaydırır',
+    build: (a) => {
+      const deltaY = num(a[0])
+      return deltaY === null ? null : { action: 'scroll', deltaY }
+    }
+  },
+  {
+    key: 'snap',
+    usage: 'snap',
+    hint: 'Sayfayı yeniden tarar',
+    build: () => ({ action: 'snapshot' })
+  },
+  {
+    key: 'press',
+    usage: 'press [no] <tuş>',
+    hint: 'Tuşa basar',
+    build: (a) => {
+      if (a.length >= 2) {
+        const index = num(a[0])
+        return index === null || !a[1] ? null : { action: 'press_key', index, key: a[1] }
+      }
+      return a[0] ? { action: 'press_key', key: a[0] } : null
+    }
+  },
+  {
+    key: 'sel',
+    usage: 'sel <no> <değer>',
+    hint: 'Açılır listeden seçer',
+    build: (a) => {
+      const index = num(a[0])
+      const optionValue = a.slice(1).join(' ')
+      return index === null || !optionValue ? null : { action: 'select_option', index, optionValue }
+    }
+  },
+  {
+    key: 'upload',
+    usage: 'upload <no> <dosya...>',
+    hint: 'Dosya yükler',
+    build: (a) => {
+      const index = num(a[0])
+      const files = a.slice(1).filter(Boolean)
+      return index === null || !files.length ? null : { action: 'upload', index, files }
+    }
+  },
+  {
+    key: 'wait',
+    usage: 'wait',
+    hint: 'Sayfanın durulmasını bekler',
+    build: () => ({ action: 'wait' })
+  }
+]
+
+const BUILTINS: Entry[] = [
+  { key: 'a', usage: 'a', hint: 'Komut listesini yazdırır' },
+  { key: 'cls', usage: 'cls', hint: 'Terminal geçmişini temizler' }
+]
+
+const PALETTE: Entry[] = [...ACTIONS, ...BUILTINS]
+const ACTION_MAP = new Map(ACTIONS.map((entry) => [entry.key, entry]))
+const PALETTE_KEYS = new Set(PALETTE.map((entry) => entry.key))
 
 const GLYPHS: Record<string, React.JSX.Element> = {
   chat: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,
@@ -104,11 +230,11 @@ const GLYPHS: Record<string, React.JSX.Element> = {
   ),
   collapse: <path d="M15 18l-6-6 6-6" />,
   minimize: <path d="M5 12h14" />,
-  maximize: <rect x="5" y="5" width="14" height="14" rx="2" />,
+  maximize: <rect x="5" y="5" width="14" height="14" />,
   restore: (
     <>
-      <path d="M8 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" />
-      <rect x="4" y="8" width="12" height="12" rx="2" />
+      <path d="M8 8V4h12v12h-4" />
+      <rect x="4" y="8" width="12" height="12" />
     </>
   ),
   close: (
@@ -116,25 +242,162 @@ const GLYPHS: Record<string, React.JSX.Element> = {
       <path d="M18 6L6 18" />
       <path d="M6 6l12 12" />
     </>
+  ),
+  terminal: (
+    <>
+      <path d="M4 17l6-5-6-5" />
+      <path d="M12 19h8" />
+    </>
+  ),
+  prompt: (
+    <>
+      <path d="M4 17l6-5-6-5" />
+      <path d="M12 19h8" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4 7h16" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M6 7l1 13h10l1-13" />
+      <path d="M9 7V4h6v3" />
+    </>
+  ),
+  check: <path d="M20 6L9 17l-5-5" />,
+  alert: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v6" />
+      <path d="M12 16.5v.01" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v6" />
+      <path d="M12 7.5v.01" />
+    </>
+  ),
+  settings: (
+    <>
+      <path d="M4 7h10" />
+      <path d="M18 7h2" />
+      <path d="M4 17h4" />
+      <path d="M12 17h8" />
+      <rect x="14" y="4" width="4" height="6" />
+      <rect x="8" y="14" width="4" height="6" />
+    </>
   )
+}
+
+function toUrl(input: string): string {
+  const text = input.trim()
+  if (!text) return ''
+  if (/^[a-z][a-z0-9+.-]*:/i.test(text)) return text
+  if (/^(localhost|\d{1,3}(\.\d{1,3}){3})(:\d+)?(\/|$)/i.test(text)) return 'http://' + text
+  if (/^[^\s/?#]+\.[^\s/?#]{2,}/.test(text)) return 'https://' + text
+  return 'https://www.google.com/search?q=' + encodeURIComponent(text)
+}
+
+function shortUrl(raw: string): string {
+  if (!raw) return ''
+  try {
+    const parsed = new URL(raw)
+    const path = parsed.pathname === '/' ? '' : parsed.pathname
+    return parsed.host + path + parsed.search
+  } catch {
+    return raw
+  }
+}
+
+function stamp(): string {
+  const now = new Date()
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  return pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds())
+}
+
+function formatMs(ms: number): string {
+  if (ms < 1000) return ms + ' ms'
+  return (ms / 1000).toFixed(1).replace('.', ',') + ' sn'
+}
+
+function readOutcome(result: ExecuteResult): Extra {
+  const outcome = result.outcome
+  if (!outcome) return {}
+
+  const detail: string[] = []
+  let facts: Fact[] | undefined
+
+  if (!result.ok && outcome.code) detail.push('kod: ' + outcome.code)
+  if (result.ok && outcome.mode === 'direct-call') detail.push('yol: doğrudan çağrı')
+
+  const report = outcome.actionability
+  if (!result.ok && report) {
+    facts = [
+      { label: 'görünür', ok: report.visible },
+      { label: 'etkin', ok: report.enabled },
+      { label: 'kararlı', ok: report.stable },
+      { label: 'üstü açık', ok: report.unobstructed }
+    ]
+    if (report.reason) detail.push('hazırlık: ' + report.reason)
+  }
+
+  for (const dialog of outcome.dialogs)
+    detail.push('diyalog: ' + dialog.type + ' · ' + dialog.policy)
+  for (const download of outcome.downloads) {
+    detail.push('indirme: ' + download.fileName + ' · ' + download.state)
+  }
+
+  return { detail: detail.length ? detail : undefined, facts }
+}
+
+function sameBox(a: StageBox | null, b: StageBox): boolean {
+  if (!a) return false
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+}
+
+function part(value: number, total: number): number {
+  if (!total) return 0
+  return Math.round((value / total) * 10000) / 10000
+}
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(Math.max(value, low), Math.max(low, high))
+}
+
+function readSize(key: string, fallback: number): number {
+  try {
+    const raw = Number(window.localStorage.getItem(key))
+    return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function storeSize(key: string, value: number): void {
+  try {
+    window.localStorage.setItem(key, String(Math.round(value)))
+  } catch {
+    return
+  }
 }
 
 const Logo = memo(function Logo(): React.JSX.Element {
   return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 512 512"
-      fill="currentColor"
-      aria-hidden="true"
-      role="img"
-    >
+    <svg width="18" height="18" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
       <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
     </svg>
   )
 })
 
-const Glyph = memo(function Glyph({ name, size = 18 }: { name: string; size?: number }) {
+const Glyph = memo(function Glyph({
+  name,
+  size = 18
+}: {
+  name: string
+  size?: number
+}): React.JSX.Element {
   return (
     <svg
       width={size}
@@ -143,8 +406,9 @@ const Glyph = memo(function Glyph({ name, size = 18 }: { name: string; size?: nu
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      strokeLinecap="square"
+      strokeLinejoin="miter"
+      aria-hidden="true"
     >
       {GLYPHS[name]}
     </svg>
@@ -157,7 +421,9 @@ const IconButton = memo(function IconButton({
   onClick,
   active,
   disabled,
-  danger
+  danger,
+  small,
+  badge
 }: {
   name: string
   title: string
@@ -165,19 +431,66 @@ const IconButton = memo(function IconButton({
   active?: boolean
   disabled?: boolean
   danger?: boolean
-}) {
-  const cls = 'icon-btn' + (active ? ' on' : '') + (danger ? ' danger' : '')
+  small?: boolean
+  badge?: number
+}): React.JSX.Element {
+  const cls =
+    'icon-btn' +
+    (active ? ' on' : '') +
+    (danger ? ' danger' : '') +
+    (small ? ' small' : '') +
+    (badge ? ' badged' : '')
+
   return (
-    <button className={cls} title={title} onClick={onClick} disabled={disabled} type="button">
-      <Glyph name={name} />
+    <button
+      className={cls}
+      title={title}
+      aria-label={title}
+      aria-pressed={active === undefined ? undefined : active}
+      onClick={onClick}
+      disabled={disabled}
+      type="button"
+    >
+      <Glyph name={name} size={small ? 15 : 18} />
+      {badge ? <span className="icon-badge">{badge > 99 ? '99+' : badge}</span> : null}
     </button>
   )
 })
 
-const Row = memo(function Row({ line }: { line: Line }) {
+const LogRow = memo(function LogRow({ line }: { line: Line }): React.JSX.Element {
+  const role = ROLES[line.kind]
   return (
-    <div className="row" style={{ color: COLORS[line.kind] }}>
-      {line.text}
+    <div className={'line ' + line.kind}>
+      <span className="line-mark">
+        <Glyph name={role.glyph} size={12} />
+      </span>
+      <div className="line-body">
+        <div className="line-meta">
+          <span className="line-role">{role.label}</span>
+          <span className="line-time">{line.time}</span>
+          {line.ms === undefined ? null : <span className="line-ms">{formatMs(line.ms)}</span>}
+        </div>
+        <div className="line-text">{line.text}</div>
+        {line.facts ? (
+          <div className="facts">
+            {line.facts.map((fact) => (
+              <span key={fact.label} className={fact.ok ? 'fact yes' : 'fact no'}>
+                <span className="fact-mark">{fact.ok ? '✓' : '✕'}</span>
+                {fact.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {line.detail ? (
+          <div className="detail">
+            {line.detail.map((row, index) => (
+              <div key={index} className="detail-row">
+                {row}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 })
@@ -219,31 +532,97 @@ const EMPTY_STATE: BrowserState = {
   canGoBack: false,
   canGoForward: false,
   loading: false,
-  chatOpen: true,
+  chatOpen: false,
+  terminalOpen: false,
   vision: false,
   maximized: false,
   fullscreen: false
 }
 
 export default function App(): React.JSX.Element {
-  const [cmd, setCmd] = useState('')
-  const [lines, setLines] = useState<Line[]>([])
-  const [chatOpen, setChatOpen] = useState(true)
   const [state, setState] = useState<BrowserState>(EMPTY_STATE)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [lines, setLines] = useState<Line[]>([])
+  const [cmd, setCmd] = useState('')
+  const [pending, setPending] = useState(false)
+  const [sel, setSel] = useState(0)
+  const [paletteOff, setPaletteOff] = useState(false)
+  const [drag, setDrag] = useState<DragAxis | null>(null)
+  const [urlFocused, setUrlFocused] = useState(false)
+  const [urlDraft, setUrlDraft] = useState('')
+  const [elements, setElements] = useState(0)
+  const [lastMs, setLastMs] = useState(0)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [theme, setTheme] = useState<ThemeId>(() => readTheme())
+  const [chatWidth, setChatWidth] = useState(() => readSize(CHAT_KEY, CHAT_SIZE))
+  const [termHeight, setTermHeight] = useState(() => readSize(TERM_KEY, TERM_SIZE))
+  const [space, setSpace] = useState({ width: 0, height: 0 })
 
   const logRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const urlRef = useRef<HTMLInputElement | null>(null)
+  const stageRef = useRef<HTMLDivElement | null>(null)
+  const spaceRef = useRef<HTMLDivElement | null>(null)
+  const closeSettingsRef = useRef<HTMLButtonElement | null>(null)
   const pinnedRef = useRef(true)
   const seqRef = useRef(0)
   const cmdRef = useRef('')
+  const pendingRef = useRef(false)
+  const historyRef = useRef<string[]>([])
+  const cursorRef = useRef(-1)
+  const stageBoxRef = useRef<StageBox | null>(null)
+  const dragRef = useRef<DragAxis | null>(null)
 
-  const push = useCallback((kind: LineKind, text: string): void => {
+  const terminalOpen = state.terminalOpen
+  const chatSize = space.width
+    ? clamp(chatWidth, CHAT_MIN, Math.floor(space.width * CHAT_MAX_RATIO))
+    : chatWidth
+  const termSize = space.height
+    ? clamp(termHeight, TERM_MIN, Math.floor(space.height * TERM_MAX_RATIO))
+    : termHeight
+
+  const push = useCallback((kind: LineKind, text: string, extra?: Extra): void => {
     seqRef.current += 1
-    const line: Line = { id: seqRef.current, kind, text }
+    const line: Line = { id: seqRef.current, kind, text, time: stamp(), ...extra }
     setLines((prev) => {
       const next = prev.length >= MAX_LINES ? prev.slice(prev.length - MAX_LINES + 1) : prev.slice()
       next.push(line)
       return next
     })
+  }, [])
+
+  const writeCmd = useCallback((value: string): void => {
+    cmdRef.current = value
+    setCmd(value)
+  }, [])
+
+  const focusPrompt = useCallback((): void => {
+    const el = inputRef.current
+    if (!el || el.disabled) return
+    if (document.activeElement === el) return
+    el.focus()
+  }, [])
+
+  const reportStage = useCallback((): void => {
+    const el = stageRef.current
+    if (!el) return
+
+    const view = document.documentElement
+    const width = view.clientWidth
+    const height = view.clientHeight
+    if (!width || !height) return
+
+    const rect = el.getBoundingClientRect()
+    const next: StageBox = {
+      x: part(rect.left, width),
+      y: part(rect.top, height),
+      width: part(rect.width, width),
+      height: part(rect.height, height)
+    }
+
+    if (sameBox(stageBoxRef.current, next)) return
+    stageBoxRef.current = next
+    window.aft.setStage(next)
   }, [])
 
   useEffect(() => {
@@ -256,11 +635,146 @@ export default function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    if (!chatOpen || !pinnedRef.current) return
+    paintTheme(theme)
+    storeTheme(theme)
+    window.aft.setChrome(themeOf(theme).chrome)
+  }, [theme])
+
+  useEffect(() => {
+    const el = stageRef.current
+    if (!el) return
+
+    const observer = new ResizeObserver(() => reportStage())
+    observer.observe(el)
+    observer.observe(document.documentElement)
+    window.addEventListener('resize', reportStage)
+    reportStage()
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', reportStage)
+    }
+  }, [reportStage])
+
+  useEffect(reportStage)
+
+  useEffect(() => {
+    const el = spaceRef.current
+    if (!el) return
+
+    const measure = (): void => {
+      const rect = el.getBoundingClientRect()
+      setSpace((prev) => {
+        const width = Math.round(rect.width)
+        const height = Math.round(rect.height)
+        if (prev.width === width && prev.height === height) return prev
+        return { width, height }
+      })
+    }
+
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    measure()
+
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    window.aft.setModal(settingsOpen)
+    if (settingsOpen) closeSettingsRef.current?.focus()
+  }, [settingsOpen])
+
+  useEffect(() => {
+    return window.aft.onFocusUrl(() => urlRef.current?.focus())
+  }, [])
+
+  useEffect(() => {
+    return window.aft.onFocusTerminal(() => focusPrompt())
+  }, [focusPrompt])
+
+  useEffect(() => {
+    if (!terminalOpen || !pinnedRef.current) return
     const log = logRef.current
     if (!log) return
     log.scrollTop = log.scrollHeight
-  }, [lines, chatOpen])
+  }, [lines, terminalOpen, termSize])
+
+  useEffect(() => {
+    if (!terminalOpen || settingsOpen || urlFocused) return
+
+    const keep = (): void => {
+      const el = inputRef.current
+      if (!el || el.disabled) return
+      const active = document.activeElement
+      if (active === el) return
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return
+      if (active instanceof HTMLSelectElement) return
+      el.focus()
+    }
+
+    keep()
+    const timer = window.setTimeout(keep, 60)
+    window.addEventListener('focus', keep)
+    document.addEventListener('focusin', keep)
+    document.addEventListener('visibilitychange', keep)
+
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('focus', keep)
+      document.removeEventListener('focusin', keep)
+      document.removeEventListener('visibilitychange', keep)
+    }
+  }, [terminalOpen, settingsOpen, urlFocused, pending, state.url, state.loading, termSize])
+
+  useEffect(() => {
+    return window.aft.onPointer((spot) => {
+      const axis = dragRef.current
+      const box = spaceRef.current?.getBoundingClientRect()
+      if (!axis || !box) return
+
+      const view = document.documentElement
+      if (axis === 'chat') {
+        setChatWidth(Math.round(spot.x * view.clientWidth - box.left))
+        return
+      }
+      setTermHeight(Math.round(box.bottom - spot.y * view.clientHeight))
+    })
+  }, [])
+
+  useEffect(() => {
+    return window.aft.onDragEnd(() => {
+      if (!dragRef.current) return
+      dragRef.current = null
+      setDrag(null)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!drag) return
+
+    const stop = (): void => {
+      if (!dragRef.current) return
+      dragRef.current = null
+      setDrag(null)
+      window.aft.endDrag()
+    }
+
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
+    window.addEventListener('blur', stop)
+
+    return () => {
+      window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointercancel', stop)
+      window.removeEventListener('blur', stop)
+    }
+  }, [drag])
+
+  useEffect(() => {
+    if (drag) return
+    storeSize(CHAT_KEY, chatSize)
+    storeSize(TERM_KEY, termSize)
+  }, [drag, chatSize, termSize])
 
   const onLogScroll = useCallback((): void => {
     const log = logRef.current
@@ -296,75 +810,282 @@ export default function App(): React.JSX.Element {
     })
   }, [])
 
+  const toggleTerminal = useCallback((): void => {
+    window.aft.setTerminal(!terminalOpen)
+  }, [terminalOpen])
+
+  const closeTerminal = useCallback((): void => {
+    window.aft.setTerminal(false)
+  }, [])
+
+  const openSettings = useCallback((): void => setSettingsOpen(true), [])
+
+  const closeSettings = useCallback((): void => {
+    setSettingsOpen(false)
+    window.requestAnimationFrame(() => focusPrompt())
+  }, [focusPrompt])
+
+  const clearLog = useCallback((): void => {
+    setLines([])
+    pinnedRef.current = true
+  }, [])
+
+  const beginDrag = useCallback(
+    (axis: DragAxis, event: React.PointerEvent<HTMLDivElement>): void => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      dragRef.current = axis
+      setDrag(axis)
+      window.aft.startDrag(axis)
+    },
+    []
+  )
+
+  const beginChatDrag = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('chat', event),
+    [beginDrag]
+  )
+
+  const beginTermDrag = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('terminal', event),
+    [beginDrag]
+  )
+
   const toggleVision = useCallback(async (): Promise<void> => {
     const next = !state.vision
     setState((prev) => ({ ...prev, vision: next }))
     try {
-      const res: ExecuteResult = await window.aft.setVision(next)
-      if (!res.ok) {
-        push('err', res.result)
+      const result: ExecuteResult = await window.aft.setVision(next)
+      if (!result.ok) {
+        push('err', result.result)
         return
       }
-      const snap: ExecuteResult = await window.aft.execute({ action: 'snapshot' })
-      push(snap.ok ? 'ok' : 'err', snap.result)
+      if (result.page) setElements(result.page.elements.length)
+      push('note', result.result)
     } catch (err) {
-      push('err', 'KOPRU HATASI: ' + (err as Error).message)
+      push('err', 'Köprü hatası: ' + (err as Error).message)
     }
   }, [push, state.vision])
 
-  const parse = useCallback((input: string): ParsedCommand => {
-    const [head = '', ...rest] = input.trim().split(/\s+/)
-    const key = head.toLowerCase()
-    if (key === 'a') return { kind: 'help' }
-    const entry = COMMANDS[key]
-    return entry ? { kind: 'action', action: entry.build(rest) } : null
-  }, [])
+  const suggestions = useMemo(() => {
+    if (pending || paletteOff) return []
+    const text = cmd.trim().toLowerCase()
+    if (!text || /\s/.test(cmd.trim())) return []
+    return PALETTE.filter((entry) => entry.key.startsWith(text)).slice(0, MAX_SUGGESTIONS)
+  }, [cmd, pending, paletteOff])
+
+  const active = suggestions.length ? Math.min(sel, suggestions.length - 1) : -1
+
+  const complete = useCallback(
+    (entry: Entry): void => {
+      writeCmd(entry.key + (/[<[]/.test(entry.usage) ? ' ' : ''))
+      setSel(0)
+      inputRef.current?.focus()
+    },
+    [writeCmd]
+  )
+
+  const printHelp = useCallback((): void => {
+    push('note', 'Kullanılabilir komutlar', {
+      detail: PALETTE.map((entry) => entry.usage.padEnd(26, ' ') + entry.hint)
+    })
+  }, [push])
 
   const run = useCallback(async (): Promise<void> => {
+    if (pendingRef.current) return
+
     const input = cmdRef.current.trim()
     if (!input) return
 
-    const parsed = parse(input)
-    if (!parsed) {
-      push('err', 'Bilinmeyen komut. Liste icin: a')
+    const [head = '', ...rest] = input.split(/\s+/)
+    const key = head.toLowerCase()
+
+    const history = historyRef.current
+    if (history[history.length - 1] !== input) history.push(input)
+    if (history.length > 100) history.shift()
+    cursorRef.current = -1
+
+    writeCmd('')
+    setPaletteOff(false)
+    setSel(0)
+    pinnedRef.current = true
+
+    if (key === 'cls') {
+      clearLog()
+      focusPrompt()
       return
     }
 
-    push('in', '> ' + input)
-    cmdRef.current = ''
-    setCmd('')
+    push('in', input)
 
-    if (parsed.kind === 'help') {
-      push('ok', 'Kullanilabilir aksiyonlar:')
-      Object.values(COMMANDS).forEach((c) => push('el', '  ' + c.usage))
+    if (key === 'a' || key === '?') {
+      printHelp()
+      focusPrompt()
       return
     }
+
+    const entry = ACTION_MAP.get(key)
+    if (!entry) {
+      push('err', 'Bilinmeyen komut: ' + head, { detail: ['Tüm komutlar için: a'] })
+      focusPrompt()
+      return
+    }
+
+    const action = entry.build(rest)
+    if (!action) {
+      push('err', 'Komut eksik veya geçersiz değer içeriyor.', {
+        detail: ['Kullanım: ' + entry.usage]
+      })
+      focusPrompt()
+      return
+    }
+
+    pendingRef.current = true
+    setPending(true)
+    const started = performance.now()
 
     try {
-      const res = await window.aft.execute(parsed.action)
-      push(res.ok ? 'ok' : 'err', res.result)
-      for (const detail of diagnose(res)) push('el', '  ' + detail)
+      const result = await window.aft.execute(action)
+      const ms = Math.round(performance.now() - started)
+      push(result.ok ? 'ok' : 'err', result.result, { ...readOutcome(result), ms })
+      if (result.page) setElements(result.page.elements.length)
+      setLastMs(ms)
     } catch (err) {
-      push('err', 'KOPRU HATASI: ' + (err as Error).message)
+      push('err', 'Köprü hatası: ' + (err as Error).message)
+    } finally {
+      pendingRef.current = false
+      setPending(false)
+      window.requestAnimationFrame(() => focusPrompt())
     }
-  }, [parse, push])
+  }, [clearLog, focusPrompt, printHelp, push, writeCmd])
 
-  const onChange = useCallback((e: React.ChangeEvent<HTMLInputElement>): void => {
-    cmdRef.current = e.target.value
-    setCmd(e.target.value)
-  }, [])
+  const stepHistory = useCallback(
+    (direction: number): void => {
+      const history = historyRef.current
+      if (!history.length) return
+      setPaletteOff(true)
 
-  const onKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>): void => {
-      if (e.key !== 'Enter') return
-      e.preventDefault()
+      if (direction < 0) {
+        const index =
+          cursorRef.current < 0 ? history.length - 1 : Math.max(0, cursorRef.current - 1)
+        cursorRef.current = index
+        writeCmd(history[index])
+        return
+      }
+
+      if (cursorRef.current < 0) return
+      const index = cursorRef.current + 1
+      if (index >= history.length) {
+        cursorRef.current = -1
+        writeCmd('')
+        return
+      }
+      cursorRef.current = index
+      writeCmd(history[index])
+    },
+    [writeCmd]
+  )
+
+  const onCmdChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>): void => {
+      writeCmd(event.target.value)
+      setPaletteOff(false)
+      setSel(0)
+      cursorRef.current = -1
+    },
+    [writeCmd]
+  )
+
+  const onCmdKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>): void => {
+      if (event.key === 'Escape') {
+        setPaletteOff(true)
+        return
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        if (suggestions.length)
+          setSel((prev) => (prev - 1 + suggestions.length) % suggestions.length)
+        else stepHistory(-1)
+        return
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        if (suggestions.length) setSel((prev) => (prev + 1) % suggestions.length)
+        else stepHistory(1)
+        return
+      }
+
+      if (event.key === 'Tab') {
+        if (!suggestions.length || active < 0) return
+        event.preventDefault()
+        complete(suggestions[active])
+        return
+      }
+
+      if (event.key !== 'Enter') return
+      event.preventDefault()
+
+      const typed = cmd.trim().toLowerCase()
+      if (suggestions.length && active >= 0 && !PALETTE_KEYS.has(typed)) {
+        complete(suggestions[active])
+        return
+      }
       void run()
     },
-    [run]
+    [active, cmd, complete, run, stepHistory, suggestions]
+  )
+
+  const onUrlFocus = useCallback((): void => {
+    setUrlFocused(true)
+    setUrlDraft(state.url)
+    requestAnimationFrame(() => urlRef.current?.select())
+  }, [state.url])
+
+  const onUrlBlur = useCallback((): void => {
+    setUrlFocused(false)
+    setUrlDraft('')
+  }, [])
+
+  const onUrlKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        urlRef.current?.blur()
+        return
+      }
+
+      if (event.key !== 'Enter') return
+      event.preventDefault()
+
+      const url = toUrl(urlDraft)
+      if (!url) return
+
+      urlRef.current?.blur()
+      void window.aft
+        .execute({ action: 'go_to_url', url })
+        .then((result) => {
+          if (!result.ok) push('err', result.result, readOutcome(result))
+          if (result.page) setElements(result.page.elements.length)
+        })
+        .catch((err: Error) => push('err', 'Köprü hatası: ' + err.message))
+    },
+    [push, urlDraft]
+  )
+
+  const onSheetKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>): void => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      closeSettings()
+    },
+    [closeSettings]
   )
 
   return (
-    <div className="shell">
+    <div className={'shell' + (drag ? ' drag-' + drag : '')}>
       <header className="shell-bar">
         <div className="bar-left">
           <span className="logo" title="AFT">
@@ -374,7 +1095,7 @@ export default function App(): React.JSX.Element {
           <IconButton name="back" title="Geri" onClick={goBack} disabled={!state.canGoBack} />
           <IconButton
             name="forward"
-            title="Ileri"
+            title="İleri"
             onClick={goForward}
             disabled={!state.canGoForward}
           />
@@ -383,72 +1104,288 @@ export default function App(): React.JSX.Element {
             title={state.loading ? 'Durdur' : 'Yenile'}
             onClick={refreshPage}
           />
+          <IconButton name="home" title="Ana sayfa" onClick={goHome} />
           <IconButton
             name={state.vision ? 'eye' : 'eyeOff'}
-            title={state.vision ? 'Gorusu kapat' : 'Gorusu ac'}
+            title={state.vision ? 'Görüşü kapat' : 'Görüşü aç'}
             onClick={() => void toggleVision()}
             active={state.vision}
+            badge={state.vision ? elements : 0}
           />
-          <IconButton name="home" title="Ana sayfa" onClick={goHome} />
         </div>
 
-        <div className="bar-drag" onDoubleClick={maximizeWindow}>
-          <span className="bar-title">{state.title || 'AFT'}</span>
+        <div className="bar-drag" onDoubleClick={maximizeWindow} />
+
+        <div className={'omnibox' + (urlFocused ? ' focused' : '')}>
+          <input
+            ref={urlRef}
+            className="omni-input"
+            value={urlFocused ? urlDraft : shortUrl(state.url)}
+            onChange={(event) => setUrlDraft(event.target.value)}
+            onFocus={onUrlFocus}
+            onBlur={onUrlBlur}
+            onKeyDown={onUrlKeyDown}
+            placeholder="Adres veya arama"
+            spellCheck={false}
+            aria-label="Adres çubuğu"
+          />
+          {state.loading ? <span className="omni-load" /> : null}
         </div>
+
+        <div className="bar-drag" onDoubleClick={maximizeWindow} />
 
         <div className="bar-right">
-          <IconButton name="minimize" title="Simge durumuna kucult" onClick={minimizeWindow} />
+          <IconButton
+            name="minimize"
+            title="Simge durumuna küçült"
+            onClick={minimizeWindow}
+            small
+          />
           <IconButton
             name={state.maximized ? 'restore' : 'maximize'}
-            title={state.maximized ? 'Onceki boyut' : 'Ekrani kapla'}
+            title={state.maximized ? 'Önceki boyut' : 'Ekranı kapla'}
             onClick={maximizeWindow}
+            small
           />
-          <IconButton name="close" title="Kapat" onClick={closeWindow} danger />
+          <IconButton name="close" title="Kapat" onClick={closeWindow} small danger />
         </div>
       </header>
 
       <aside className="shell-side">
         <IconButton
           name="chat"
-          title={chatOpen ? 'Agent chat kapat' : 'Agent chat ac'}
+          title={chatOpen ? 'Ajan sohbetini kapat' : 'Ajan sohbetini aç'}
           onClick={toggleChat}
           active={chatOpen}
         />
+        <span className="side-gap" />
+        <IconButton
+          name="terminal"
+          title={terminalOpen ? 'Terminali kapat (Ctrl+K)' : 'Terminali aç (Ctrl+K)'}
+          onClick={toggleTerminal}
+          active={terminalOpen}
+        />
+        <IconButton name="settings" title="Ayarlar" onClick={openSettings} active={settingsOpen} />
       </aside>
 
-      <div className="workspace">
-        {chatOpen && (
-          <section className="panel">
+      <div className="workspace" ref={spaceRef}>
+        {chatOpen ? (
+          <section className="panel" style={{ width: chatSize }}>
             <header className="panel-head">
-              <span className="brand">AGENT CHAT</span>
-              <button className="collapse" title="Chati kapat" onClick={toggleChat} type="button">
+              <span className="panel-title">AJAN SOHBETİ</span>
+              <button
+                className="ghost-btn"
+                title="Paneli kapat"
+                aria-label="Paneli kapat"
+                onClick={toggleChat}
+                type="button"
+              >
                 <Glyph name="collapse" size={15} />
               </button>
             </header>
 
-            <div className="log" ref={logRef} onScroll={onLogScroll}>
-              {lines.map((line) => (
-                <Row key={line.id} line={line} />
-              ))}
-            </div>
+            <div className="panel-body" />
 
-            <div className="composer">
-              <input
-                value={cmd}
-                onChange={onChange}
-                onKeyDown={onKeyDown}
-                placeholder="Komutlar için 'a' yaz."
-                spellCheck={false}
-              />
-              <button className="send" onClick={() => void run()} type="button">
-                <Glyph name="send" size={16} />
-              </button>
-            </div>
+            <div
+              className="panel-grip"
+              onPointerDown={beginChatDrag}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Sohbet panelinin genişliğini değiştir"
+            />
           </section>
-        )}
+        ) : null}
 
-        <div className="stage" />
+        <div className="main">
+          <div className="stage" ref={stageRef} />
+
+          {terminalOpen ? (
+            <section className="terminal" style={{ height: termSize }}>
+              <div
+                className="term-grip"
+                onPointerDown={beginTermDrag}
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="Terminal yüksekliğini değiştir"
+              />
+
+              <header className="term-head">
+                <span className="term-tab">
+                  <Glyph name="terminal" size={13} />
+                  aksiyonlar
+                </span>
+
+                {pending ? (
+                  <span className="term-running">
+                    <span className="spinner" />
+                    çalışıyor
+                  </span>
+                ) : null}
+
+                <span className="term-push" />
+
+                <button
+                  className="ghost-btn"
+                  title="Terminali temizle"
+                  aria-label="Terminali temizle"
+                  onClick={clearLog}
+                  type="button"
+                >
+                  <Glyph name="trash" size={14} />
+                </button>
+                <button
+                  className="ghost-btn"
+                  title="Terminali kapat"
+                  aria-label="Terminali kapat"
+                  onClick={closeTerminal}
+                  type="button"
+                >
+                  <Glyph name="minimize" size={14} />
+                </button>
+              </header>
+
+              <div className="term-body">
+                <div
+                  className="log"
+                  ref={logRef}
+                  onScroll={onLogScroll}
+                  role="log"
+                  aria-live="polite"
+                  aria-label="Terminal çıktısı"
+                >
+                  {lines.map((line) => (
+                    <LogRow key={line.id} line={line} />
+                  ))}
+                </div>
+
+                {suggestions.length ? (
+                  <div className="palette" role="listbox" aria-label="Komut önerileri">
+                    <div className="palette-head">
+                      KOMUTLAR · {suggestions.length} / {PALETTE.length}
+                    </div>
+                    {suggestions.map((entry, index) => (
+                      <button
+                        key={entry.key}
+                        className={'palette-row' + (index === active ? ' sel' : '')}
+                        role="option"
+                        aria-selected={index === active}
+                        onMouseEnter={() => setSel(index)}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => complete(entry)}
+                        type="button"
+                      >
+                        <span className="palette-key">{entry.usage}</span>
+                        <span className="palette-hint">{entry.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="composer">
+                <span className="composer-caret">›</span>
+                <input
+                  ref={inputRef}
+                  value={cmd}
+                  onChange={onCmdChange}
+                  onKeyDown={onCmdKeyDown}
+                  placeholder={pending ? 'Komut çalışıyor…' : 'Komut yazın, liste için a'}
+                  spellCheck={false}
+                  disabled={pending}
+                  aria-label="Komut girişi"
+                />
+                <button
+                  className="send"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => void run()}
+                  disabled={pending || !cmd.trim()}
+                  title="Çalıştır"
+                  aria-label="Çalıştır"
+                  type="button"
+                >
+                  <Glyph name="send" size={15} />
+                </button>
+              </div>
+            </section>
+          ) : null}
+        </div>
       </div>
+
+      {settingsOpen ? (
+        <div className="sheet" role="dialog" aria-modal="true" aria-label="Ayarlar">
+          <div className="sheet-card" onKeyDown={onSheetKeyDown}>
+            <header className="sheet-head">
+              <span className="sheet-title">AYARLAR</span>
+              <button
+                ref={closeSettingsRef}
+                className="ghost-btn"
+                title="Ayarları kapat"
+                aria-label="Ayarları kapat"
+                onClick={closeSettings}
+                type="button"
+              >
+                <Glyph name="close" size={15} />
+              </button>
+            </header>
+
+            <div className="sheet-body">
+              <section className="sheet-block">
+                <h3 className="sheet-label">Tema</h3>
+                <div className="theme-grid">
+                  {THEMES.map((item) => (
+                    <button
+                      key={item.id}
+                      className={'theme-card' + (item.id === theme ? ' sel' : '')}
+                      onClick={() => setTheme(item.id)}
+                      aria-pressed={item.id === theme}
+                      type="button"
+                    >
+                      <span className="theme-swatch">
+                        {item.swatch.map((color) => (
+                          <span key={color} style={{ background: color }} />
+                        ))}
+                      </span>
+                      <span className="theme-name">{item.label}</span>
+                      <span className="theme-note">{item.note}</span>
+                      {item.id === theme ? (
+                        <span className="theme-mark">
+                          <Glyph name="check" size={12} />
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="sheet-block">
+                <h3 className="sheet-label">Kısayollar</h3>
+                <div className="key-rows">
+                  {SHORTCUTS.map((item) => (
+                    <div key={item.code} className="key-row">
+                      <span className="key-name">{item.name}</span>
+                      <span className="key-code">{item.code}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <footer className="shell-foot">
+        <span className={'status-live' + (state.loading ? ' busy' : '')} />
+        <span className="status-item">{state.loading ? 'yükleniyor' : 'hazır'}</span>
+        <span className="status-sep" />
+        <span className="status-item">{elements} öğe</span>
+        <span className="status-sep" />
+        <span className="status-item">son işlem {lastMs ? formatMs(lastMs) : '—'}</span>
+        <span className="status-sep" />
+        <span className="status-item">görüş {state.vision ? 'açık' : 'kapalı'}</span>
+        <span className="status-push" />
+        <span className="status-key">Ctrl+K terminal</span>
+        <span className="status-key">Ctrl+L adres</span>
+      </footer>
     </div>
   )
 }

@@ -118,6 +118,14 @@ export class IdentityChannel {
     )
   }
 
+  identity(): IdentityService {
+    return this.service
+  }
+
+  catalog(): DescriptorStore {
+    return this.descriptors
+  }
+
   invalidate(): void {
     this.cachedGraph = null
     this.cachedIndex = null
