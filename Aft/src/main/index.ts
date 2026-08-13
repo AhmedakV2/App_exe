@@ -14,6 +14,11 @@ const CHAT_WIDTH = 320
 const STAGE_RADIUS = 0
 const FRAME_COLOR = '#1e1f22'
 const HOME_URL = 'https://www.google.com'
+const TERMINAL_HEIGHT = 268
+const TERMINAL_MIN = 132
+const TERMINAL_MAX_RATIO = 0.72
+const RESIZE_TICK = 16
+const RESIZE_MAX_MS = 20000
 const iconPath = app.isPackaged
   ? join(process.resourcesPath, 'build', 'icon.png')
   : join(__dirname, '../../build/icon.png')
@@ -22,7 +27,11 @@ let win: BaseWindow
 let chatView: WebContentsView
 let targetView: WebContentsView
 let controller: BrowserController
-let chatOpen = true
+let chatOpen = false
+let terminalOpen = true
+let terminalHeight = TERMINAL_HEIGHT
+let resizeTimer: ReturnType<typeof setInterval> | null = null
+let resizeStartedAt = 0
 let layoutQueued = false
 let stateQueued = false
 
@@ -35,6 +44,16 @@ function chatBlock(total: number): number {
   const usable = Math.max(0, total - FRAME * 2)
   const wanted = chatOpen ? CHAT_WIDTH + DIVIDER : 0
   return Math.max(0, Math.min(wanted, usable))
+}
+
+function terminalLimit(height: number): number {
+  const usable = Math.max(0, height - FRAME * 2)
+  return Math.max(0, Math.floor(usable * TERMINAL_MAX_RATIO))
+}
+
+function terminalBlock(height: number): number {
+  if (!terminalOpen) return 0
+  return Math.max(0, Math.min(terminalHeight, terminalLimit(height)))
 }
 
 function visibleArea(): Rectangle {
@@ -60,13 +79,14 @@ function layout(): void {
   const area = visibleArea()
   const x = area.x + FRAME + chatBlock(area.width)
   const y = area.y + FRAME
+  const bottom = area.y + area.height - FRAME - terminalBlock(area.height)
 
   chatView.setBounds(area)
   targetView.setBounds({
     x,
     y,
     width: Math.max(0, area.x + area.width - FRAME - x),
-    height: Math.max(0, area.y + area.height - FRAME - y)
+    height: Math.max(0, bottom - y)
   })
 }
 
@@ -79,6 +99,11 @@ function scheduleLayout(): void {
   })
 }
 
+function terminalSize(): number {
+  if (!win || win.isDestroyed()) return terminalOpen ? terminalHeight : 0
+  return terminalBlock(visibleArea().height)
+}
+
 function snapshotState(): BrowserState {
   return {
     url: controller.url(),
@@ -87,10 +112,72 @@ function snapshotState(): BrowserState {
     canGoForward: controller.canGoForward(),
     loading: controller.isLoading(),
     chatOpen,
+    terminalOpen,
+    terminalHeight: terminalSize(),
     vision: controller.isVisionOn(),
     maximized: !win || win.isDestroyed() ? false : win.isMaximized(),
     fullscreen: !win || win.isDestroyed() ? false : win.isFullScreen()
   }
+}
+
+function focusChat(): void {
+  if (!chatView || chatView.webContents.isDestroyed()) return
+  chatView.webContents.focus()
+}
+
+function setChat(open: boolean): void {
+  if (open === chatOpen) return
+  chatOpen = open
+  layout()
+  pushState()
+}
+
+function setTerminal(open: boolean, focus: boolean): void {
+  if (open !== terminalOpen) {
+    terminalOpen = open
+    if (!open) stopResize()
+    layout()
+    pushState()
+  }
+  if (open && focus) focusChat()
+}
+
+function applyCursorHeight(): void {
+  if (!win || win.isDestroyed() || !terminalOpen) {
+    stopResize()
+    return
+  }
+
+  if (Date.now() - resizeStartedAt > RESIZE_MAX_MS) {
+    stopResize()
+    return
+  }
+
+  const area = visibleArea()
+  const bounds = win.getContentBounds()
+  const limit = terminalLimit(area.height)
+  const floor = Math.min(TERMINAL_MIN, limit)
+  const localY = screen.getCursorScreenPoint().y - bounds.y
+  const wanted = Math.round(area.y + area.height - FRAME - localY)
+  const next = Math.max(floor, Math.min(limit, wanted))
+
+  if (next === terminalHeight) return
+  terminalHeight = next
+  layout()
+  pushState()
+}
+
+function startResize(): void {
+  if (resizeTimer || !terminalOpen) return
+  resizeStartedAt = Date.now()
+  resizeTimer = setInterval(applyCursorHeight, RESIZE_TICK)
+}
+
+function stopResize(): void {
+  if (!resizeTimer) return
+  clearInterval(resizeTimer)
+  resizeTimer = null
+  pushState()
 }
 
 function pushState(): void {
@@ -182,11 +269,40 @@ function windowAction(action: WindowAction): void {
   pushState()
 }
 
-function bindFullScreenKey(wc: WebContents): void {
+function bindShortcuts(wc: WebContents): void {
   wc.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown' || input.key !== 'F11') return
-    event.preventDefault()
-    toggleFullScreen()
+    if (input.type !== 'keyDown') return
+
+    if (input.key === 'F11') {
+      event.preventDefault()
+      toggleFullScreen()
+      return
+    }
+
+    if (input.alt && !input.control && !input.meta && input.key === 'F12') {
+      event.preventDefault()
+      setTerminal(!terminalOpen, true)
+      return
+    }
+
+    if (!input.control || input.alt || input.meta) return
+    const key = input.key.toLowerCase()
+
+    if (key === '`') {
+      event.preventDefault()
+      setTerminal(!terminalOpen, true)
+      return
+    }
+
+    if (key === 'l') {
+      event.preventDefault()
+      focusChat()
+      if (!chatView.webContents.isDestroyed()) chatView.webContents.send('aft:focus-url')
+    }
+  })
+
+  wc.on('input-event', (_event, input) => {
+    if (input.type === 'mouseUp') stopResize()
   })
 }
 
@@ -200,6 +316,7 @@ function bindWindowEvents(): void {
   win.on('unmaximize', sync)
   win.on('enter-full-screen', sync)
   win.on('leave-full-screen', sync)
+  win.on('blur', stopResize)
 }
 
 function bindTargetEvents(): void {
@@ -258,8 +375,8 @@ function createWindow(): void {
   win.contentView.addChildView(targetView)
   layout()
   bindWindowEvents()
-  bindFullScreenKey(chatView.webContents)
-  bindFullScreenKey(targetView.webContents)
+  bindShortcuts(chatView.webContents)
+  bindShortcuts(targetView.webContents)
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     chatView.webContents.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -275,6 +392,7 @@ function createWindow(): void {
   void targetView.webContents.loadURL(HOME_URL).catch(() => undefined)
 
   win.on('closed', () => {
+    stopResize()
     void unmountIdentity()
       .catch(() => undefined)
       .finally(() => controller.dispose())
@@ -294,7 +412,7 @@ app.whenReady().then(() => {
       const target = normalizeLevel(level)
       controller.setLevel(target)
       const page = await controller.scan(target)
-      return { result: 'Tarama tamam: seviye ' + target, page, outcome: null }
+      return { result: 'Tarama tamamlandı: seviye ' + target, page, outcome: null }
     })
   )
 
@@ -306,7 +424,7 @@ app.whenReady().then(() => {
   ipcMain.handle('aft:vision', (_e, on: boolean): Promise<ExecuteResult> =>
     respond(async () => {
       const page = await controller.setVision(on)
-      return { result: on ? 'Gorus acildi' : 'Gorus kapatildi', page, outcome: null }
+      return { result: on ? 'Görüş açıldı' : 'Görüş kapatıldı', page, outcome: null }
     })
   )
 
@@ -314,12 +432,13 @@ app.whenReady().then(() => {
 
   ipcMain.on('aft:window', (_e, action: WindowAction) => windowAction(action))
 
-  ipcMain.on('aft:chat', (_e, open: boolean) => {
-    const next = Boolean(open)
-    if (next === chatOpen) return
-    chatOpen = next
-    layout()
-    pushState()
+  ipcMain.on('aft:chat', (_e, open: boolean) => setChat(Boolean(open)))
+
+  ipcMain.on('aft:terminal', (_e, open: boolean) => setTerminal(Boolean(open), Boolean(open)))
+
+  ipcMain.on('aft:terminal-resize', (_e, active: boolean) => {
+    if (active) startResize()
+    else stopResize()
   })
 
   ipcMain.on('aft:state', () => pushState())
