@@ -1,0 +1,66 @@
+{
+  "version": "scenario/1.0.0",
+  "id": "ornek-arama",
+  "title": "Ornek arama akisi",
+  "description": "Faz 6 bitis kriteri icin elle yazilmis referans senaryo",
+  "baseUrl": "https://example.com/",
+  "defaults": {
+    "scanLevel": 1,
+    "stepTimeoutMs": 20000,
+    "retries": 1,
+    "stopOnFailure": true,
+    "verifyState": true,
+    "allowLowConfidence": false
+  },
+  "steps": [
+    {
+      "id": "acilis",
+      "kind": "navigate",
+      "title": "Baslangic adresini ac",
+      "url": "https://example.com/"
+    },
+    {
+      "id": "adres-dogrula",
+      "kind": "assert",
+      "title": "Adres dogrulamasi",
+      "assert": "url-matches",
+      "expected": "example.com"
+    },
+    {
+      "id": "govde",
+      "kind": "group",
+      "title": "Sayfa icerigi",
+      "steps": [
+        {
+          "id": "baslik-dogrula",
+          "kind": "assert",
+          "title": "Baslik dogrulamasi",
+          "assert": "title-contains",
+          "expected": "Example"
+        },
+        {
+          "id": "baglanti-var",
+          "kind": "assert",
+          "title": "Baglanti var mi",
+          "assert": "element-exists",
+          "target": {
+            "label": "More information baglantisi",
+            "ordinal": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "baglanti-tikla",
+      "kind": "click",
+      "title": "Baglantiya tikla",
+      "target": {
+        "label": "More information baglantisi",
+        "ordinal": 0
+      },
+      "condition": {
+        "kind": "previous-passed"
+      }
+    }
+  ]
+}

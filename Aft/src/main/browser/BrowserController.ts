@@ -94,6 +94,18 @@ export class BrowserController {
     return this.enqueue(() => this.perform(request))
   }
 
+  dispatch(request: ActionRequest): Promise<ActionOutcome> {
+    return this.enqueue(() => this.send(request))
+  }
+
+  scanGraph(level: ScanLevel, force: boolean): Promise<ElementGraph> {
+    return this.enqueue(async () => {
+      await this.ready()
+      this.graph = await this.engine.scan({ level, force })
+      return this.graph
+    })
+  }
+
   canGoBack(): boolean {
     return this.view.webContents.navigationHistory.canGoBack()
   }
@@ -153,6 +165,21 @@ export class BrowserController {
       this.syncTimer = null
       void this.enqueue(() => this.refresh(this.level, true)).catch(() => undefined)
     }, SYNC_DELAY)
+  }
+
+  private async send(request: ActionRequest): Promise<ActionOutcome> {
+    await this.ready()
+
+    if (request.kind === 'press-key' && typeof request.ordinal === 'number') {
+      const focus = await this.actions.execute({ kind: 'click', ordinal: request.ordinal })
+      if (!focus.ok) return focus
+    }
+
+    const outcome = await this.actions.execute(request)
+    if (request.kind === 'navigate') this.detachGraph()
+    else this.engine.invalidate()
+
+    return outcome
   }
 
   private async perform(request: AgentAction): Promise<ActionReport> {

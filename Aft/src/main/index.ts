@@ -3,7 +3,7 @@ import type { Rectangle, WebContents } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
-import { mountIdentity, unmountIdentity } from './bridge'
+import { mountIdentity, mountPlayback, unmountIdentity, unmountPlayback } from './bridge'
 import { BrowserController } from './browser/BrowserController'
 import { AgentAction, BrowserState, ExecuteResult, NavKind, WindowAction } from './browser/types'
 import type { CoverageSummary, ScanLevel } from './discovery'
@@ -388,12 +388,23 @@ function createWindow(): void {
   controller.attach()
   bindTargetEvents()
 
-  void mountIdentity(controller).catch(() => undefined)
+  void mountIdentity(controller)
+    .then((identity) =>
+      mountPlayback(controller, {
+        identity: identity.identity(),
+        descriptors: identity.catalog(),
+        target: targetView.webContents,
+        renderer: chatView.webContents
+      })
+    )
+    .catch(() => undefined)
   void targetView.webContents.loadURL(HOME_URL).catch(() => undefined)
 
   win.on('closed', () => {
     stopResize()
-    void unmountIdentity()
+    void unmountPlayback()
+      .catch(() => undefined)
+      .then(() => unmountIdentity())
       .catch(() => undefined)
       .finally(() => controller.dispose())
   })
