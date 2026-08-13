@@ -2,9 +2,10 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import type {
   AgentAction,
   BrowserState,
+  DragAxis,
   ExecuteResult,
   NavKind,
-  StageRect,
+  StageBox,
   WindowAction
 } from '../../main/browser/types'
 import { THEMES, paintTheme, readTheme, storeTheme, themeOf } from './themes'
@@ -28,6 +29,15 @@ type ActionEntry = Entry & { build: (args: string[]) => AgentAction | null }
 const MAX_LINES = 400
 const PIN_SLACK = 48
 const MAX_SUGGESTIONS = 6
+
+const CHAT_KEY = 'aft:chat-width'
+const TERM_KEY = 'aft:term-height'
+const CHAT_SIZE = 320
+const TERM_SIZE = 268
+const CHAT_MIN = 220
+const TERM_MIN = 120
+const CHAT_MAX_RATIO = 0.6
+const TERM_MAX_RATIO = 0.72
 
 const ROLES: Record<LineKind, { label: string; glyph: string }> = {
   in: { label: 'Komut', glyph: 'prompt' },
@@ -342,9 +352,35 @@ function readOutcome(result: ExecuteResult): Extra {
   return { detail: detail.length ? detail : undefined, facts }
 }
 
-function sameRect(a: StageRect | null, b: StageRect): boolean {
+function sameBox(a: StageBox | null, b: StageBox): boolean {
   if (!a) return false
   return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+}
+
+function part(value: number, total: number): number {
+  if (!total) return 0
+  return Math.round((value / total) * 10000) / 10000
+}
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(Math.max(value, low), Math.max(low, high))
+}
+
+function readSize(key: string, fallback: number): number {
+  try {
+    const raw = Number(window.localStorage.getItem(key))
+    return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function storeSize(key: string, value: number): void {
+  try {
+    window.localStorage.setItem(key, String(Math.round(value)))
+  } catch {
+    return
+  }
 }
 
 const Logo = memo(function Logo(): React.JSX.Element {
@@ -467,7 +503,6 @@ const EMPTY_STATE: BrowserState = {
   loading: false,
   chatOpen: false,
   terminalOpen: false,
-  terminalHeight: 0,
   vision: false,
   maximized: false,
   fullscreen: false
@@ -481,18 +516,22 @@ export default function App(): React.JSX.Element {
   const [pending, setPending] = useState(false)
   const [sel, setSel] = useState(0)
   const [paletteOff, setPaletteOff] = useState(false)
-  const [resizing, setResizing] = useState(false)
+  const [drag, setDrag] = useState<DragAxis | null>(null)
   const [urlFocused, setUrlFocused] = useState(false)
   const [urlDraft, setUrlDraft] = useState('')
   const [elements, setElements] = useState(0)
   const [lastMs, setLastMs] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
+  const [chatWidth, setChatWidth] = useState(() => readSize(CHAT_KEY, CHAT_SIZE))
+  const [termHeight, setTermHeight] = useState(() => readSize(TERM_KEY, TERM_SIZE))
+  const [space, setSpace] = useState({ width: 0, height: 0 })
 
   const logRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const urlRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
+  const spaceRef = useRef<HTMLDivElement | null>(null)
   const closeSettingsRef = useRef<HTMLButtonElement | null>(null)
   const pinnedRef = useRef(true)
   const seqRef = useRef(0)
@@ -500,10 +539,16 @@ export default function App(): React.JSX.Element {
   const pendingRef = useRef(false)
   const historyRef = useRef<string[]>([])
   const cursorRef = useRef(-1)
-  const stageRectRef = useRef<StageRect | null>(null)
+  const stageBoxRef = useRef<StageBox | null>(null)
+  const dragRef = useRef<DragAxis | null>(null)
 
   const terminalOpen = state.terminalOpen
-  const terminalHeight = state.terminalHeight
+  const chatSize = space.width
+    ? clamp(chatWidth, CHAT_MIN, Math.floor(space.width * CHAT_MAX_RATIO))
+    : chatWidth
+  const termSize = space.height
+    ? clamp(termHeight, TERM_MIN, Math.floor(space.height * TERM_MAX_RATIO))
+    : termHeight
 
   const push = useCallback((kind: LineKind, text: string, extra?: Extra): void => {
     seqRef.current += 1
@@ -530,15 +575,22 @@ export default function App(): React.JSX.Element {
   const reportStage = useCallback((): void => {
     const el = stageRef.current
     if (!el) return
+
+    const view = document.documentElement
+    const width = view.clientWidth
+    const height = view.clientHeight
+    if (!width || !height) return
+
     const rect = el.getBoundingClientRect()
-    const next: StageRect = {
-      x: Math.round(rect.left),
-      y: Math.round(rect.top),
-      width: Math.round(rect.width),
-      height: Math.round(rect.height)
+    const next: StageBox = {
+      x: part(rect.left, width),
+      y: part(rect.top, height),
+      width: part(rect.width, width),
+      height: part(rect.height, height)
     }
-    if (sameRect(stageRectRef.current, next)) return
-    stageRectRef.current = next
+
+    if (sameBox(stageBoxRef.current, next)) return
+    stageBoxRef.current = next
     window.aft.setStage(next)
   }, [])
 
@@ -576,6 +628,27 @@ export default function App(): React.JSX.Element {
   useEffect(reportStage)
 
   useEffect(() => {
+    const el = spaceRef.current
+    if (!el) return
+
+    const measure = (): void => {
+      const rect = el.getBoundingClientRect()
+      setSpace((prev) => {
+        const width = Math.round(rect.width)
+        const height = Math.round(rect.height)
+        if (prev.width === width && prev.height === height) return prev
+        return { width, height }
+      })
+    }
+
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    measure()
+
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
     window.aft.setModal(settingsOpen)
     if (settingsOpen) closeSettingsRef.current?.focus()
   }, [settingsOpen])
@@ -593,7 +666,7 @@ export default function App(): React.JSX.Element {
     const log = logRef.current
     if (!log) return
     log.scrollTop = log.scrollHeight
-  }, [lines, terminalOpen, terminalHeight])
+  }, [lines, terminalOpen, termSize])
 
   useEffect(() => {
     if (!terminalOpen || settingsOpen || urlFocused) return
@@ -620,14 +693,39 @@ export default function App(): React.JSX.Element {
       document.removeEventListener('focusin', keep)
       document.removeEventListener('visibilitychange', keep)
     }
-  }, [terminalOpen, settingsOpen, urlFocused, pending, state.url, state.loading, terminalHeight])
+  }, [terminalOpen, settingsOpen, urlFocused, pending, state.url, state.loading, termSize])
 
   useEffect(() => {
-    if (!resizing) return
+    return window.aft.onPointer((spot) => {
+      const axis = dragRef.current
+      const box = spaceRef.current?.getBoundingClientRect()
+      if (!axis || !box) return
+
+      const view = document.documentElement
+      if (axis === 'chat') {
+        setChatWidth(Math.round(spot.x * view.clientWidth - box.left))
+        return
+      }
+      setTermHeight(Math.round(box.bottom - spot.y * view.clientHeight))
+    })
+  }, [])
+
+  useEffect(() => {
+    return window.aft.onDragEnd(() => {
+      if (!dragRef.current) return
+      dragRef.current = null
+      setDrag(null)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!drag) return
 
     const stop = (): void => {
-      setResizing(false)
-      window.aft.resizeTerminal(false)
+      if (!dragRef.current) return
+      dragRef.current = null
+      setDrag(null)
+      window.aft.endDrag()
     }
 
     window.addEventListener('pointerup', stop)
@@ -639,7 +737,13 @@ export default function App(): React.JSX.Element {
       window.removeEventListener('pointercancel', stop)
       window.removeEventListener('blur', stop)
     }
-  }, [resizing])
+  }, [drag])
+
+  useEffect(() => {
+    if (drag) return
+    storeSize(CHAT_KEY, chatSize)
+    storeSize(TERM_KEY, termSize)
+  }, [drag, chatSize, termSize])
 
   const onLogScroll = useCallback((): void => {
     const log = logRef.current
@@ -679,10 +783,6 @@ export default function App(): React.JSX.Element {
     window.aft.setTerminal(!terminalOpen)
   }, [terminalOpen])
 
-  const openTerminal = useCallback((): void => {
-    window.aft.setTerminal(true)
-  }, [])
-
   const closeTerminal = useCallback((): void => {
     window.aft.setTerminal(false)
   }, [])
@@ -699,12 +799,26 @@ export default function App(): React.JSX.Element {
     pinnedRef.current = true
   }, [])
 
-  const startResize = useCallback((event: React.PointerEvent<HTMLDivElement>): void => {
-    if (event.button !== 0) return
-    event.preventDefault()
-    setResizing(true)
-    window.aft.resizeTerminal(true)
-  }, [])
+  const beginDrag = useCallback(
+    (axis: DragAxis, event: React.PointerEvent<HTMLDivElement>): void => {
+      if (event.button !== 0) return
+      event.preventDefault()
+      dragRef.current = axis
+      setDrag(axis)
+      window.aft.startDrag(axis)
+    },
+    []
+  )
+
+  const beginChatDrag = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('chat', event),
+    [beginDrag]
+  )
+
+  const beginTermDrag = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('terminal', event),
+    [beginDrag]
+  )
 
   const toggleVision = useCallback(async (): Promise<void> => {
     const next = !state.vision
@@ -940,7 +1054,7 @@ export default function App(): React.JSX.Element {
   )
 
   return (
-    <div className={'shell' + (resizing ? ' resizing' : '')}>
+    <div className={'shell' + (drag ? ' drag-' + drag : '')}>
       <header className="shell-bar">
         <div className="bar-left">
           <span className="logo" title="AFT">
@@ -1023,9 +1137,9 @@ export default function App(): React.JSX.Element {
         <IconButton name="settings" title="Ayarlar" onClick={openSettings} active={settingsOpen} />
       </aside>
 
-      <div className="workspace">
+      <div className="workspace" ref={spaceRef}>
         {chatOpen ? (
-          <section className="panel">
+          <section className="panel" style={{ width: chatSize }}>
             <header className="panel-head">
               <span className="panel-title">AJAN SOHBETİ</span>
               <button
@@ -1039,29 +1153,26 @@ export default function App(): React.JSX.Element {
               </button>
             </header>
 
-            <div className="panel-empty">
-              <span className="panel-badge">Ayrıldı</span>
-              <p className="panel-lead">Bu panel ajan konuşması için ayrıldı.</p>
-              <p className="panel-note">
-                Aksiyon komutları alttaki terminale taşındı. Terminali açmak için Ctrl+K veya
-                soldaki terminal düğmesini kullanın.
-              </p>
-              <button className="panel-action" onClick={openTerminal} type="button">
-                <Glyph name="terminal" size={14} />
-                Terminali aç
-              </button>
-            </div>
+            <div className="panel-body" />
+
+            <div
+              className="panel-grip"
+              onPointerDown={beginChatDrag}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Sohbet panelinin genişliğini değiştir"
+            />
           </section>
         ) : null}
 
         <div className="main">
           <div className="stage" ref={stageRef} />
 
-          {terminalOpen && terminalHeight > 0 ? (
-            <section className="terminal" style={{ height: terminalHeight }}>
+          {terminalOpen ? (
+            <section className="terminal" style={{ height: termSize }}>
               <div
                 className="term-grip"
-                onPointerDown={startResize}
+                onPointerDown={beginTermDrag}
                 role="separator"
                 aria-orientation="horizontal"
                 aria-label="Terminal yüksekliğini değiştir"
@@ -1111,33 +1222,9 @@ export default function App(): React.JSX.Element {
                   aria-live="polite"
                   aria-label="Terminal çıktısı"
                 >
-                  {lines.length ? (
-                    lines.map((line) => <LogRow key={line.id} line={line} />)
-                  ) : (
-                    <div className="log-empty">
-                      <p className="log-empty-title">Aksiyon terminali hazır.</p>
-                      <p className="log-empty-note">
-                        Bir komut yazın, tamamlama listesi kendiliğinden açılır. Geçmiş için yukarı
-                        ok, tüm liste için a, temizlemek için cls.
-                      </p>
-                      <div className="log-chips">
-                        {['go', 'snap', 'click', 'type'].map((key) => {
-                          const entry = ACTION_MAP.get(key)
-                          if (!entry) return null
-                          return (
-                            <button
-                              key={key}
-                              className="chip"
-                              onClick={() => complete(entry)}
-                              type="button"
-                            >
-                              {entry.usage}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
+                  {lines.map((line) => (
+                    <LogRow key={line.id} line={line} />
+                  ))}
                 </div>
 
                 {suggestions.length ? (
