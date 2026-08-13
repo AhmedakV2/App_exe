@@ -140,9 +140,15 @@ input {
   overflow: hidden;
 }
 
-.shell.resizing,
-.shell.resizing * {
+.shell.drag-terminal,
+.shell.drag-terminal * {
   cursor: ns-resize !important;
+  user-select: none;
+}
+
+.shell.drag-chat,
+.shell.drag-chat * {
+  cursor: ew-resize !important;
   user-select: none;
 }
 
@@ -459,8 +465,8 @@ input {
 }
 
 .panel {
-  flex: 0 0 320px;
-  width: 320px;
+  position: relative;
+  flex: 0 0 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -469,7 +475,26 @@ input {
   background: var(--panel);
   border: var(--line) solid var(--panel-line);
   box-shadow: 3px 0 10px var(--shadow);
-  contain: strict;
+}
+
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  background: var(--panel);
+}
+
+.panel-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(var(--gap) * -1 - 1px);
+  width: calc(var(--gap) + 3px);
+  cursor: ew-resize;
+  z-index: 3;
+}
+
+.panel-grip:hover {
+  background: var(--accent-wash);
 }
 
 .panel-head {
@@ -492,65 +517,6 @@ input {
   font: 700 11.5px var(--ui);
   letter-spacing: 0.12em;
   color: var(--text);
-}
-
-.panel-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 18px 16px;
-}
-
-.panel-badge {
-  padding: 3px 8px;
-  border-radius: 0;
-  background: var(--field);
-  border: var(--line) solid var(--line-color);
-  font: 700 10.5px var(--mono);
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-.panel-lead {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.panel-note {
-  margin: 0;
-  font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1.65;
-  color: var(--muted);
-}
-
-.panel-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 4px;
-  height: 28px;
-  padding: 0 12px;
-  background: var(--field);
-  color: var(--text);
-  border: var(--line) solid var(--line-color);
-  border-radius: 0;
-  cursor: pointer;
-  font-size: 12.5px;
-  font-weight: 600;
-  transition:
-    background 90ms ease,
-    border-color 90ms ease;
-}
-
-.panel-action:hover {
-  background: var(--hover);
-  border-color: var(--accent);
 }
 
 .terminal {
@@ -664,56 +630,6 @@ input {
   background: var(--scroll);
   border: 3px solid var(--panel);
   border-radius: 0;
-}
-
-.log-empty {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 6px 4px;
-}
-
-.log-empty-title {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.log-empty-note {
-  margin: 0;
-  max-width: 62ch;
-  font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1.65;
-  color: var(--muted);
-}
-
-.log-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 2px;
-}
-
-.chip {
-  padding: 4px 9px;
-  background: var(--field);
-  color: var(--text);
-  border: var(--line) solid var(--line-color);
-  border-radius: 0;
-  cursor: pointer;
-  font: 600 11.5px var(--mono);
-  transition:
-    color 90ms ease,
-    border-color 90ms ease,
-    background 90ms ease;
-}
-
-.chip:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accent-wash);
 }
 
 .line {

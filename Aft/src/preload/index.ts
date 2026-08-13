@@ -12,8 +12,9 @@ const api = {
   window: (action: string): void => ipcRenderer.send('aft:window', action),
   setChat: (open: boolean): void => ipcRenderer.send('aft:chat', open),
   setTerminal: (open: boolean): void => ipcRenderer.send('aft:terminal', open),
-  resizeTerminal: (active: boolean): void => ipcRenderer.send('aft:terminal-resize', active),
-  setStage: (rect: unknown): void => ipcRenderer.send('aft:stage', rect),
+  startDrag: (axis: string): void => ipcRenderer.send('aft:drag', axis),
+  endDrag: (): void => ipcRenderer.send('aft:drag', null),
+  setStage: (box: unknown): void => ipcRenderer.send('aft:stage', box),
   setModal: (open: boolean): void => ipcRenderer.send('aft:modal', open),
   setChrome: (color: string): void => ipcRenderer.send('aft:chrome', color),
   requestState: (): void => ipcRenderer.send('aft:state'),
@@ -36,6 +37,20 @@ const api = {
     ipcRenderer.on('aft:focus-terminal', handler)
     return (): void => {
       ipcRenderer.removeListener('aft:focus-terminal', handler)
+    }
+  },
+  onPointer: (fn: (spot: unknown) => void): (() => void) => {
+    const handler = (_e: IpcRendererEvent, spot: unknown): void => fn(spot)
+    ipcRenderer.on('aft:pointer', handler)
+    return (): void => {
+      ipcRenderer.removeListener('aft:pointer', handler)
+    }
+  },
+  onDragEnd: (fn: () => void): (() => void) => {
+    const handler = (): void => fn()
+    ipcRenderer.on('aft:drag-end', handler)
+    return (): void => {
+      ipcRenderer.removeListener('aft:drag-end', handler)
     }
   },
   versions: process.versions
