@@ -11,7 +11,8 @@ export default defineConfig({
           regression: resolve('src/main/regression/run.ts'),
           smoke: resolve('src/main/regression/smoke.ts'),
           playback: resolve('src/main/scenario/run.ts'),
-          'playback-verify': resolve('src/main/scenario/verify.ts')
+          'playback-verify': resolve('src/main/scenario/verify.ts'),
+          'record-verify': resolve('src/main/record/verify.ts')
         }
       }
     }

@@ -3,7 +3,14 @@ import type { Rectangle, WebContents } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
-import { mountIdentity, mountPlayback, unmountIdentity, unmountPlayback } from './bridge'
+import {
+  mountIdentity,
+  mountPlayback,
+  mountRecord,
+  unmountIdentity,
+  unmountPlayback,
+  unmountRecord
+} from './bridge'
 import { BrowserController } from './browser/BrowserController'
 import {
   AgentAction,
@@ -485,20 +492,30 @@ function createWindow(): void {
   bindTargetEvents()
 
   void mountIdentity(controller)
-    .then((identity) =>
-      mountPlayback(controller, {
+    .then(async (identity) => {
+      const playback = await mountPlayback(controller, {
         identity: identity.identity(),
         descriptors: identity.catalog(),
         target: targetView.webContents,
         renderer: chatView.webContents
       })
-    )
+
+      mountRecord(controller, {
+        identity: identity.identity(),
+        descriptors: identity.catalog(),
+        scenarios: playback.library(),
+        target: targetView.webContents,
+        renderer: chatView.webContents
+      })
+    })
     .catch(() => undefined)
   void targetView.webContents.loadURL(HOME_URL).catch(() => undefined)
 
   win.on('closed', () => {
     stopDrag()
-    void unmountPlayback()
+    void unmountRecord()
+      .catch(() => undefined)
+      .then(() => unmountPlayback())
       .catch(() => undefined)
       .then(() => unmountIdentity())
       .catch(() => undefined)
@@ -544,7 +561,7 @@ app.whenReady().then(() => {
   ipcMain.on('aft:terminal', (_e, open: boolean) => setTerminal(Boolean(open), Boolean(open)))
 
   ipcMain.on('aft:drag', (_e, axis: unknown) => {
-    if (axis === 'chat' || axis === 'terminal') startDrag(axis)
+    if (axis === 'chat' || axis === 'terminal' || axis === 'record') startDrag(axis)
     else stopDrag()
   })
 

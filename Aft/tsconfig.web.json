@@ -4,7 +4,9 @@
     "src/renderer/src/**/*",
     "src/renderer/src/**/*.tsx",
     "src/preload/*.d.ts",
-    "src/main/browser/types.ts"
+    "src/main/browser/types.ts",
+    "src/main/record/types.ts",
+    "src/main/bridge/record-types.ts"
   ],
   "compilerOptions": {
     "composite": true,
