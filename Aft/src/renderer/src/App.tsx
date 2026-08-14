@@ -12,6 +12,7 @@ import { THEMES, paintTheme, readTheme, storeTheme, themeOf } from './themes'
 import type { ThemeId } from './themes'
 import { Glyph, IconButton } from './icons'
 import RecordPanel from './RecordPanel'
+import PlaybackPanel from './PlaybackPanel'
 
 type LineKind = 'in' | 'ok' | 'err' | 'note'
 type Fact = { label: string; ok: boolean }
@@ -25,6 +26,7 @@ type Line = {
   detail?: string[]
 }
 type Extra = { ms?: number; facts?: Fact[]; detail?: string[] }
+type DockTab = 'record' | 'playback' | null
 type Entry = { key: string; usage: string; hint: string }
 type ActionEntry = Entry & { build: (args: string[]) => AgentAction | null }
 
@@ -185,7 +187,8 @@ const ACTIONS: ActionEntry[] = [
 const BUILTINS: Entry[] = [
   { key: 'a', usage: 'a', hint: 'Komut listesini yazdırır' },
   { key: 'cls', usage: 'cls', hint: 'Terminal geçmişini temizler' },
-  { key: 'rec', usage: 'rec', hint: 'Kayıt panelini açar veya kapatır' }
+  { key: 'rec', usage: 'rec', hint: 'Kayıt panelini açar veya kapatır' },
+  { key: 'oyn', usage: 'oyn', hint: 'Oynatma panelini açar veya kapatır' }
 ]
 
 const PALETTE: Entry[] = [...ACTIONS, ...BUILTINS]
@@ -357,7 +360,10 @@ export default function App(): React.JSX.Element {
   const [elements, setElements] = useState(0)
   const [lastMs, setLastMs] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [recordOpen, setRecordOpen] = useState(false)
+  const [dock, setDock] = useState<DockTab>(null)
+  const [recording, setRecording] = useState(false)
+  const [playing, setPlaying] = useState(false)
+  const [library, setLibrary] = useState(0)
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
   const [chatWidth, setChatWidth] = useState(() => readSize(CHAT_KEY, CHAT_SIZE))
   const [termHeight, setTermHeight] = useState(() => readSize(TERM_KEY, TERM_SIZE))
@@ -492,6 +498,24 @@ export default function App(): React.JSX.Element {
     window.aft.setModal(settingsOpen)
     if (settingsOpen) closeSettingsRef.current?.focus()
   }, [settingsOpen])
+
+  useEffect(() => {
+    const offUpdate = window.aftRecord.onUpdate((view) => {
+      setRecording(view.status === 'recording' || view.status === 'paused')
+    })
+
+    const offNotice = window.aftRecord.onNotice((notice) => {
+      if (notice.level === 'info') return
+      push(notice.level === 'error' ? 'err' : 'note', notice.message, {
+        detail: notice.detail.length ? notice.detail : undefined
+      })
+    })
+
+    return () => {
+      offUpdate()
+      offNotice()
+    }
+  }, [push])
 
   useEffect(() => {
     return window.aft.onFocusUrl(() => urlRef.current?.focus())
@@ -670,16 +694,27 @@ export default function App(): React.JSX.Element {
     [beginDrag]
   )
 
-  const toggleRecord = useCallback((): void => setRecordOpen((prev) => !prev), [])
+  const openDock = useCallback((tab: Exclude<DockTab, null>): void => {
+    setDock((prev) => (prev === tab ? null : tab))
+  }, [])
 
-  const closeRecord = useCallback((): void => setRecordOpen(false), [])
+  const closeDock = useCallback((): void => setDock(null), [])
 
-  const reportRecord = useCallback(
-    (report: { level: 'ok' | 'err' | 'note'; text: string; detail?: string[] }): void => {
-      push(report.level, report.text, report.detail?.length ? { detail: report.detail } : undefined)
+  const showRecord = useCallback((): void => openDock('record'), [openDock])
+
+  const showPlayback = useCallback((): void => openDock('playback'), [openDock])
+
+  const report = useCallback(
+    (entry: { level: 'ok' | 'err' | 'note'; text: string; detail?: string[] }): void => {
+      push(entry.level, entry.text, entry.detail?.length ? { detail: entry.detail } : undefined)
     },
     [push]
   )
+
+  const onSaved = useCallback((): void => {
+    setLibrary((prev) => prev + 1)
+    setDock('playback')
+  }, [])
 
   const toggleVision = useCallback(async (): Promise<void> => {
     const next = !state.vision
@@ -748,10 +783,19 @@ export default function App(): React.JSX.Element {
 
     push('in', input)
 
-    if (key === 'rec') {
-      setRecordOpen((prev) => {
-        push('note', prev ? 'Kayıt paneli kapatıldı' : 'Kayıt paneli açıldı')
-        return !prev
+    if (key === 'rec' || key === 'oyn') {
+      const tab = key === 'rec' ? 'record' : 'playback'
+      setDock((prev) => {
+        const next = prev === tab ? null : tab
+        push(
+          'note',
+          next
+            ? key === 'rec'
+              ? 'Kayıt paneli açıldı'
+              : 'Oynatma paneli açıldı'
+            : 'Panel kapatıldı'
+        )
+        return next
       })
       focusPrompt()
       return
@@ -999,9 +1043,16 @@ export default function App(): React.JSX.Element {
         />
         <IconButton
           name="record"
-          title={recordOpen ? 'Kayıt panelini kapat' : 'Kayıt panelini aç'}
-          onClick={toggleRecord}
-          active={recordOpen}
+          title={dock === 'record' ? 'Kayıt panelini kapat' : 'Kayıt panelini aç'}
+          onClick={showRecord}
+          active={dock === 'record'}
+          danger={recording}
+        />
+        <IconButton
+          name="play"
+          title={dock === 'playback' ? 'Oynatma panelini kapat' : 'Oynatma panelini aç'}
+          onClick={showPlayback}
+          active={dock === 'playback'}
         />
         <span className="side-gap" />
         <IconButton
@@ -1155,16 +1206,58 @@ export default function App(): React.JSX.Element {
           ) : null}
         </div>
 
-        {recordOpen ? (
+        {dock ? (
           <section className="panel rec-panel" style={{ width: recSize }}>
             <div
               className="rec-grip"
               onPointerDown={beginRecDrag}
               role="separator"
               aria-orientation="vertical"
-              aria-label="Kayıt panelinin genişliğini değiştir"
+              aria-label="Panel genişliğini değiştir"
             />
-            <RecordPanel onClose={closeRecord} onReport={reportRecord} />
+
+            <header className="dock-head">
+              <button
+                className={'dock-tab' + (dock === 'record' ? ' sel' : '')}
+                onClick={showRecord}
+                type="button"
+              >
+                <Glyph name="record" size={13} />
+                KAYIT
+              </button>
+              <button
+                className={'dock-tab' + (dock === 'playback' ? ' sel' : '')}
+                onClick={showPlayback}
+                type="button"
+              >
+                <Glyph name="play" size={13} />
+                OYNATMA
+              </button>
+              <span className="dock-push" />
+              <button
+                className="ghost-btn"
+                title="Paneli kapat"
+                aria-label="Paneli kapat"
+                onClick={closeDock}
+                type="button"
+              >
+                <Glyph name="collapse" size={15} />
+              </button>
+            </header>
+
+            <div className="dock-body" hidden={dock !== 'record'}>
+              <RecordPanel blocked={playing} onReport={report} onSaved={onSaved} />
+            </div>
+
+            <div className="dock-body" hidden={dock !== 'playback'}>
+              <PlaybackPanel
+                active={dock === 'playback'}
+                revision={library}
+                blocked={recording}
+                onReport={report}
+                onBusy={setPlaying}
+              />
+            </div>
           </section>
         ) : null}
       </div>

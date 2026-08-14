@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AlternativeView, RecordStepView, RecordView } from '../../main/bridge/record-types'
 import type { RecordEditRequest } from '../../main/bridge/record-types'
-import type { AssertionOption, RecordNotice } from '../../main/record/types'
+import type { AssertionOption } from '../../main/record/types'
 import { Glyph, IconButton } from './icons'
 
 type ReportLevel = 'ok' | 'err' | 'note'
@@ -260,11 +260,13 @@ const StepRow = memo(function StepRow({
 })
 
 export default function RecordPanel({
-  onClose,
-  onReport
+  blocked,
+  onReport,
+  onSaved
 }: {
-  onClose: () => void
+  blocked: boolean
   onReport: (report: RecordReport) => void
+  onSaved: () => void
 }): React.JSX.Element {
   const [view, setView] = useState<RecordView | null>(null)
   const [busy, setBusy] = useState(false)
@@ -274,6 +276,7 @@ export default function RecordPanel({
   const nameRef = useRef<HTMLInputElement | null>(null)
   const pinnedRef = useRef(true)
   const reportRef = useRef(onReport)
+  const savedRef = useRef(onSaved)
 
   const status = view?.status ?? 'idle'
   const steps = useMemo(() => view?.steps ?? [], [view])
@@ -282,7 +285,8 @@ export default function RecordPanel({
 
   useEffect(() => {
     reportRef.current = onReport
-  }, [onReport])
+    savedRef.current = onSaved
+  }, [onReport, onSaved])
 
   const say = useCallback((level: ReportLevel, text: string, detail?: string[]): void => {
     reportRef.current({ level, text, detail })
@@ -314,14 +318,6 @@ export default function RecordPanel({
 
   useEffect(() => {
     const offUpdate = window.aftRecord.onUpdate((payload) => setView(payload))
-    const offNotice = window.aftRecord.onNotice((notice: RecordNotice) => {
-      if (notice.level === 'info') return
-      reportRef.current({
-        level: notice.level === 'error' ? 'err' : 'note',
-        text: notice.message,
-        detail: notice.detail
-      })
-    })
 
     window.aftRecord
       .state()
@@ -332,10 +328,7 @@ export default function RecordPanel({
         reportRef.current({ level: 'err', text: 'Kayıt köprüsü hazır değil: ' + error.message })
       })
 
-    return () => {
-      offUpdate()
-      offNotice()
-    }
+    return offUpdate
   }, [])
 
   useEffect(() => {
@@ -420,6 +413,7 @@ export default function RecordPanel({
           'dosya ' + result.data.file
         ]
       })
+      savedRef.current()
     } catch (error) {
       reportRef.current({ level: 'err', text: 'Köprü hatası: ' + (error as Error).message })
     } finally {
@@ -507,20 +501,6 @@ export default function RecordPanel({
 
   return (
     <section className="rec">
-      <header className="panel-head">
-        <span className="panel-title">KAYIT</span>
-        <span className={'rec-state ' + status}>{STATUS_LABELS[status]}</span>
-        <button
-          className="ghost-btn"
-          title="Paneli kapat"
-          aria-label="Paneli kapat"
-          onClick={onClose}
-          type="button"
-        >
-          <Glyph name="collapse" size={15} />
-        </button>
-      </header>
-
       <div className="rec-bar">
         {status === 'recording' ? (
           <IconButton name="pause" title="Duraklat" onClick={pause} disabled={busy} small />
@@ -529,7 +509,7 @@ export default function RecordPanel({
             name={status === 'paused' ? 'play' : 'record'}
             title={status === 'paused' ? 'Sürdür' : 'Kaydı başlat'}
             onClick={status === 'paused' ? resume : () => void start()}
-            disabled={busy}
+            disabled={busy || (blocked && status !== 'paused')}
             active={status !== 'paused'}
             small
           />
@@ -568,8 +548,13 @@ export default function RecordPanel({
         />
       </div>
 
+      {blocked ? <div className="play-note">Koşum sürerken kayıt başlatılamaz.</div> : null}
+
       <div className="rec-meta">
-        <span className="rec-meta-row">{summary || 'kayıt bekleniyor'}</span>
+        <span className="rec-meta-row">
+          <span className={'rec-state ' + status}>{STATUS_LABELS[status]}</span>
+          {summary || 'kayıt bekleniyor'}
+        </span>
         {view?.baseUrl ? (
           <span className="rec-meta-row muted">başlangıç: {shortUrl(view.baseUrl)}</span>
         ) : null}
