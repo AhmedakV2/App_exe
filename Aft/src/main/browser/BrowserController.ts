@@ -3,7 +3,7 @@ import { ActionEngine } from '../action'
 import type { ActionOutcome, ActionRequest, DescriptorLookup } from '../action'
 import { DiscoveryEngine } from '../discovery'
 import type { ElementGraph } from '../discovery'
-import type { ScanLevel } from '../discovery'
+import type { ScanLevel, Transport } from '../discovery'
 import { Overlay } from './Overlay'
 import type { AgentAction, PageState } from './types'
 
@@ -37,6 +37,10 @@ export class BrowserController {
       getGraph: () => this.graph,
       resolveDescriptor: (descriptorId) => this.resolver?.(descriptorId) ?? null
     })
+  }
+
+  get transport(): Transport {
+    return this.engine.transport
   }
 
   isVisionOn(): boolean {

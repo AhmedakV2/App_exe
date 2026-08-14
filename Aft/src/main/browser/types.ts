@@ -67,7 +67,7 @@ export interface PointerSpot {
   y: number
 }
 
-export type DragAxis = 'chat' | 'terminal'
+export type DragAxis = 'chat' | 'terminal' | 'record'
 
 export type NavKind = 'back' | 'forward' | 'reload' | 'home' | 'stop'
 

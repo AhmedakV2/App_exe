@@ -74,6 +74,10 @@ export class PlaybackChannel {
     await this.engine.store().prune(RETENTION_MS)
   }
 
+  library(): ScenarioStore {
+    return this.scenarios
+  }
+
   register(): void {
     if (this.registered) return
     this.registered = true

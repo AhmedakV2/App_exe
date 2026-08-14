@@ -104,7 +104,15 @@ async function main(): Promise<number> {
     const nodes = graph.nodes
     const coverage = graph.coverage
 
-    expect('shadow kok', coverage.shadowRoots >= 2, 'shadowRoots=' + coverage.shadowRoots)
+    const shadowed = nodes.filter((node) => node.shadowPath.length > 0)
+    expect(
+      'shadow kok',
+      coverage.shadowRoots >= 1 &&
+        ['shadow-action', 'deep-action'].every((mark) =>
+          shadowed.some((node) => node.attrs['data-testid'] === mark)
+        ),
+      'shadowRoots=' + coverage.shadowRoots + ' shadow yolu tasiyan=' + shadowed.length
+    )
     expect('cerceve', coverage.frames >= 2, 'frames=' + coverage.frames)
     expect(
       'erisilemeyen cerceve yok',
