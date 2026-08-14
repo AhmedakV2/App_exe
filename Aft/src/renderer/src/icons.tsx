@@ -156,6 +156,24 @@ const GLYPHS: Record<string, React.JSX.Element> = {
       <circle cx="12" cy="12" r="8" />
       <circle cx="12" cy="12" r="3" />
     </>
+  ),
+  file: (
+    <>
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v5h4" />
+    </>
+  ),
+  camera: (
+    <>
+      <path d="M3 8h4l2-3h6l2 3h4v12H3z" />
+      <circle cx="12" cy="13" r="4" />
+    </>
+  ),
+  flag: (
+    <>
+      <path d="M6 21V4" />
+      <path d="M6 5h12l-3 4 3 4H6" />
+    </>
   )
 }
 

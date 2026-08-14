@@ -6,7 +6,9 @@
     "src/preload/*.d.ts",
     "src/main/browser/types.ts",
     "src/main/record/types.ts",
-    "src/main/bridge/record-types.ts"
+    "src/main/scenario/types.ts",
+    "src/main/bridge/record-types.ts",
+    "src/main/bridge/playback-types.ts"
   ],
   "compilerOptions": {
     "composite": true,
