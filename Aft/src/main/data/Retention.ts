@@ -1,4 +1,3 @@
-
 import { rm } from 'node:fs/promises'
 import type { ContextStore } from '../scenario'
 import type { DataDriver } from './driver'

@@ -1,5 +1,5 @@
-import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
+import { writeFileAtomic } from '../atomic'
 import { renderLog } from './RunLog'
 import type { RunResult, StepResult, StepStatus } from './types'
 
@@ -72,9 +72,8 @@ export async function writeReport(run: RunResult, directory: string): Promise<st
   const jsonPath = join(directory, run.id + '.json')
   const textPath = join(directory, run.id + '.txt')
 
-  await mkdir(dirname(jsonPath), { recursive: true })
-  await writeFile(jsonPath, JSON.stringify(run, null, 2), 'utf8')
-  await writeFile(textPath, renderText(run), 'utf8')
+  await writeFileAtomic(jsonPath, JSON.stringify(run, null, 2))
+  await writeFileAtomic(textPath, renderText(run))
 
   return [jsonPath, textPath]
 }

@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { join } from 'node:path'
+import type { Indexer } from '../data'
 import type { DescriptorStore, IdentityService } from '../identity'
 import {
   PlaybackEngine,
@@ -9,6 +10,7 @@ import {
   writeReport,
   type PlaybackHost,
   type PlaybackOptions,
+  type RunResult,
   type Scenario
 } from '../scenario'
 import type { ChannelResult } from './types'
@@ -52,6 +54,8 @@ export class PlaybackChannel {
   private readonly engine: PlaybackEngine
   private readonly notify: ((channel: string, payload: unknown) => void) | null
   private readonly reportDir: string
+  private readonly indexFaults: string[] = []
+  private indexer: Indexer | null = null
   private registered = false
 
   constructor(options: PlaybackChannelOptions) {
@@ -76,6 +80,14 @@ export class PlaybackChannel {
 
   library(): ScenarioStore {
     return this.scenarios
+  }
+
+  setIndexer(indexer: Indexer | null): void {
+    this.indexer = indexer
+  }
+
+  faults(): string[] {
+    return [...this.indexFaults]
   }
 
   register(): void {
@@ -155,7 +167,27 @@ export class PlaybackChannel {
     })
 
     const reports = await writeReport(run, this.reportDir).catch(() => [])
+    await this.index(run, reports)
     return { run, reports }
+  }
+
+  private async index(run: RunResult, reports: readonly string[]): Promise<void> {
+    if (!this.indexer) return
+
+    try {
+      const refs = await this.engine.store().refs()
+      const wanted = new Set(run.contexts)
+
+      this.indexer.recordRun(run, {
+        reports,
+        contexts: refs.filter((entry) => wanted.has(entry.id)),
+        origin: null,
+        author: null,
+        enqueue: true
+      })
+    } catch (error) {
+      this.indexFaults.push(error instanceof Error ? error.message : String(error))
+    }
   }
 
   private payload(scenario: Scenario): ScenarioPayload {

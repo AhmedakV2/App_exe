@@ -1,7 +1,8 @@
-import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { readFile, readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import type { ActionOutcome } from '../action'
+import { writeFileAtomic } from '../atomic'
 import type { ElementGraph } from '../discovery'
 import { digest } from '../model'
 import type { ModelIndex } from '../model'
@@ -20,6 +21,10 @@ const FILE_SUFFIX = '.context.json.gz'
 const ELEMENT_CAP = 400
 
 const TEXT_CAP = 120
+
+export interface StoredContextRef extends StoredContext {
+  filePath: string
+}
 
 export interface ContextInput {
   runId: string
@@ -90,9 +95,16 @@ export class ContextStore {
     if (!this.directory) return ''
 
     const payload = gzipSync(Buffer.from(JSON.stringify(context), 'utf8'))
-    await mkdir(this.directory, { recursive: true })
-    await writeFile(join(this.directory, context.id + FILE_SUFFIX), payload)
+    await writeFileAtomic(join(this.directory, context.id + FILE_SUFFIX), payload)
     return context.id
+  }
+
+  async refs(): Promise<StoredContextRef[]> {
+    const stored = await this.list()
+    return stored.map((entry) => ({
+      ...entry,
+      filePath: join(this.directory, entry.id + FILE_SUFFIX)
+    }))
   }
 
   async read(id: string): Promise<FailureContext | null> {
