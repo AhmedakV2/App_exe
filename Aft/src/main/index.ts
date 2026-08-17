@@ -4,9 +4,11 @@ import { join } from 'path'
 import { existsSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
+  mountData,
   mountIdentity,
   mountPlayback,
   mountRecord,
+  unmountData,
   unmountIdentity,
   unmountPlayback,
   unmountRecord
@@ -500,6 +502,9 @@ function createWindow(): void {
         renderer: chatView.webContents
       })
 
+      const data = await mountData({ scenarios: playback.library() })
+      playback.setIndexer(data.indexer())
+
       mountRecord(controller, {
         identity: identity.identity(),
         descriptors: identity.catalog(),
@@ -514,6 +519,8 @@ function createWindow(): void {
   win.on('closed', () => {
     stopDrag()
     void unmountRecord()
+      .catch(() => undefined)
+      .then(() => unmountData())
       .catch(() => undefined)
       .then(() => unmountPlayback())
       .catch(() => undefined)

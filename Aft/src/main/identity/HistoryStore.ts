@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { quarantine, writeFileAtomic } from '../atomic'
 import type { StrategyKind, StrategyStat } from './types'
 
 const DECAY = 0.94
@@ -19,16 +19,30 @@ interface HistoryFile {
   scopes: Record<string, Record<string, StrategyStat>>
 }
 
+function historyFault(error: unknown, moved: string): string {
+  const detail = error instanceof Error ? error.message : String(error)
+  return 'Gecmis dosyasi bozuk: ' + detail + (moved ? ' | yedek: ' + moved : '')
+}
+
 export class HistoryStore {
   private scopes = new Map<string, Map<StrategyKind, StrategyStat>>()
+  private readonly problems: string[] = []
   private flushTimer: ReturnType<typeof setTimeout> | null = null
   private dirty = false
 
   constructor(private readonly filePath: string) {}
 
   async load(): Promise<void> {
+    this.scopes = new Map()
+
+    let raw = ''
     try {
-      const raw = await readFile(this.filePath, 'utf8')
+      raw = await readFile(this.filePath, 'utf8')
+    } catch {
+      return
+    }
+
+    try {
       const parsed = JSON.parse(raw) as HistoryFile
       this.scopes = new Map(
         Object.entries(parsed.scopes ?? {}).map(([scope, stats]) => [
@@ -36,9 +50,15 @@ export class HistoryStore {
           new Map(Object.entries(stats) as [StrategyKind, StrategyStat][])
         ])
       )
-    } catch {
+    } catch (error) {
       this.scopes = new Map()
+      const moved = await quarantine(this.filePath).catch(() => '')
+      this.problems.push(historyFault(error, moved))
     }
+  }
+
+  faults(): string[] {
+    return [...this.problems]
   }
 
   multiplier(scope: string, kind: StrategyKind): number {
@@ -95,8 +115,7 @@ export class HistoryStore {
     }
 
     try {
-      await mkdir(dirname(this.filePath), { recursive: true })
-      await writeFile(this.filePath, JSON.stringify(payload), 'utf8')
+      await writeFileAtomic(this.filePath, JSON.stringify(payload))
     } catch (error) {
       this.dirty = true
       throw error
