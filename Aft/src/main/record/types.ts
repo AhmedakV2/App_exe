@@ -72,6 +72,7 @@ export interface RecordIntent {
   files: string[]
   deltaY: number
   needsElement: boolean
+  optionalElement: boolean
   label: string
 }
 

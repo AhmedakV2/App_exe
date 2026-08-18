@@ -147,7 +147,7 @@ const ACTIONS: ActionEntry[] = [
   {
     key: 'press',
     usage: 'press [no] <tuş>',
-    hint: 'Tuşa basar',
+    hint: 'Tuşa basar, Ctrl+A gibi bileşimleri de kabul eder',
     build: (a) => {
       if (a.length >= 2) {
         const index = num(a[0])

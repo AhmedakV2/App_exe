@@ -7,6 +7,8 @@ body { margin: 0; font: 14px sans-serif; }
 label { display: inline-block; width: 120px; }
 .kart { padding: 8px 12px; border: 1px solid #888; display: inline-block; cursor: pointer; }
 iframe { width: 420px; height: 120px; border: 1px solid #ccc; }
+.liste { width: 240px; height: 80px; overflow-y: auto; border: 1px solid #888; }
+.liste-ic { height: 900px; }
 </style>
 </head>
 <body>
@@ -27,7 +29,17 @@ iframe { width: 420px; height: 120px; border: 1px solid #ccc; }
 </form>
 
 <div class="box">
+  <label for="arama">Arama</label><input id="arama" name="arama" type="text" data-testid="arama">
+</div>
+
+<div class="box">
   <div class="kart x7f2a9c" id="">Kalici kimligi olmayan kart</div>
+</div>
+
+<div class="box">
+  <div id="liste" data-testid="liste" class="liste">
+    <div class="liste-ic">uzun liste icerigi</div>
+  </div>
 </div>
 
 <div class="box"><aft-kutu></aft-kutu></div>
@@ -35,6 +47,8 @@ iframe { width: 420px; height: 120px; border: 1px solid #ccc; }
 <div class="box"><iframe id="ic" src="ic.html" title="ic cerceve"></iframe></div>
 
 <p id="durum" class="box">form bekliyor</p>
+<p id="tus" class="box">tus bekliyor</p>
+<p id="kaydirma" class="box">kaydirma bekliyor</p>
 
 <script>
 document.getElementById('sozlesme').addEventListener('change', function () {
@@ -43,6 +57,14 @@ document.getElementById('sozlesme').addEventListener('change', function () {
 
 document.querySelector('.kart').addEventListener('click', function () {
   document.getElementById('durum').textContent = 'kart secildi';
+});
+
+document.getElementById('arama').addEventListener('keydown', function (event) {
+  if (event.key === 'Enter') document.getElementById('tus').textContent = 'arama: ' + this.value;
+});
+
+document.getElementById('liste').addEventListener('scroll', function () {
+  document.getElementById('kaydirma').textContent = 'liste kaydirildi';
 });
 
 class AftKutu extends HTMLElement {

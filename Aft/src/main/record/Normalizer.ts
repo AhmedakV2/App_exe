@@ -1,19 +1,8 @@
+import { isPressableKey } from '../action'
 import type { ActionKind } from '../action'
 import type { RawElement, RawInteraction, RecordIntent, RecordOptions } from './types'
 
-const KEY_STEPS: ReadonlySet<string> = new Set([
-  'Enter',
-  'Tab',
-  'Escape',
-  'ArrowUp',
-  'ArrowDown',
-  'ArrowLeft',
-  'ArrowRight',
-  'PageUp',
-  'PageDown',
-  'Home',
-  'End'
-])
+const ROOT_TAGS: ReadonlySet<string> = new Set(['', 'body', 'html', '#document'])
 
 const ELEMENT_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>([
   'click',
@@ -36,6 +25,7 @@ export function normalize(raw: RawInteraction, options: RecordOptions): RecordIn
     optionValue: '',
     files: [] as string[],
     deltaY: 0,
+    optionalElement: false,
     label: labelOf(raw.element)
   }
 
@@ -47,13 +37,25 @@ export function normalize(raw: RawInteraction, options: RecordOptions): RecordIn
   if (raw.kind === 'scroll') {
     if (!options.captureScroll) return null
     if (Math.abs(raw.deltaY) < options.scrollThreshold) return null
-    return { ...base, kind: 'scroll', deltaY: raw.deltaY, needsElement: false }
+    return {
+      ...base,
+      kind: 'scroll',
+      deltaY: raw.deltaY,
+      needsElement: false,
+      optionalElement: addressable(raw.element)
+    }
   }
 
   if (raw.kind === 'key') {
     if (!options.captureKeys) return null
-    if (!KEY_STEPS.has(raw.key)) return null
-    return { ...base, kind: 'press-key', key: raw.key, needsElement: false }
+    if (!raw.key || !isPressableKey(raw.key)) return null
+    return {
+      ...base,
+      kind: 'press-key',
+      key: raw.key,
+      needsElement: false,
+      optionalElement: addressable(raw.element)
+    }
   }
 
   if (!raw.element) return null
@@ -91,6 +93,11 @@ export function normalize(raw: RawInteraction, options: RecordOptions): RecordIn
 
 export function needsElement(kind: ActionKind): boolean {
   return ELEMENT_KINDS.has(kind)
+}
+
+export function addressable(element: RawElement | null): boolean {
+  if (!element) return false
+  return !ROOT_TAGS.has(element.tag)
 }
 
 export function sourceKey(raw: RawInteraction): string {

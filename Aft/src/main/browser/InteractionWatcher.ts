@@ -10,12 +10,16 @@ const SOURCE = `(function () {
   var queue = [];
   var slots = {};
   var seq = 0;
-  var base = Math.round(window.pageYOffset || 0);
-  var scrollTimer = null;
   var bound = [];
   var layer = null;
+  var jobs = [];
+  var lastPointerAt = 0;
+  var lastKeyAt = 0;
   var TEST = ['data-testid','data-test-id','data-test','data-qa','data-qa-id','data-cy','data-e2e','data-automation-id','data-automationid','data-tracking-id'];
-  var KEYS = ['Enter','Tab','Escape','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End'];
+  var KEYS = ['Enter','Tab','Escape','Backspace','Delete','Insert','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
+  var TYPING_KEYS = ['Backspace','Delete','Insert',' '];
+  var MODIFIER_KEYS = ['Shift','Control','Alt','Meta','AltGraph','CapsLock','NumLock','ScrollLock','Dead'];
+  var CHANGE_QUIET_MS = 700;
   var TONES = { strong: '#3ecf8e', weak: '#f0a02a', blocked: '#ef4444' };
 
   function attr(el, name) {
@@ -70,6 +74,61 @@ const SOURCE = `(function () {
     };
   }
 
+  function combo(event) {
+    var name = event.key === ' ' ? 'Space' : event.key;
+    var hard = event.ctrlKey || event.altKey || event.metaKey;
+    var parts = [];
+    if (event.ctrlKey) parts.push('Control');
+    if (event.altKey) parts.push('Alt');
+    if (event.metaKey) parts.push('Meta');
+    if (event.shiftKey && (name.length > 1 || hard)) parts.push('Shift');
+    parts.push(name);
+    return parts.join('+');
+  }
+
+  function scrollJob(node) {
+    for (var i = 0; i < jobs.length; i++) if (jobs[i].node === node) return jobs[i];
+    var job = { node: node, timer: null, base: scrollTopOf(node), wheel: 0 };
+    jobs.push(job);
+    if (jobs.length > 32) jobs.shift();
+    return job;
+  }
+
+  function wheelDelta(event) {
+    var value = Number(event.deltaY) || 0;
+    if (event.deltaMode === 1) return Math.round(value * 40);
+    if (event.deltaMode === 2) return Math.round(value * (window.innerHeight || 800));
+    return Math.round(value);
+  }
+
+  function scrollTopOf(node) {
+    if (!node) return Math.round(window.pageYOffset || 0);
+    try { return Math.round(node.scrollTop || 0); } catch (e) { return 0; }
+  }
+
+  function scrollHost(node) {
+    if (!node || node === document || node === window) return null;
+    if (node === document.documentElement || node === document.body) return null;
+    return node.nodeType === 1 ? node : null;
+  }
+
+  function scrolls(node) {
+    try {
+      return node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1;
+    } catch (e) { return false; }
+  }
+
+  function seedScroll(node) {
+    var cursor = node;
+    var guard = 0;
+    while (cursor && guard < 32) {
+      if (scrollHost(cursor) && scrolls(cursor)) return scrollJob(cursor);
+      cursor = cursor.parentElement || (cursor.parentNode && cursor.parentNode.host) || null;
+      guard++;
+    }
+    return scrollJob(null);
+  }
+
   function pick(event) {
     var path = typeof event.composedPath === 'function' ? event.composedPath() : null;
     var node = path && path.length ? path[0] : event.target;
@@ -107,17 +166,23 @@ const SOURCE = `(function () {
 
   bind('click', document, function (event) {
     if (event.button === 2) return;
+    var now = Date.now();
+    var forwarded = !event.detail && (now - lastPointerAt < CHANGE_QUIET_MS || now - lastKeyAt < CHANGE_QUIET_MS);
+    if (forwarded) return;
     var el = pick(event);
+    lastPointerAt = now;
     if (el) emit('click', el, { detail: event.detail || 1 });
   });
 
   bind('dblclick', document, function (event) {
     var el = pick(event);
+    lastPointerAt = Date.now();
     if (el) emit('double-click', el, { detail: 2 });
   });
 
   bind('contextmenu', document, function (event) {
     var el = pick(event);
+    lastPointerAt = Date.now();
     if (el) emit('right-click', el, {});
   });
 
@@ -144,25 +209,47 @@ const SOURCE = `(function () {
       return;
     }
     if (tag === 'input' && (type === 'checkbox' || type === 'radio')) {
+      var now = Date.now();
+      if (now - lastPointerAt < CHANGE_QUIET_MS) return;
+      if (now - lastKeyAt < CHANGE_QUIET_MS) return;
       emit('toggle', el, { detail: el.checked ? 1 : 0 });
     }
   });
 
   bind('keydown', document, function (event) {
-    if (KEYS.indexOf(event.key) < 0) return;
-    emit('key', pick(event), { key: event.key });
+    if (event.repeat) return;
+    var key = event.key;
+    if (!key || MODIFIER_KEYS.indexOf(key) >= 0) return;
+
+    var hard = event.ctrlKey || event.altKey || event.metaKey;
+    var known = KEYS.indexOf(key) >= 0 || key === ' ';
+    if (!hard && !known) return;
+
+    var el = pick(event);
+    if (!hard && el && editable(el) && TYPING_KEYS.indexOf(key) >= 0) return;
+
+    lastKeyAt = Date.now();
+    emit('key', el, { key: combo(event) });
   });
 
-  bind('scroll', window, function () {
-    if (scrollTimer) return;
-    scrollTimer = setTimeout(function () {
-      scrollTimer = null;
-      var now = Math.round(window.pageYOffset || 0);
-      var delta = now - base;
-      base = now;
-      if (delta) emit('scroll', null, { deltaY: delta, scrollY: now });
+  bind('wheel', document, function (event) {
+    seedScroll(pick(event)).wheel += wheelDelta(event);
+  });
+
+  bind('scroll', window, function (event) {
+    var job = scrollJob(scrollHost(event.target));
+    if (job.timer) return;
+    job.timer = setTimeout(function () {
+      job.timer = null;
+      var now = scrollTopOf(job.node);
+      var delta = job.wheel || now - job.base;
+      job.wheel = 0;
+      job.base = now;
+      if (delta) emit('scroll', job.node, { deltaY: delta, scrollY: now });
     }, 220);
   });
+
+  scrollJob(null);
 
   function surface() {
     if (layer && layer.parentNode) return layer;
@@ -196,7 +283,9 @@ const SOURCE = `(function () {
     },
     stop: function () {
       for (var i = 0; i < bound.length; i++) bound[i][1].removeEventListener(bound[i][0], bound[i][2], true);
+      for (var j = 0; j < jobs.length; j++) if (jobs[j].timer) clearTimeout(jobs[j].timer);
       bound = [];
+      jobs = [];
       queue = [];
       slots = {};
       window.__aftRecord.clear();

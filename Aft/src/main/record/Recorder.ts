@@ -7,7 +7,7 @@ import { edit, renumber, type EditOutcome } from './Editor'
 import { normalize, sourceKey } from './Normalizer'
 import { suppress } from './NoiseFilter'
 import { assess, blocked, plain } from './Quality'
-import { assertionOptions, build, descriptorTarget, stepId } from './StepFactory'
+import { assertionOptions, build, descriptorTarget, scrollTitle, stepId } from './StepFactory'
 import {
   DEFAULT_RECORD,
   RECORD_VERSION,
@@ -258,7 +258,7 @@ export class Recorder {
 
     if (entry.kind === 'scroll') {
       entry.step.deltaY += intent.deltaY
-      entry.step.title = 'Kaydir: ' + entry.step.deltaY + ' px'
+      entry.step.title = scrollTitle(entry.step.deltaY, entry.step.target?.label ?? '')
     } else if (entry.kind === 'clear-type') {
       entry.step.text = intent.text
       entry.step.title = rewrite(entry.step.title, intent.text)
@@ -278,32 +278,20 @@ export class Recorder {
     const order = session.steps.length
     const id = stepId(session.id, order, intent.kind, intent.at)
 
-    if (!intent.needsElement) {
-      const step = build(id, intent, null, session.options)
-      this.append(
-        session,
-        {
-          id,
-          order,
-          at: intent.at,
-          origin: 'capture',
-          kind: step.kind,
-          step,
-          advice: plain(),
-          assertions: assertionOptions(null, this.host.url(), this.host.title()),
-          url: intent.raw.url || this.host.url(),
-          frameDepth: 0,
-          shadowDepth: 0,
-          rect: null,
-          scanned: false,
-          sourceKey: ''
-        },
-        intent.raw
-      )
+    if (!intent.needsElement && !intent.optionalElement) {
+      this.appendPlain(session, id, order, intent)
       return
     }
 
     const located = await this.locate(intent.raw, session)
+
+    if (!located && intent.optionalElement) {
+      this.appendPlain(session, id, order, intent)
+      this.notice('info', id, 'Adim sayfa duzeyinde kaydedildi: ' + (intent.label || intent.kind), [
+        'eleman agacta bulunamadi'
+      ])
+      return
+    }
 
     if (!located) {
       session.counters.unresolved++
@@ -385,6 +373,35 @@ export class Recorder {
         advice.reasons.concat(advice.alternatives.map((option) => 'oneri: ' + option.label))
       )
     }
+  }
+
+  private appendPlain(
+    session: RecordSession,
+    id: string,
+    order: number,
+    intent: RecordIntent
+  ): void {
+    const step = build(id, intent, null, session.options)
+    this.append(
+      session,
+      {
+        id,
+        order,
+        at: intent.at,
+        origin: 'capture',
+        kind: step.kind,
+        step,
+        advice: plain(),
+        assertions: assertionOptions(null, this.host.url(), this.host.title()),
+        url: intent.raw.url || this.host.url(),
+        frameDepth: 0,
+        shadowDepth: 0,
+        rect: null,
+        scanned: false,
+        sourceKey: ''
+      },
+      intent.raw
+    )
   }
 
   private append(session: RecordSession, entry: RecordedStep, raw: RawInteraction): void {

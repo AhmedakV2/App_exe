@@ -184,11 +184,15 @@ function option(
   }
 }
 
+export function scrollTitle(deltaY: number, label: string): string {
+  return KIND_LABELS['scroll'] + ': ' + deltaY + ' px' + (label ? ' (' + label + ')' : '')
+}
+
 function titleOf(kind: string, label: string, intent: RecordIntent): string {
   const head = KIND_LABELS[kind] ?? kind
 
   if (kind === 'navigate') return head + ': ' + intent.url
-  if (kind === 'scroll') return head + ': ' + intent.deltaY + ' px'
+  if (kind === 'scroll') return scrollTitle(intent.deltaY, label)
   if (kind === 'press-key') return head + ': ' + intent.key + (label ? ' (' + label + ')' : '')
   if (kind === 'clear-type' || kind === 'type') {
     return head + ': ' + (label || 'alan') + ' = "' + clip(intent.text) + '"'

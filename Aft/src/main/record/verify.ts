@@ -52,6 +52,11 @@ function ordinalOf(graph: ElementGraph, match: (attrs: Record<string, string>) =
   return node ? node.index : -1
 }
 
+function textOf(graph: ElementGraph, id: string): string {
+  const node = graph.nodes.find((entry) => entry.attrs['id'] === id)
+  return (node?.text ?? '').replace(/\s+/g, ' ').trim()
+}
+
 async function main(): Promise<number> {
   step('fixture sunucusu')
   const { server, root } = await workspace()
@@ -89,8 +94,11 @@ async function main(): Promise<number> {
 
     const ad = ordinalOf(graph, (attrs) => attrs['id'] === 'ad')
     const eposta = ordinalOf(graph, (attrs) => attrs['id'] === 'eposta')
+    const arama = ordinalOf(graph, (attrs) => attrs['id'] === 'arama')
     const sehir = ordinalOf(graph, (attrs) => attrs['id'] === 'sehir')
     const sozlesme = ordinalOf(graph, (attrs) => attrs['id'] === 'sozlesme')
+    const etiket = ordinalOf(graph, (attrs) => attrs['for'] === 'sozlesme')
+    const liste = ordinalOf(graph, (attrs) => attrs['id'] === 'liste')
     const kart = ordinalOf(graph, (attrs) => (attrs['class'] ?? '').includes('kart'))
     const golge = ordinalOf(graph, (attrs) => attrs['data-testid'] === 'golge-dugme')
     const cerceve = ordinalOf(graph, (attrs) => attrs['data-testid'] === 'cerceve-dugme')
@@ -98,11 +106,19 @@ async function main(): Promise<number> {
 
     expect(
       'fixture elemanlari bulundu',
-      [ad, eposta, sehir, sozlesme, kart, golge, cerceve, gonder].every((entry) => entry >= 0),
+      [ad, eposta, arama, sehir, sozlesme, etiket, liste, kart, golge, cerceve, gonder].every(
+        (entry) => entry >= 0
+      ),
       'ad=' +
         ad +
+        ' arama=' +
+        arama +
         ' sehir=' +
         sehir +
+        ' etiket=' +
+        etiket +
+        ' liste=' +
+        liste +
         ' kart=' +
         kart +
         ' golge=' +
@@ -119,15 +135,21 @@ async function main(): Promise<number> {
     await delay(160)
     await controller.dispatch({ kind: 'clear-type', ordinal: eposta, text: 'ayse@ornek.com' })
     await delay(160)
+    await controller.dispatch({ kind: 'clear-type', ordinal: arama, text: 'kalem' })
+    await delay(160)
+    await controller.dispatch({ kind: 'press-key', ordinal: arama, key: 'Enter' })
+    await delay(320)
     await controller.dispatch({ kind: 'select-option', ordinal: sehir, optionValue: 'ist' })
     await delay(160)
-    await controller.dispatch({ kind: 'click', ordinal: sozlesme })
-    await delay(160)
+    await controller.dispatch({ kind: 'click', ordinal: etiket })
+    await delay(320)
     await controller.dispatch({ kind: 'click', ordinal: kart })
     await delay(160)
     await controller.dispatch({ kind: 'click', ordinal: golge })
     await delay(160)
     await controller.dispatch({ kind: 'click', ordinal: cerceve })
+    await delay(160)
+    await controller.dispatch({ kind: 'scroll', ordinal: liste, deltaY: 320 })
     await delay(SETTLE_MS)
 
     step('kayit durduruluyor')
@@ -136,11 +158,39 @@ async function main(): Promise<number> {
 
     process.stdout.write('\n' + summary(session) + '\n')
 
-    expect('adim uretildi', session.steps.length >= 6, 'adim=' + session.steps.length)
+    expect('adim uretildi', session.steps.length >= 9, 'adim=' + session.steps.length)
     expect(
       'yazma adimlari birlestirildi',
-      session.steps.filter((entry) => entry.kind === 'clear-type').length === 2,
+      session.steps.filter((entry) => entry.kind === 'clear-type').length === 3,
       'yazma adimi=' + session.steps.filter((entry) => entry.kind === 'clear-type').length
+    )
+
+    const tusAdimi = session.steps.find((entry) => entry.kind === 'press-key')
+    expect(
+      'tus adimi kaydedildi',
+      Boolean(tusAdimi) && tusAdimi?.step.key === 'Enter',
+      tusAdimi ? tusAdimi.step.title : 'tus adimi yok'
+    )
+    expect(
+      'tus adimi hedefli kaydedildi',
+      Boolean(tusAdimi?.step.target),
+      tusAdimi?.step.target?.label ?? 'hedefsiz'
+    )
+
+    const kaydirmaAdimi = session.steps.find((entry) => entry.kind === 'scroll')
+    expect(
+      'eleman kaydirmasi kaydedildi',
+      Boolean(kaydirmaAdimi?.step.target),
+      kaydirmaAdimi ? kaydirmaAdimi.step.title : 'kaydirma adimi yok'
+    )
+
+    const toggles = session.steps.filter(
+      (entry) => entry.kind === 'click' && entry.step.title.toLowerCase().includes('sozlesme')
+    )
+    expect(
+      'etiket tiklamasi tek adim uretti',
+      toggles.length === 1,
+      'sozlesme adimi=' + toggles.length
     )
     expect(
       'gurultu bastirildi',
@@ -203,6 +253,17 @@ async function main(): Promise<number> {
       run.ok,
       run.status + ' | ' + (run.failures[0] ?? 'hata yok')
     )
+    const after = await controller.scanGraph(1, true)
+    const tus = textOf(after, 'tus')
+    const kaydirma = textOf(after, 'kaydirma')
+
+    expect('tus adimi sayfaya ulasti', tus.startsWith('arama:'), tus || 'tus tepkisi yok')
+    expect(
+      'kaydirma adimi sayfaya ulasti',
+      kaydirma === 'liste kaydirildi',
+      kaydirma || 'kaydirma tepkisi yok'
+    )
+
     expect(
       'cozumleme kesin',
       run.metrics.resolvedMissing === 0 && run.metrics.resolvedLow === 0,
