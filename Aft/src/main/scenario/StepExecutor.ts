@@ -25,6 +25,11 @@ export interface ConditionCheck {
   reason: string
 }
 
+interface ResolvedIdentity {
+  ref: string
+  ordinal: number
+}
+
 export class StepExecutor {
   readonly counters = { scans: 0, retries: 0 }
 
@@ -154,7 +159,7 @@ export class StepExecutor {
     ctx: ExecutionContext,
     result: StepResult
   ): Promise<StepAttempt> {
-    const outcome = await this.dispatch(this.request(step, ctx, -1), step.timeoutMs)
+    const outcome = await this.dispatch(this.request(step, ctx, null), step.timeoutMs)
     result.outcome = outcome
     return { ok: outcome.ok, message: outcome.message }
   }
@@ -198,7 +203,7 @@ export class StepExecutor {
     }
 
     const outcome = await this.dispatch(
-      this.request(step, ctx, resolution.element.identity.ordinal),
+      this.request(step, ctx, resolution.element.identity),
       step.timeoutMs
     )
 
@@ -223,15 +228,20 @@ export class StepExecutor {
     return withTimeout(this.host.execute(request), timeoutMs, 'adim zaman asimina ugradi')
   }
 
-  private request(step: ScenarioStep, ctx: ExecutionContext, ordinal: number): ActionRequest {
+  private request(
+    step: ScenarioStep,
+    ctx: ExecutionContext,
+    target: ResolvedIdentity | null
+  ): ActionRequest {
     return {
       kind: step.kind as ActionKind,
-      ordinal: ordinal >= 0 ? ordinal : undefined,
+      ref: target?.ref || undefined,
+      ordinal: target && target.ordinal >= 0 ? target.ordinal : undefined,
       text: step.kind === 'type' || step.kind === 'clear-type' ? step.text : undefined,
-      key: step.key || undefined,
+      key: step.kind === 'press-key' ? step.key : undefined,
       url: step.kind === 'navigate' ? absolute(step.url, ctx.scenario.baseUrl) : undefined,
       deltaY: step.kind === 'scroll' ? step.deltaY : undefined,
-      optionValue: step.optionValue || undefined,
+      optionValue: step.kind === 'select-option' ? step.optionValue : undefined,
       files: step.files.length ? step.files.slice() : undefined,
       timeoutMs: step.timeoutMs,
       mode: step.mode ?? ctx.options.inputMode ?? undefined

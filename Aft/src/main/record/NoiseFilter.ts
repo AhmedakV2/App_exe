@@ -37,7 +37,8 @@ export function suppress(
   }
 
   if (intent.kind === 'scroll') {
-    if (last && last.kind === 'scroll' && intent.at - last.at <= options.scrollFollowMs) {
+    const sameSurface = last && last.kind === 'scroll' && last.sourceKey === key
+    if (sameSurface && intent.at - last.at <= options.scrollFollowMs) {
       return { ...NONE, mergeInto: last.id, reason: 'ardisik kaydirma birlestirildi' }
     }
     return NONE
@@ -56,7 +57,13 @@ export function suppress(
   const remove: string[] = []
   let removeReason = ''
 
-  if (last && last.kind === 'scroll' && intent.at - last.at <= options.scrollFollowMs) {
+  const scrolledIntoView =
+    last &&
+    last.kind === 'scroll' &&
+    !last.step.target &&
+    intent.at - last.at <= options.scrollFollowMs
+
+  if (scrolledIntoView) {
     remove.push(last.id)
     removeReason = 'eylem oncesi kaydirma elendi'
   }
@@ -103,7 +110,7 @@ export function suppress(
   }
 
   if (intent.kind === 'press-key' && last && last.kind === 'press-key') {
-    if (last.step.key === intent.key && intent.at - last.at <= 120) {
+    if (last.step.key === intent.key && last.sourceKey === key && intent.at - last.at <= 120) {
       return { ...NONE, drop: true, reason: 'tekrar eden tus elendi' }
     }
   }

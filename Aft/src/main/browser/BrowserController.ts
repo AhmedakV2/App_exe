@@ -178,11 +178,6 @@ export class BrowserController {
   private async send(request: ActionRequest): Promise<ActionOutcome> {
     await this.ready()
 
-    if (request.kind === 'press-key' && typeof request.ordinal === 'number') {
-      const focus = await this.actions.execute({ kind: 'click', ordinal: request.ordinal })
-      if (!focus.ok) return focus
-    }
-
     const outcome = await this.actions.execute(request)
     if (request.kind === 'navigate') this.detachGraph()
     else this.engine.invalidate()
@@ -201,11 +196,6 @@ export class BrowserController {
     }
 
     await this.ready()
-
-    if (request.action === 'press_key' && typeof request.index === 'number' && request.index >= 0) {
-      const focus = await this.actions.execute(this.toRequest({ ...request, action: 'click' }))
-      if (!focus.ok) return this.report(request, focus)
-    }
 
     const outcome = await this.actions.execute(this.toRequest(request))
     return this.report(request, outcome)
@@ -252,9 +242,9 @@ export class BrowserController {
       case 'upload':
         return { kind: 'upload', files: request.files ?? [], ...target }
       case 'scroll':
-        return { kind: 'scroll', deltaY: request.deltaY ?? 0 }
+        return { kind: 'scroll', deltaY: request.deltaY ?? 0, ...target }
       case 'press_key':
-        return { kind: 'press-key', key: request.key ?? '' }
+        return { kind: 'press-key', key: request.key ?? '', ...target }
       case 'wait':
         return { kind: 'wait' }
       default:
