@@ -442,18 +442,6 @@ function bindFullScreenKey(wc: WebContents): void {
   })
 }
 
-function bindWindowEvents(): void {
-  const sync = (): void => {
-    scheduleLayout()
-    pushState()
-  }
-  win.on('resize', scheduleLayout)
-  win.on('maximize', sync)
-  win.on('unmaximize', sync)
-  win.on('enter-full-screen', sync)
-  win.on('leave-full-screen', sync)
-}
-
 function bindTargetEvents(): void {
   const wc = targetView.webContents
 
