@@ -81,6 +81,20 @@ export function blocked(reasons: string[]): StepAdvice {
   }
 }
 
+export function degraded(reasons: string[]): StepAdvice {
+  return {
+    level: 'weak',
+    score: 0,
+    tier: 'weak',
+    state: 'low-confidence',
+    confidence: 0,
+    ambiguous: false,
+    strategies: [],
+    reasons,
+    alternatives: []
+  }
+}
+
 export function plain(): StepAdvice {
   return {
     level: 'strong',

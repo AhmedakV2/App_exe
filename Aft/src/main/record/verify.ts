@@ -150,6 +150,8 @@ async function main(): Promise<number> {
     await controller.dispatch({ kind: 'click', ordinal: cerceve })
     await delay(160)
     await controller.dispatch({ kind: 'scroll', ordinal: liste, deltaY: 320 })
+    await delay(320)
+    await controller.dispatch({ kind: 'click', ordinal: gonder })
     await delay(SETTLE_MS)
 
     step('kayit durduruluyor')
@@ -157,7 +159,6 @@ async function main(): Promise<number> {
     if (!session) throw new Error('Kayit oturumu olusmadi')
 
     process.stdout.write('\n' + summary(session) + '\n')
-
     expect('adim uretildi', session.steps.length >= 9, 'adim=' + session.steps.length)
     expect(
       'yazma adimlari birlestirildi',
@@ -175,6 +176,20 @@ async function main(): Promise<number> {
       'tus adimi hedefli kaydedildi',
       Boolean(tusAdimi?.step.target),
       tusAdimi?.step.target?.label ?? 'hedefsiz'
+    )
+
+    const gonderAdimi = session.steps.find(
+      (entry) => entry.kind === 'click' && entry.step.title.toLowerCase().includes('gonder')
+    )
+    expect(
+      'adres degistiren tiklama kaydedildi',
+      Boolean(gonderAdimi),
+      gonderAdimi ? gonderAdimi.step.title : 'gonder tiklamasi yok'
+    )
+    expect(
+      'adres degisimi adim olarak yazilmadi',
+      !session.steps.some((entry) => entry.kind === 'navigate'),
+      'adres adimi=' + session.steps.filter((entry) => entry.kind === 'navigate').length
     )
 
     const kaydirmaAdimi = session.steps.find((entry) => entry.kind === 'scroll')
@@ -245,7 +260,10 @@ async function main(): Promise<number> {
       options: { contextDir: join(root, 'contexts'), reportDir: '' }
     })
 
-    const run = await engine.run(scenario)
+    const lastId = scenario.steps[scenario.steps.length - 1].id
+    const onPage = scenario.steps.filter((entry) => entry.id !== lastId).map((entry) => entry.id)
+
+    const run = await engine.run(scenario, { only: onPage })
     process.stdout.write('\n' + renderText(run) + '\n')
 
     expect(
@@ -273,6 +291,20 @@ async function main(): Promise<number> {
         run.metrics.resolvedLow +
         ' bulunamayan=' +
         run.metrics.resolvedMissing
+    )
+
+    const navRun = await engine.run(scenario, { only: [lastId] })
+    const landed = await controller.scanGraph(1, true)
+
+    expect(
+      'adres degistiren tiklama oynatildi',
+      navRun.ok,
+      navRun.status + ' | ' + (navRun.failures[0] ?? 'hata yok')
+    )
+    expect(
+      'tiklama sonrasi sayfa degisti',
+      landed.url.includes('tamam.html') && textOf(landed, 'sonuc') === 'kayit alindi',
+      landed.url
     )
 
     return verdict()
