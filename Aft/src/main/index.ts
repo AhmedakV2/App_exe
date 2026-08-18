@@ -409,31 +409,6 @@ function bindWindowEvents(): void {
   win.on('blur', stopDrag)
 }
 
-function toggleFullScreen(): void {
-  if (!win || win.isDestroyed()) return
-  win.setFullScreen(!win.isFullScreen())
-}
-
-function windowAction(action: WindowAction): void {
-  if (!win || win.isDestroyed()) return
-  switch (action) {
-    case 'minimize':
-      win.minimize()
-      break
-    case 'maximize':
-      if (win.isMaximized()) win.unmaximize()
-      else win.maximize()
-      break
-    case 'fullscreen':
-      toggleFullScreen()
-      break
-    case 'close':
-      win.close()
-      break
-  }
-  pushState()
-}
-
 function bindFullScreenKey(wc: WebContents): void {
   wc.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || input.key !== 'F11') return
