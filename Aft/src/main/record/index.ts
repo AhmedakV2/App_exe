@@ -5,6 +5,7 @@ export {
   assess,
   alternatives,
   blocked,
+  degraded,
   plain,
   optionTarget,
   probe,

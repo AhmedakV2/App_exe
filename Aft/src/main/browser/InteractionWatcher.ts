@@ -3,7 +3,11 @@ import type { HighlightMark, RawInteraction, RawSink } from '../record'
 
 const WORLD = 'aft_record'
 
+const BINDING = '__aftRecordSend'
+
 const POLL_MS = 120
+
+const PROBE_LIMIT = 16
 
 const SOURCE = `(function () {
   if (window.__aftRecord) return;
@@ -13,6 +17,7 @@ const SOURCE = `(function () {
   var bound = [];
   var layer = null;
   var jobs = [];
+  var probe = { el: null, seq: 0 };
   var lastPointerAt = 0;
   var lastKeyAt = 0;
   var TEST = ['data-testid','data-test-id','data-test','data-qa','data-qa-id','data-cy','data-e2e','data-automation-id','data-automationid','data-tracking-id'];
@@ -136,14 +141,35 @@ const SOURCE = `(function () {
     return node && node.nodeType === 1 ? node : null;
   }
 
+  function post(item) {
+    try {
+      if (typeof window.__aftRecordSend !== 'function') return false;
+      window.__aftRecordSend(JSON.stringify(item));
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function markProbe(el) {
+    if (!el) return;
+    seq += 1;
+    slots[seq] = el;
+    probe = { el: el, seq: seq };
+    if (!post({ seq: seq, kind: 'probe', at: Date.now(), url: location.href })) {
+      delete slots[seq];
+      probe = { el: null, seq: 0 };
+    }
+  }
+
   function emit(kind, el, extra) {
     seq += 1;
-    if (el) slots[seq] = el;
+    var reuse = el && probe.el === el ? probe.seq : 0;
+    if (el && !reuse) slots[seq] = el;
     var item = {
       seq: seq,
       kind: kind,
       at: Date.now(),
       url: location.href,
+      probeSeq: reuse,
       element: describe(el),
       text: '',
       key: '',
@@ -155,6 +181,7 @@ const SOURCE = `(function () {
       detail: 0
     };
     if (extra) for (var name in extra) item[name] = extra[name];
+    if (post(item)) return;
     queue.push(item);
     if (queue.length > 400) queue.shift();
   }
@@ -163,6 +190,10 @@ const SOURCE = `(function () {
     target.addEventListener(type, fn, true);
     bound.push([type, target, fn]);
   }
+
+  bind('mousedown', document, function (event) {
+    markProbe(pick(event));
+  });
 
   bind('click', document, function (event) {
     if (event.button === 2) return;
@@ -288,6 +319,7 @@ const SOURCE = `(function () {
       jobs = [];
       queue = [];
       slots = {};
+      probe = { el: null, seq: 0 };
       window.__aftRecord.clear();
       try { delete window.__aftRecord; } catch (e) { window.__aftRecord = null; }
     }
@@ -315,8 +347,11 @@ export class InteractionWatcher {
   private readonly worlds = new Map<string, WorldRef>()
   private readonly scripts = new Map<string, string>()
   private readonly offs: (() => void)[] = []
+  private readonly bindings = new Set<string>()
+  private readonly probes = new Map<string, Promise<number>>()
   private timer: ReturnType<typeof setInterval> | null = null
   private sink: RawSink | null = null
+  private relay: Promise<void> = Promise.resolve()
   private draining = false
   private active = false
 
@@ -352,6 +387,16 @@ export class InteractionWatcher {
     )
 
     this.offs.push(
+      this.tp.on('Runtime.bindingCalled', (params, sessionId) => {
+        if (String(params['name'] ?? '') !== BINDING) return
+        const contextId = Number(params['executionContextId'])
+        const ref = this.worlds.get(key(sessionId, contextId))
+        if (!ref) return
+        this.accept(ref, String(params['payload'] ?? ''))
+      })
+    )
+
+    this.offs.push(
       this.tp.on('Target.attachedToTarget', (params) => {
         const attached = String((params['sessionId'] as string | undefined) ?? '')
         if (attached) void this.install(attached).catch(() => undefined)
@@ -379,10 +424,16 @@ export class InteractionWatcher {
     }
     this.scripts.clear()
 
+    for (const sessionId of Array.from(this.bindings)) {
+      await this.tp.trySend('Runtime.removeBinding', { name: BINDING }, sessionId)
+    }
+    this.bindings.clear()
+
     for (const ref of Array.from(this.worlds.values())) {
       await this.evaluate(ref, 'window.__aftRecord && window.__aftRecord.stop()')
     }
     this.worlds.clear()
+    this.probes.clear()
   }
 
   async mark(highlight: HighlightMark): Promise<void> {
@@ -417,6 +468,15 @@ export class InteractionWatcher {
     await this.tp.trySend('Runtime.enable', {}, sessionId)
     await this.tp.trySend('DOM.enable', {}, sessionId)
 
+    if (!this.bindings.has(sessionId)) {
+      const bound = await this.tp.trySend(
+        'Runtime.addBinding',
+        { name: BINDING, executionContextName: WORLD },
+        sessionId
+      )
+      if (bound !== null) this.bindings.add(sessionId)
+    }
+
     if (!this.scripts.has(sessionId)) {
       const added = await this.tp.trySend<{ identifier?: string }>(
         'Page.addScriptToEvaluateOnNewDocument',
@@ -446,6 +506,33 @@ export class InteractionWatcher {
     }
   }
 
+  private accept(ref: WorldRef, payload: string): void {
+    if (!payload) return
+
+    const item = single(payload)
+    if (!item) return
+
+    const seq = Number(item['seq'] ?? 0)
+
+    if (item['kind'] === 'probe') {
+      if (seq) this.rememberProbe(ref, seq)
+      return
+    }
+
+    const pending = this.hydrate(ref, item)
+
+    const task = async (): Promise<void> => {
+      const raw = await pending
+      if (this.active && this.sink) this.sink([raw])
+    }
+
+    const next = this.relay.then(task, task)
+    this.relay = next.then(
+      () => undefined,
+      () => undefined
+    )
+  }
+
   private async drain(): Promise<void> {
     if (this.draining || !this.active) return
     this.draining = true
@@ -466,16 +553,44 @@ export class InteractionWatcher {
         for (const item of parse(value)) batch.push(await this.hydrate(ref, item))
       }
 
-      if (batch.length && this.sink) this.sink(batch)
+      if (batch.length && this.sink) {
+        const sink = this.sink
+        const task = async (): Promise<void> => {
+          sink(batch)
+        }
+        const next = this.relay.then(task, task)
+        this.relay = next.then(
+          () => undefined,
+          () => undefined
+        )
+      }
     } finally {
       this.draining = false
     }
   }
 
+  private rememberProbe(ref: WorldRef, seq: number): void {
+    this.probes.set(key(ref.sessionId, seq), this.resolve(ref, seq))
+
+    while (this.probes.size > PROBE_LIMIT) {
+      const oldest = this.probes.keys().next().value
+      if (oldest === undefined) break
+      this.probes.delete(oldest)
+    }
+  }
+
+  private claim(ref: WorldRef, probeSeq: number): Promise<number> {
+    if (!probeSeq) return Promise.resolve(0)
+
+    const pending = this.probes.get(key(ref.sessionId, probeSeq))
+    return pending ? pending.catch(() => 0) : Promise.resolve(0)
+  }
+
   private async hydrate(ref: WorldRef, item: Record<string, unknown>): Promise<RawInteraction> {
     const seq = Number(item['seq'] ?? 0)
     const element = item['element'] as RawInteraction['element']
-    const backendNodeId = element ? await this.resolve(ref, seq) : 0
+    const probed = element ? await this.claim(ref, Number(item['probeSeq'] ?? 0)) : 0
+    const backendNodeId = element ? probed || (await this.resolve(ref, seq)) : 0
 
     return {
       seq,
@@ -498,7 +613,10 @@ export class InteractionWatcher {
   }
 
   private async resolve(ref: WorldRef, seq: number): Promise<number> {
-    const handle = await this.evaluate(ref, 'window.__aftRecord.node(' + seq + ')')
+    const handle = await this.evaluate(
+      ref,
+      'window.__aftRecord && window.__aftRecord.node(' + seq + ')'
+    )
     const objectId = handle?.result?.objectId
     if (!objectId) return 0
 
@@ -508,8 +626,8 @@ export class InteractionWatcher {
       ref.sessionId
     )
 
-    await this.tp.trySend('Runtime.releaseObject', { objectId }, ref.sessionId)
-    await this.evaluate(ref, 'window.__aftRecord.release(' + seq + ')')
+    void this.tp.trySend('Runtime.releaseObject', { objectId }, ref.sessionId)
+    void this.evaluate(ref, 'window.__aftRecord && window.__aftRecord.release(' + seq + ')')
 
     return described?.node?.backendNodeId ?? 0
   }
@@ -549,6 +667,15 @@ function frameIds(node: FrameNode): string[] {
   if (id) out.push(id)
   for (const child of node.childFrames ?? []) out.push(...frameIds(child))
   return out
+}
+
+function single(value: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
 }
 
 function parse(value: string): Record<string, unknown>[] {

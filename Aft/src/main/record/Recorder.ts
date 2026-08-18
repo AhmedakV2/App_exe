@@ -4,9 +4,9 @@ import type { ElementModel, ModelIndex } from '../model'
 import type { StepQuery, StepTarget } from '../scenario'
 import { compose, defaultTitle, sessionId, type Composition } from './Composer'
 import { edit, renumber, type EditOutcome } from './Editor'
-import { normalize, sourceKey } from './Normalizer'
+import { labelOf, normalize, sourceKey } from './Normalizer'
 import { suppress } from './NoiseFilter'
-import { assess, blocked, plain } from './Quality'
+import { assess, blocked, degraded, plain } from './Quality'
 import { assertionOptions, build, descriptorTarget, scrollTitle, stepId } from './StepFactory'
 import {
   DEFAULT_RECORD,
@@ -15,6 +15,7 @@ import {
   type NoticeLevel,
   type RawElement,
   type RawInteraction,
+  type RawKind,
   type RecordIntent,
   type RecordNotice,
   type RecordOptions,
@@ -25,6 +26,17 @@ import {
 } from './types'
 
 const NOTICE_LIMIT = 240
+
+const POINTER_KINDS: ReadonlySet<RawKind> = new Set<RawKind>([
+  'click',
+  'double-click',
+  'right-click',
+  'input',
+  'toggle',
+  'select',
+  'upload',
+  'key'
+])
 
 interface Located {
   graph: ElementGraph
@@ -44,6 +56,7 @@ export class Recorder {
   private session: RecordSession | null = null
   private queue: Promise<void> = Promise.resolve()
   private warmTimer: ReturnType<typeof setTimeout> | null = null
+  private interactedAt = 0
   private watching = false
 
   constructor(
@@ -94,6 +107,7 @@ export class Recorder {
 
     session.title = defaultTitle(session)
     this.session = session
+    this.interactedAt = 0
 
     await this.host.watch((batch) => this.accept(batch))
     this.watching = true
@@ -208,6 +222,7 @@ export class Recorder {
     if (!session || session.status !== 'recording') return
 
     session.counters.captured++
+    if (POINTER_KINDS.has(raw.kind)) this.interactedAt = raw.at
 
     const intent = normalize(raw, session.options)
     if (!intent) {
@@ -225,7 +240,7 @@ export class Recorder {
       return
     }
 
-    const decision = suppress(intent, session.steps, session.options)
+    const decision = suppress(intent, session.steps, session.options, this.interactedAt)
 
     if (decision.remove.length) {
       const removed = new Set(decision.remove)
@@ -310,7 +325,7 @@ export class Recorder {
           origin: 'capture',
           kind: step.kind,
           step,
-          advice: blocked(reasons),
+          advice: target ? degraded(reasons) : blocked(reasons),
           assertions: assertionOptions(null, this.host.url(), this.host.title()),
           url: intent.raw.url || this.host.url(),
           frameDepth: 0,
@@ -322,7 +337,13 @@ export class Recorder {
         intent.raw
       )
 
-      this.notice('error', id, 'Adim hedefi cozulemedi: ' + (intent.label || intent.kind), reasons)
+      session.counters.weak++
+      this.notice(
+        target ? 'warn' : 'error',
+        id,
+        'Adim hedefi taramadan alinamadi: ' + (intent.label || intent.kind),
+        reasons
+      )
       return
     }
 
@@ -535,7 +556,7 @@ function fallbackTarget(element: RawElement | null): StepTarget | null {
 
   return {
     kind: 'query',
-    label: query.kind + ' "' + query.value + '"',
+    label: labelOf(element) || query.kind + ' "' + query.value + '"',
     descriptorId: '',
     descriptor: null,
     query,

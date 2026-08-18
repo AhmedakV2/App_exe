@@ -20,12 +20,16 @@ const NONE: Suppression = {
 export function suppress(
   intent: RecordIntent,
   steps: readonly RecordedStep[],
-  options: RecordOptions
+  options: RecordOptions,
+  interactedAt = 0
 ): Suppression {
   const last = steps[steps.length - 1] ?? null
   const key = sourceKey(intent.raw)
 
   if (intent.kind === 'navigate') {
+    if (interactedAt && intent.at - interactedAt <= options.navigateQuietMs) {
+      return { ...NONE, drop: true, reason: 'etkilesim sonrasi otomatik adres degisimi' }
+    }
     const anchor = lastCaptured(steps)
     if (anchor && intent.at - anchor.at <= options.navigateQuietMs && anchor.kind !== 'navigate') {
       return { ...NONE, drop: true, reason: 'adim sonrasi otomatik adres degisimi' }
