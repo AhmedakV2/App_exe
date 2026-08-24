@@ -3,7 +3,7 @@ import { ActionEngine } from '../action'
 import type { ActionOutcome, ActionRequest, DescriptorLookup } from '../action'
 import { DiscoveryEngine } from '../discovery'
 import type { ElementGraph } from '../discovery'
-import type { ScanLevel } from '../discovery'
+import type { ScanLevel, Transport } from '../discovery'
 import { Overlay } from './Overlay'
 import type { AgentAction, PageState } from './types'
 
@@ -39,6 +39,10 @@ export class BrowserController {
     })
   }
 
+  get transport(): Transport {
+    return this.engine.transport
+  }
+
   isVisionOn(): boolean {
     return this.vision
   }
@@ -57,6 +61,10 @@ export class BrowserController {
 
   attach(): void {
     void this.ready().catch(() => undefined)
+  }
+
+  start(): Promise<void> {
+    return this.ready()
   }
 
   invalidate(): void {
@@ -92,6 +100,18 @@ export class BrowserController {
 
   execute(request: AgentAction): Promise<ActionReport> {
     return this.enqueue(() => this.perform(request))
+  }
+
+  dispatch(request: ActionRequest): Promise<ActionOutcome> {
+    return this.enqueue(() => this.send(request))
+  }
+
+  scanGraph(level: ScanLevel, force: boolean): Promise<ElementGraph> {
+    return this.enqueue(async () => {
+      await this.ready()
+      this.graph = await this.engine.scan({ level, force })
+      return this.graph
+    })
   }
 
   canGoBack(): boolean {
@@ -155,6 +175,16 @@ export class BrowserController {
     }, SYNC_DELAY)
   }
 
+  private async send(request: ActionRequest): Promise<ActionOutcome> {
+    await this.ready()
+
+    const outcome = await this.actions.execute(request)
+    if (request.kind === 'navigate') this.detachGraph()
+    else this.engine.invalidate()
+
+    return outcome
+  }
+
   private async perform(request: AgentAction): Promise<ActionReport> {
     if (request.action === 'snapshot') {
       return {
@@ -166,11 +196,6 @@ export class BrowserController {
     }
 
     await this.ready()
-
-    if (request.action === 'press_key' && typeof request.index === 'number' && request.index >= 0) {
-      const focus = await this.actions.execute(this.toRequest({ ...request, action: 'click' }))
-      if (!focus.ok) return this.report(request, focus)
-    }
 
     const outcome = await this.actions.execute(this.toRequest(request))
     return this.report(request, outcome)
@@ -217,9 +242,9 @@ export class BrowserController {
       case 'upload':
         return { kind: 'upload', files: request.files ?? [], ...target }
       case 'scroll':
-        return { kind: 'scroll', deltaY: request.deltaY ?? 0 }
+        return { kind: 'scroll', deltaY: request.deltaY ?? 0, ...target }
       case 'press_key':
-        return { kind: 'press-key', key: request.key ?? '' }
+        return { kind: 'press-key', key: request.key ?? '', ...target }
       case 'wait':
         return { kind: 'wait' }
       default:

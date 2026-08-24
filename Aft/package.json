@@ -14,13 +14,18 @@
     "start": "electron-vite preview",
     "regression": "electron-vite build && electron ./out/main/regression.js",
     "smoke": "electron-vite build && electron ./out/main/smoke.js",
+    "playback": "electron-vite build && electron ./out/main/playback.js",
+    "playback:verify": "electron-vite build && electron ./out/main/playback-verify.js",
+    "record:verify": "electron-vite build && electron ./out/main/record-verify.js",
+    "verify": "electron-vite build && electron ./out/main/verify.js",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "data:verify": "electron-vite build && electron ./out/main/data-verify.js"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

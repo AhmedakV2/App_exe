@@ -55,6 +55,20 @@ export interface ExecuteResult {
   outcome: ActionOutcome | null
 }
 
+export interface StageBox {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface PointerSpot {
+  x: number
+  y: number
+}
+
+export type DragAxis = 'chat' | 'terminal' | 'record'
+
 export type NavKind = 'back' | 'forward' | 'reload' | 'home' | 'stop'
 
 export type WindowAction = 'minimize' | 'maximize' | 'close' | 'fullscreen'
@@ -67,7 +81,6 @@ export interface BrowserState {
   loading: boolean
   chatOpen: boolean
   terminalOpen: boolean
-  terminalHeight: number
   vision: boolean
   maximized: boolean
   fullscreen: boolean

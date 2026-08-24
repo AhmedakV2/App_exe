@@ -7,11 +7,10 @@ import { DEFAULT_HEALING, type HealingPolicy } from '../identity'
 import { IdentityService } from '../identity'
 import { scopeOf } from '../identity'
 import type { Descriptor, ResolveOptions } from '../identity'
-import { ModelIndex } from '../model'
+import type { ModelIndex } from '../model'
 import { ModelStore } from '../model'
 import { project } from '../model'
-import type { ConsumerKind } from '../model'
-import { toSnapshot } from '../model'
+import type { ConsumerKind, GraphSnapshot } from '../model'
 import { validateSnapshot } from '../model'
 import type {
   CapturePayload,
@@ -118,6 +117,14 @@ export class IdentityChannel {
     )
   }
 
+  identity(): IdentityService {
+    return this.service
+  }
+
+  catalog(): DescriptorStore {
+    return this.descriptors
+  }
+
   invalidate(): void {
     this.cachedGraph = null
     this.cachedIndex = null
@@ -211,13 +218,14 @@ export class IdentityChannel {
 
   private indexOf(graph: ElementGraph): ModelIndex {
     if (this.cachedGraph === graph && this.cachedIndex) return this.cachedIndex
-    const index = new ModelIndex(this.snapshotOf(graph))
+
+    const index = this.service.index(graph)
     this.cachedGraph = graph
     this.cachedIndex = index
     return index
   }
 
-  private snapshotOf(graph: ElementGraph): ReturnType<typeof toSnapshot> {
+  private snapshotOf(graph: ElementGraph): GraphSnapshot {
     return this.indexOf(graph).snapshot
   }
 

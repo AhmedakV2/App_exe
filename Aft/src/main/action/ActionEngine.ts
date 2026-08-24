@@ -1,3 +1,4 @@
+import { delay } from '../discovery'
 import type { ElementGraph } from '../discovery'
 import type { Transport } from '../discovery'
 import type { GraphNode, Point } from '../discovery'
@@ -16,6 +17,10 @@ import {
   type InputMode,
   type NavigationReport
 } from './types'
+
+const FALLBACK_VIEWPORT = { width: 1280, height: 800 }
+
+const WHEEL_SETTLE_MS = 80
 
 export interface DescriptorLookup {
   ref: string
@@ -38,6 +43,7 @@ export class ActionEngine {
   private readonly getGraph: () => ElementGraph | null
   private readonly lookup: ((descriptorId: string) => DescriptorLookup | null) | null
   private queue: Promise<unknown> = Promise.resolve()
+  private started: Promise<void> | null = null
 
   constructor(
     private readonly tp: Transport,
@@ -52,14 +58,24 @@ export class ActionEngine {
     this.lookup = config.resolveDescriptor ?? null
   }
 
-  async start(): Promise<void> {
-    await this.tp.start()
-    await this.navigation.enable()
-    await this.dialogs.install(
-      this.settings.dialogPolicy,
-      this.settings.promptText,
-      this.settings.downloadPath
-    )
+  start(): Promise<void> {
+    if (!this.started) this.started = this.install()
+    return this.started
+  }
+
+  private async install(): Promise<void> {
+    try {
+      await this.tp.start()
+      await this.navigation.enable()
+      await this.dialogs.install(
+        this.settings.dialogPolicy,
+        this.settings.promptText,
+        this.settings.downloadPath
+      )
+    } catch (error) {
+      this.started = null
+      throw error
+    }
   }
 
   execute(request: ActionRequest): Promise<ActionOutcome> {
@@ -73,6 +89,7 @@ export class ActionEngine {
   }
 
   dispose(): void {
+    this.started = null
     this.navigation.dispose()
     this.dialogs.dispose()
   }
@@ -95,28 +112,31 @@ export class ActionEngine {
         )
         return this.done(request, null, null, null, navigation, started, 'Bekleme tamam')
       }
-      if (request.kind === 'scroll') {
-        const navigation = await this.scroll(request)
+      if (request.kind === 'scroll' && !targeted(request)) {
+        const navigation = await this.scrollPage(request)
         return this.done(request, null, null, null, navigation, started, 'Kaydirma tamam')
       }
-      if (request.kind === 'press-key') {
+      if (request.kind === 'press-key' && !targeted(request)) {
+        const key = requireKey(request)
         const navigation = await this.navigation.observe(
-          () => this.input.press(request.key ?? ''),
+          () => this.input.press(key),
           this.settings.navigation
         )
-        return this.done(request, null, null, null, navigation, started, 'Tus gonderildi')
+        return this.done(request, null, null, null, navigation, started, 'Tus gonderildi: ' + key)
       }
 
       const located = this.locate(request)
       target = located.target
       const probe: ActionabilityTarget = located.probe
 
-      report = request.force
+      const lenient = request.force || directOnly(request.kind, located.node)
+
+      report = lenient
         ? await this.actionability.wait(probe, this.settings.actionability)
         : await this.actionability.require(probe, this.settings.actionability)
 
       const point = report.point
-      if (!point && !request.force) throw new ActionError('element-not-ready', report.reason)
+      if (!point && !lenient) throw new ActionError('element-not-ready', report.reason)
 
       const outcome = await this.dispatch(request, located.node, point)
       mode = outcome.mode
@@ -168,6 +188,10 @@ export class ActionEngine {
           return this.select(request, objectId, node)
         case 'upload':
           return this.upload(request, node, point)
+        case 'press-key':
+          return this.pressOn(request, objectId, node, point, preferred)
+        case 'scroll':
+          return this.scrollOn(request, objectId, node, point)
         default:
           throw new ActionError('not-supported', request.kind)
       }
@@ -200,12 +224,17 @@ export class ActionEngine {
     if (preferred === 'real-input' && point) {
       try {
         await this.input.click(point, button, clicks)
-        return { mode: 'real-input', message: 'Tiklandi' }
+        return { mode: 'real-input', message: button === 'right' ? 'Sag tiklandi' : 'Tiklandi' }
       } catch (error) {
-        if (!this.settings.fallbackToDirect || button === 'right') throw error
+        if (!this.settings.fallbackToDirect) throw error
       }
     } else if (preferred === 'real-input' && !this.settings.fallbackToDirect) {
       throw new ActionError('element-not-ready', 'girdi olayi gonderilemedi')
+    }
+
+    if (button === 'right') {
+      await this.input.directContextMenu(node.sessionId, objectId)
+      return { mode: 'direct-call', message: 'Dogrudan cagri ile sag tiklandi' }
     }
 
     await this.input.directClick(node.sessionId, objectId)
@@ -226,8 +255,65 @@ export class ActionEngine {
         if (!this.settings.fallbackToDirect) throw error
       }
     }
-    await this.input.directClick(node.sessionId, objectId)
-    return { mode: 'direct-call', message: 'Dogrudan cagri ile tiklandi' }
+    await this.input.directDoubleClick(node.sessionId, objectId)
+    return { mode: 'direct-call', message: 'Dogrudan cagri ile cift tiklandi' }
+  }
+
+  private async pressOn(
+    request: ActionRequest,
+    objectId: string,
+    node: GraphNode,
+    point: Point | null,
+    preferred: InputMode
+  ): Promise<{ mode: InputMode; message: string }> {
+    const key = requireKey(request)
+    const focus = await this.focusOn(objectId, node, point, preferred)
+
+    await this.input.press(key, node.sessionId)
+    return { mode: focus.mode, message: focus.message + ', tus gonderildi: ' + key }
+  }
+
+  private async scrollOn(
+    request: ActionRequest,
+    objectId: string,
+    node: GraphNode,
+    point: Point | null
+  ): Promise<{ mode: InputMode; message: string }> {
+    const deltaY = request.deltaY ?? 0
+
+    if (point) {
+      const before = await this.input.readScrollTop(node.sessionId, objectId)
+      await this.input.scroll(point, deltaY)
+      await delay(WHEEL_SETTLE_MS)
+      const after = await this.input.readScrollTop(node.sessionId, objectId)
+
+      if (before === null || after === null || after !== before) {
+        return { mode: 'real-input', message: 'Kaydirildi: ' + deltaY + ' px' }
+      }
+    }
+
+    const done = await this.input.directScroll(node.sessionId, objectId, deltaY)
+    if (!done) throw new ActionError('element-not-ready', 'eleman kaydirilamadi')
+    return { mode: 'direct-call', message: 'Dogrudan cagri ile kaydirildi: ' + deltaY + ' px' }
+  }
+
+  private async focusOn(
+    objectId: string,
+    node: GraphNode,
+    point: Point | null,
+    preferred: InputMode
+  ): Promise<{ mode: InputMode; message: string }> {
+    if (await this.input.focusInto(node.sessionId, objectId)) {
+      return { mode: 'direct-call', message: 'Odaklandi' }
+    }
+    if (point && preferred === 'real-input') {
+      await this.input.click(point)
+      if (await this.input.focusInto(node.sessionId, objectId)) {
+        return { mode: 'real-input', message: 'Tiklanarak odaklandi' }
+      }
+      return { mode: 'real-input', message: 'Tiklandi, odak alinamadi' }
+    }
+    return { mode: 'direct-call', message: 'Odak alinamadi' }
   }
 
   private async type(
@@ -241,8 +327,7 @@ export class ActionEngine {
     const text = request.text ?? ''
     if (!text && !clearFirst) throw new ActionError('invalid-request', 'metin bos')
 
-    if (point) await this.input.click(point)
-    await this.input.focus(node.sessionId, objectId)
+    await this.focusOn(objectId, node, point, preferred)
     if (clearFirst) await this.input.clear(node.sessionId, objectId)
 
     const before = clearFirst ? '' : ((await this.input.readValue(node.sessionId, objectId)) ?? '')
@@ -274,9 +359,12 @@ export class ActionEngine {
     const value = request.optionValue ?? ''
     if (!value) throw new ActionError('invalid-request', 'secenek degeri bos')
 
-    const done = await this.input.selectOption(node.sessionId, objectId, value)
-    if (!done) throw new ActionError('element-not-found', 'secenek bulunamadi: ' + value)
-    return { mode: 'direct-call', message: 'Secenek secildi' }
+    const outcome = await this.input.selectOption(node.sessionId, objectId, value)
+    if (outcome === 'no-select') {
+      throw new ActionError('not-supported', 'hedef bir liste degil: ' + node.tag)
+    }
+    if (outcome !== 'ok') throw new ActionError('element-not-found', 'secenek bulunamadi: ' + value)
+    return { mode: 'direct-call', message: 'Secenek secildi: ' + value }
   }
 
   private async upload(
@@ -287,9 +375,9 @@ export class ActionEngine {
     const files = request.files ?? []
     if (!files.length) throw new ActionError('invalid-request', 'dosya listesi bos')
 
-    if (node.tag === 'input') {
+    if (fileInput(node)) {
       await this.input.setFiles(node.sessionId, node.backendNodeId, files)
-      return { mode: 'direct-call', message: 'Dosya atandi' }
+      return { mode: 'direct-call', message: 'Dosya atandi: ' + files.join(', ') }
     }
 
     if (!point) throw new ActionError('element-not-ready', 'nokta hesaplanamadi')
@@ -312,12 +400,28 @@ export class ActionEngine {
     }, this.settings.navigation)
   }
 
-  private async scroll(request: ActionRequest): Promise<NavigationReport> {
-    const graph = this.requireGraph()
+  private async scrollPage(request: ActionRequest): Promise<NavigationReport> {
     const deltaY = request.deltaY ?? 0
-    const point: Point = { x: graph.viewport.width / 2, y: graph.viewport.height / 2 }
+    const point = await this.viewportCenter()
 
     return this.navigation.observe(() => this.input.scroll(point, deltaY), this.settings.navigation)
+  }
+
+  private async viewportCenter(): Promise<Point> {
+    const graph = this.getGraph()
+    if (graph) return { x: graph.viewport.width / 2, y: graph.viewport.height / 2 }
+
+    const metrics = await this.tp.trySend<{
+      cssLayoutViewport?: { clientWidth?: number; clientHeight?: number }
+    }>('Page.getLayoutMetrics', {})
+
+    const width = metrics?.cssLayoutViewport?.clientWidth ?? 0
+    const height = metrics?.cssLayoutViewport?.clientHeight ?? 0
+
+    return {
+      x: (width || FALLBACK_VIEWPORT.width) / 2,
+      y: (height || FALLBACK_VIEWPORT.height) / 2
+    }
   }
 
   private locate(request: ActionRequest): {
@@ -326,6 +430,7 @@ export class ActionEngine {
     probe: ActionabilityTarget
   } {
     const graph = this.requireGraph()
+    const ordinal = typeof request.ordinal === 'number' ? request.ordinal : -1
     let confidence = 1
     let node: GraphNode | undefined
 
@@ -336,13 +441,18 @@ export class ActionEngine {
       if (found.ambiguous) throw new ActionError('element-ambiguous', request.descriptorId)
       confidence = found.confidence
       node = graph.get(found.ref)
-    } else if (request.ref) {
-      node = graph.get(request.ref)
-    } else if (typeof request.ordinal === 'number') {
-      node = graph.at(request.ordinal)
     }
 
-    if (!node) throw new ActionError('element-not-found', 'hedef belirtilmedi')
+    if (!node && request.ref) node = graph.get(request.ref)
+    if (!node && ordinal >= 0) node = graph.at(ordinal)
+
+    if (!node) {
+      const asked = request.descriptorId || request.ref || (ordinal >= 0 ? '#' + ordinal : '')
+      throw new ActionError(
+        'element-not-found',
+        asked ? 'hedef taramada bulunamadi: ' + asked : 'hedef belirtilmedi'
+      )
+    }
 
     const frame = graph.frames.find((entry) => entry.frameId === node.frameId)
 
@@ -410,4 +520,26 @@ export class ActionEngine {
       durationMs: Date.now() - started
     }
   }
+}
+
+function targeted(request: ActionRequest): boolean {
+  if (request.descriptorId) return true
+  if (request.ref) return true
+  return typeof request.ordinal === 'number' && request.ordinal >= 0
+}
+
+function requireKey(request: ActionRequest): string {
+  const key = (request.key ?? '').trim()
+  if (!key) throw new ActionError('invalid-request', 'tus degeri bos')
+  return key
+}
+
+function directOnly(kind: ActionRequest['kind'], node: GraphNode): boolean {
+  if (kind === 'press-key' || kind === 'scroll' || kind === 'select-option') return true
+  if (kind === 'upload') return fileInput(node)
+  return false
+}
+
+function fileInput(node: GraphNode): boolean {
+  return node.tag === 'input' && (node.attrs['type'] ?? '').toLowerCase() === 'file'
 }

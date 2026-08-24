@@ -3,22 +3,34 @@ import type { Rectangle, WebContents } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
-import { mountIdentity, unmountIdentity } from './bridge'
+import {
+  mountData,
+  mountIdentity,
+  mountPlayback,
+  mountRecord,
+  unmountData,
+  unmountIdentity,
+  unmountPlayback,
+  unmountRecord
+} from './bridge'
 import { BrowserController } from './browser/BrowserController'
-import { AgentAction, BrowserState, ExecuteResult, NavKind, WindowAction } from './browser/types'
+import {
+  AgentAction,
+  BrowserState,
+  DragAxis,
+  ExecuteResult,
+  NavKind,
+  StageBox,
+  WindowAction
+} from './browser/types'
 import type { CoverageSummary, ScanLevel } from './discovery'
 
 const FRAME = 40
-const DIVIDER = 0
-const CHAT_WIDTH = 320
 const STAGE_RADIUS = 0
 const FRAME_COLOR = '#1e1f22'
 const HOME_URL = 'https://www.google.com'
-const TERMINAL_HEIGHT = 268
-const TERMINAL_MIN = 132
-const TERMINAL_MAX_RATIO = 0.72
-const RESIZE_TICK = 16
-const RESIZE_MAX_MS = 20000
+const DRAG_TICK = 16
+const DRAG_MAX_MS = 30000
 const iconPath = app.isPackaged
   ? join(process.resourcesPath, 'build', 'icon.png')
   : join(__dirname, '../../build/icon.png')
@@ -28,32 +40,19 @@ let chatView: WebContentsView
 let targetView: WebContentsView
 let controller: BrowserController
 let chatOpen = false
-let terminalOpen = true
-let terminalHeight = TERMINAL_HEIGHT
-let resizeTimer: ReturnType<typeof setInterval> | null = null
-let resizeStartedAt = 0
+let terminalOpen = false
+let dragTimer: ReturnType<typeof setInterval> | null = null
+let dragAxis: DragAxis | null = null
+let dragStartedAt = 0
 let layoutQueued = false
 let stateQueued = false
+let stageBox: StageBox | null = null
+let modalOpen = false
+let pageHold = false
 
 function preloadPath(): string {
   const mjs = join(__dirname, '../preload/index.mjs')
   return existsSync(mjs) ? mjs : join(__dirname, '../preload/index.js')
-}
-
-function chatBlock(total: number): number {
-  const usable = Math.max(0, total - FRAME * 2)
-  const wanted = chatOpen ? CHAT_WIDTH + DIVIDER : 0
-  return Math.max(0, Math.min(wanted, usable))
-}
-
-function terminalLimit(height: number): number {
-  const usable = Math.max(0, height - FRAME * 2)
-  return Math.max(0, Math.floor(usable * TERMINAL_MAX_RATIO))
-}
-
-function terminalBlock(height: number): number {
-  if (!terminalOpen) return 0
-  return Math.max(0, Math.min(terminalHeight, terminalLimit(height)))
 }
 
 function visibleArea(): Rectangle {
@@ -74,20 +73,86 @@ function visibleArea(): Rectangle {
   }
 }
 
+function fallbackStage(area: Rectangle): Rectangle {
+  return {
+    x: area.x + FRAME,
+    y: area.y + FRAME,
+    width: Math.max(0, area.width - FRAME * 2),
+    height: Math.max(0, area.height - FRAME * 2)
+  }
+}
+
+function stageBounds(area: Rectangle): Rectangle {
+  if (!stageBox) return fallbackStage(area)
+
+  const x = area.x + Math.round(stageBox.x * area.width)
+  const y = area.y + Math.round(stageBox.y * area.height)
+  const width = Math.round(stageBox.width * area.width)
+  const height = Math.round(stageBox.height * area.height)
+
+  return {
+    x,
+    y,
+    width: Math.max(0, Math.min(width, area.x + area.width - x)),
+    height: Math.max(0, Math.min(height, area.y + area.height - y))
+  }
+}
+
 function layout(): void {
   if (!win || win.isDestroyed()) return
   const area = visibleArea()
-  const x = area.x + FRAME + chatBlock(area.width)
-  const y = area.y + FRAME
-  const bottom = area.y + area.height - FRAME - terminalBlock(area.height)
-
   chatView.setBounds(area)
-  targetView.setBounds({
-    x,
-    y,
-    width: Math.max(0, area.x + area.width - FRAME - x),
-    height: Math.max(0, bottom - y)
-  })
+  targetView.setBounds(stageBounds(area))
+}
+
+function readBox(value: unknown): StageBox | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Record<string, unknown>
+  const x = Number(raw.x)
+  const y = Number(raw.y)
+  const width = Number(raw.width)
+  const height = Number(raw.height)
+
+  if (![x, y, width, height].every((part) => Number.isFinite(part))) return null
+  if (width <= 0 || height <= 0) return null
+
+  return {
+    x: Math.min(1, Math.max(0, x)),
+    y: Math.min(1, Math.max(0, y)),
+    width: Math.min(1, Math.max(0, width)),
+    height: Math.min(1, Math.max(0, height))
+  }
+}
+
+function setStage(value: unknown): void {
+  const box = readBox(value)
+  if (!box) return
+  const current = stageBox
+  if (
+    current &&
+    current.x === box.x &&
+    current.y === box.y &&
+    current.width === box.width &&
+    current.height === box.height
+  ) {
+    return
+  }
+  stageBox = box
+  layout()
+}
+
+function setModal(open: boolean): void {
+  if (open === modalOpen) return
+  modalOpen = open
+  if (!targetView || targetView.webContents.isDestroyed()) return
+  targetView.setVisible(!open)
+  if (!open) layout()
+}
+
+function setChrome(color: unknown): void {
+  if (typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color)) return
+  if (win && !win.isDestroyed()) win.setBackgroundColor(color)
+  if (chatView && !chatView.webContents.isDestroyed()) chatView.setBackgroundColor(color)
 }
 
 function scheduleLayout(): void {
@@ -99,11 +164,6 @@ function scheduleLayout(): void {
   })
 }
 
-function terminalSize(): number {
-  if (!win || win.isDestroyed()) return terminalOpen ? terminalHeight : 0
-  return terminalBlock(visibleArea().height)
-}
-
 function snapshotState(): BrowserState {
   return {
     url: controller.url(),
@@ -113,7 +173,6 @@ function snapshotState(): BrowserState {
     loading: controller.isLoading(),
     chatOpen,
     terminalOpen,
-    terminalHeight: terminalSize(),
     vision: controller.isVisionOn(),
     maximized: !win || win.isDestroyed() ? false : win.isMaximized(),
     fullscreen: !win || win.isDestroyed() ? false : win.isFullScreen()
@@ -123,6 +182,19 @@ function snapshotState(): BrowserState {
 function focusChat(): void {
   if (!chatView || chatView.webContents.isDestroyed()) return
   chatView.webContents.focus()
+}
+
+function focusTerminal(): void {
+  if (!terminalOpen || modalOpen) return
+  if (!chatView || chatView.webContents.isDestroyed()) return
+  pageHold = false
+  chatView.webContents.focus()
+  chatView.webContents.send('aft:focus-terminal')
+}
+
+function focusTerminalOnLoad(): void {
+  if (pageHold) return
+  focusTerminal()
 }
 
 function setChat(open: boolean): void {
@@ -135,49 +207,56 @@ function setChat(open: boolean): void {
 function setTerminal(open: boolean, focus: boolean): void {
   if (open !== terminalOpen) {
     terminalOpen = open
-    if (!open) stopResize()
+    if (!open) stopDrag()
     layout()
     pushState()
   }
-  if (open && focus) focusChat()
+  if (open && focus) focusTerminal()
 }
 
-function applyCursorHeight(): void {
-  if (!win || win.isDestroyed() || !terminalOpen) {
-    stopResize()
+function sendPointer(): void {
+  if (!dragAxis || !win || win.isDestroyed()) {
+    stopDrag()
     return
   }
 
-  if (Date.now() - resizeStartedAt > RESIZE_MAX_MS) {
-    stopResize()
+  if (Date.now() - dragStartedAt > DRAG_MAX_MS) {
+    stopDrag()
+    return
+  }
+
+  if (!chatView || chatView.webContents.isDestroyed()) {
+    stopDrag()
     return
   }
 
   const area = visibleArea()
+  if (area.width <= 0 || area.height <= 0) return
+
   const bounds = win.getContentBounds()
-  const limit = terminalLimit(area.height)
-  const floor = Math.min(TERMINAL_MIN, limit)
-  const localY = screen.getCursorScreenPoint().y - bounds.y
-  const wanted = Math.round(area.y + area.height - FRAME - localY)
-  const next = Math.max(floor, Math.min(limit, wanted))
+  const point = screen.getCursorScreenPoint()
 
-  if (next === terminalHeight) return
-  terminalHeight = next
-  layout()
-  pushState()
+  chatView.webContents.send('aft:pointer', {
+    x: (point.x - bounds.x - area.x) / area.width,
+    y: (point.y - bounds.y - area.y) / area.height
+  })
 }
 
-function startResize(): void {
-  if (resizeTimer || !terminalOpen) return
-  resizeStartedAt = Date.now()
-  resizeTimer = setInterval(applyCursorHeight, RESIZE_TICK)
+function startDrag(axis: DragAxis): void {
+  if (dragTimer) return
+  if (axis === 'chat' && !chatOpen) return
+  if (axis === 'terminal' && !terminalOpen) return
+  dragAxis = axis
+  dragStartedAt = Date.now()
+  dragTimer = setInterval(sendPointer, DRAG_TICK)
 }
 
-function stopResize(): void {
-  if (!resizeTimer) return
-  clearInterval(resizeTimer)
-  resizeTimer = null
-  pushState()
+function stopDrag(): void {
+  if (!dragTimer) return
+  clearInterval(dragTimer)
+  dragTimer = null
+  dragAxis = null
+  if (chatView && !chatView.webContents.isDestroyed()) chatView.webContents.send('aft:drag-end')
 }
 
 function pushState(): void {
@@ -197,6 +276,7 @@ function respond(
   return handler().then(
     (out) => {
       pushState()
+      focusTerminal()
       return {
         ok: out.ok ?? true,
         result: out.result,
@@ -207,6 +287,7 @@ function respond(
     },
     (err: unknown) => {
       pushState()
+      focusTerminal()
       return {
         ok: false,
         result: err instanceof Error ? err.message : String(err),
@@ -242,6 +323,7 @@ function navigate(kind: NavKind): void {
       break
   }
   pushState()
+  focusTerminal()
 }
 
 function toggleFullScreen(): void {
@@ -288,7 +370,7 @@ function bindShortcuts(wc: WebContents): void {
     if (!input.control || input.alt || input.meta) return
     const key = input.key.toLowerCase()
 
-    if (key === '`') {
+    if (key === 'k') {
       event.preventDefault()
       setTerminal(!terminalOpen, true)
       return
@@ -302,7 +384,24 @@ function bindShortcuts(wc: WebContents): void {
   })
 
   wc.on('input-event', (_event, input) => {
-    if (input.type === 'mouseUp') stopResize()
+    if (input.type === 'mouseUp') stopDrag()
+  })
+}
+
+function bindPageFocus(): void {
+  targetView.webContents.on('input-event', (_event, input) => {
+    if (input.type === 'mouseDown' || input.type === 'keyDown') pageHold = true
+  })
+
+  chatView.webContents.on('input-event', (_event, input) => {
+    if (input.type === 'mouseDown' || input.type === 'keyDown') pageHold = false
+  })
+
+  chatView.webContents.on('did-finish-load', () => {
+    chatView.webContents.setZoomFactor(1)
+    layout()
+    pushState()
+    focusTerminal()
   })
 }
 
@@ -311,12 +410,12 @@ function bindWindowEvents(): void {
     scheduleLayout()
     pushState()
   }
-  win.on('resize', scheduleLayout)
+  win.on('resize', sync)
   win.on('maximize', sync)
   win.on('unmaximize', sync)
   win.on('enter-full-screen', sync)
   win.on('leave-full-screen', sync)
-  win.on('blur', stopResize)
+  win.on('blur', stopDrag)
 }
 
 function bindTargetEvents(): void {
@@ -329,8 +428,12 @@ function bindTargetEvents(): void {
 
   wc.on('did-start-loading', pushState)
   wc.on('did-stop-loading', pushState)
-  wc.on('did-navigate', pushState)
   wc.on('page-title-updated', pushState)
+
+  wc.on('did-navigate', () => {
+    pushState()
+    focusTerminalOnLoad()
+  })
 
   wc.on('did-navigate-in-page', () => {
     controller.sync()
@@ -341,6 +444,7 @@ function bindTargetEvents(): void {
     controller.attach()
     controller.sync()
     pushState()
+    focusTerminalOnLoad()
   })
 
   wc.on('did-fail-load', pushState)
@@ -356,7 +460,7 @@ function createWindow(): void {
     title: 'AFT',
     icon: iconPath,
     frame: false,
-    roundedCorners: true,
+    roundedCorners: false,
     backgroundColor: FRAME_COLOR
   })
 
@@ -377,6 +481,7 @@ function createWindow(): void {
   bindWindowEvents()
   bindShortcuts(chatView.webContents)
   bindShortcuts(targetView.webContents)
+  bindPageFocus()
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     chatView.webContents.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -388,12 +493,38 @@ function createWindow(): void {
   controller.attach()
   bindTargetEvents()
 
-  void mountIdentity(controller).catch(() => undefined)
+  void mountIdentity(controller)
+    .then(async (identity) => {
+      const playback = await mountPlayback(controller, {
+        identity: identity.identity(),
+        descriptors: identity.catalog(),
+        target: targetView.webContents,
+        renderer: chatView.webContents
+      })
+
+      const data = await mountData({ scenarios: playback.library() })
+      playback.setIndexer(data.indexer())
+
+      mountRecord(controller, {
+        identity: identity.identity(),
+        descriptors: identity.catalog(),
+        scenarios: playback.library(),
+        target: targetView.webContents,
+        renderer: chatView.webContents
+      })
+    })
+    .catch(() => undefined)
   void targetView.webContents.loadURL(HOME_URL).catch(() => undefined)
 
   win.on('closed', () => {
-    stopResize()
-    void unmountIdentity()
+    stopDrag()
+    void unmountRecord()
+      .catch(() => undefined)
+      .then(() => unmountData())
+      .catch(() => undefined)
+      .then(() => unmountPlayback())
+      .catch(() => undefined)
+      .then(() => unmountIdentity())
       .catch(() => undefined)
       .finally(() => controller.dispose())
   })
@@ -436,10 +567,16 @@ app.whenReady().then(() => {
 
   ipcMain.on('aft:terminal', (_e, open: boolean) => setTerminal(Boolean(open), Boolean(open)))
 
-  ipcMain.on('aft:terminal-resize', (_e, active: boolean) => {
-    if (active) startResize()
-    else stopResize()
+  ipcMain.on('aft:drag', (_e, axis: unknown) => {
+    if (axis === 'chat' || axis === 'terminal' || axis === 'record') startDrag(axis)
+    else stopDrag()
   })
+
+  ipcMain.on('aft:stage', (_e, rect: unknown) => setStage(rect))
+
+  ipcMain.on('aft:modal', (_e, open: boolean) => setModal(Boolean(open)))
+
+  ipcMain.on('aft:chrome', (_e, color: unknown) => setChrome(color))
 
   ipcMain.on('aft:state', () => pushState())
 
