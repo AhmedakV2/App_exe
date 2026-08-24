@@ -81,7 +81,15 @@ export interface BrowserState {
   loading: boolean
   chatOpen: boolean
   terminalOpen: boolean
+  settingsOpen: boolean
   vision: boolean
   maximized: boolean
   fullscreen: boolean
+}
+
+/** Tercihler ana pencerede saklanır, ayar penceresine köprü üzerinden taşınır. */
+export interface AppPrefs {
+  theme: string
+  autoTerminal: boolean
+  autoTerminalRestore: boolean
 }
