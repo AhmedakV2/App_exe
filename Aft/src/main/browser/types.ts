@@ -33,6 +33,7 @@ export type ActionName =
   | 'select_option'
   | 'upload'
   | 'wait'
+  | 'refresh'
 
 export interface AgentAction {
   action: ActionName

@@ -176,14 +176,19 @@ const ACTIONS: ActionEntry[] = [
     usage: 'wait',
     hint: 'Sayfanın durulmasını bekler',
     build: () => ({ action: 'wait' })
+  },
+  {
+    key: 'r',
+    usage: 'r',
+    hint: 'Sayfayı yeniler',
+    build: () => ({ action: 'refresh' })
   }
 ]
 
 const BUILTINS: Entry[] = [
   { key: 'a', usage: 'a', hint: 'Komut listesini yazdırır' },
-  { key: 'cls', usage: 'cls', hint: 'Terminal geçmişini temizler' },
-  { key: 'rec', usage: 'rec', hint: 'Kayıt panelini açar veya kapatır' },
-  { key: 'oyn', usage: 'oyn', hint: 'Oynatma panelini açar veya kapatır' }
+  { key: 'c', usage: 'c', hint: 'Terminal geçmişini temizler' },
+  { key: 'rp', usage: 'rp', hint: 'Record & Playback panelini açar/kapatır' }
 ]
 
 const PALETTE: Entry[] = [...ACTIONS, ...BUILTINS]
@@ -841,7 +846,7 @@ export default function App(): React.JSX.Element {
     setSel(0)
     pinnedRef.current = true
 
-    if (key === 'cls') {
+    if (key === 'c') {
       clearLog()
       focusPrompt()
       return
@@ -849,14 +854,14 @@ export default function App(): React.JSX.Element {
 
     push('in', input)
 
-    if (key === 'rec' || key === 'oyn') {
-      const tab = key === 'rec' ? 'record' : 'playback'
+    if (key === 'rp') {
+      const tab = key === 'rp' ? 'record' : 'playback'
       setDock((prev) => {
         const next = prev === tab ? null : tab
         push(
           'note',
           next
-            ? key === 'rec'
+            ? key === 'rp'
               ? 'Kayıt paneli açıldı'
               : 'Oynatma paneli açıldı'
             : 'Panel kapatıldı'

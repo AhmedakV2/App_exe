@@ -112,6 +112,10 @@ export class ActionEngine {
         )
         return this.done(request, null, null, null, navigation, started, 'Bekleme tamam')
       }
+      if (request.kind === 'refresh') {
+        const navigation = await this.refresh()
+        return this.done(request, null, null, null, navigation, started, 'Sayfa yenilendi')
+      }
       if (request.kind === 'scroll' && !targeted(request)) {
         const navigation = await this.scrollPage(request)
         return this.done(request, null, null, null, navigation, started, 'Kaydirma tamam')
@@ -422,6 +426,12 @@ export class ActionEngine {
       x: (width || FALLBACK_VIEWPORT.width) / 2,
       y: (height || FALLBACK_VIEWPORT.height) / 2
     }
+  }
+
+  private async refresh(): Promise<NavigationReport> {
+    return this.navigation.observe(async () => {
+      await this.tp.send('Page.reload', { ignoreCache: false })
+    }, this.settings.navigation)
   }
 
   private locate(request: ActionRequest): {
