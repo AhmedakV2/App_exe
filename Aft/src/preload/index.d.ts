@@ -1,4 +1,5 @@
 import type {
+  AppPrefs,
   BrowserState,
   DragAxis,
   ExecuteResult,
@@ -24,12 +25,17 @@ declare global {
       endDrag: () => void
       setStage: (box: StageBox) => void
       setModal: (open: boolean) => void
+      setSettings: (open: boolean) => void
+      publishPrefs: (value: AppPrefs) => void
+      patchPrefs: (patch: Partial<AppPrefs>) => void
       setChrome: (color: string) => void
       requestState: () => void
       onState: (fn: (state: BrowserState) => void) => () => void
       onFocusUrl: (fn: () => void) => () => void
       onFocusTerminal: (fn: () => void) => () => void
       onPointer: (fn: (spot: PointerSpot) => void) => () => void
+      onPrefs: (fn: (value: AppPrefs) => void) => () => void
+      onPrefsPatch: (fn: (patch: Partial<AppPrefs>) => void) => () => void
       onDragEnd: (fn: () => void) => () => void
       versions: NodeJS.ProcessVersions
     }

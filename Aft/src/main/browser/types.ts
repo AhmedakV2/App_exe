@@ -81,7 +81,14 @@ export interface BrowserState {
   loading: boolean
   chatOpen: boolean
   terminalOpen: boolean
+  settingsOpen: boolean
   vision: boolean
   maximized: boolean
   fullscreen: boolean
+}
+
+export interface AppPrefs {
+  theme: string
+  autoTerminal: boolean
+  autoTerminalRestore: boolean
 }

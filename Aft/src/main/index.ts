@@ -1,4 +1,4 @@
-import { app, BaseWindow, WebContentsView, ipcMain, Menu, screen } from 'electron'
+import { app, BaseWindow, BrowserWindow, WebContentsView, ipcMain, Menu, screen } from 'electron'
 import type { Rectangle, WebContents } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
@@ -16,6 +16,7 @@ import {
 import { BrowserController } from './browser/BrowserController'
 import {
   AgentAction,
+  AppPrefs,
   BrowserState,
   DragAxis,
   ExecuteResult,
@@ -31,6 +32,10 @@ const FRAME_COLOR = '#1e1f22'
 const HOME_URL = 'https://www.google.com'
 const DRAG_TICK = 16
 const DRAG_MAX_MS = 30000
+const SETTINGS_WIDTH = 392
+const SETTINGS_HEIGHT = 560
+const SETTINGS_MIN_WIDTH = 320
+const SETTINGS_MIN_HEIGHT = 280
 const iconPath = app.isPackaged
   ? join(process.resourcesPath, 'build', 'icon.png')
   : join(__dirname, '../../build/icon.png')
@@ -49,6 +54,11 @@ let stateQueued = false
 let stageBox: StageBox | null = null
 let modalOpen = false
 let pageHold = false
+let settingsWin: BrowserWindow | null = null
+let settingsSpot: { x: number; y: number } | null = null
+let settingsSize = { width: SETTINGS_WIDTH, height: SETTINGS_HEIGHT }
+let chromeColor = FRAME_COLOR
+let prefs: AppPrefs | null = null
 
 function preloadPath(): string {
   const mjs = join(__dirname, '../preload/index.mjs')
@@ -151,8 +161,10 @@ function setModal(open: boolean): void {
 
 function setChrome(color: unknown): void {
   if (typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color)) return
+  chromeColor = color
   if (win && !win.isDestroyed()) win.setBackgroundColor(color)
   if (chatView && !chatView.webContents.isDestroyed()) chatView.setBackgroundColor(color)
+  if (settingsAlive()) (settingsWin as BrowserWindow).setBackgroundColor(color)
 }
 
 function scheduleLayout(): void {
@@ -173,6 +185,7 @@ function snapshotState(): BrowserState {
     loading: controller.isLoading(),
     chatOpen,
     terminalOpen,
+    settingsOpen: settingsAlive(),
     vision: controller.isVisionOn(),
     maximized: !win || win.isDestroyed() ? false : win.isMaximized(),
     fullscreen: !win || win.isDestroyed() ? false : win.isFullScreen()
@@ -202,6 +215,115 @@ function setChat(open: boolean): void {
   chatOpen = open
   layout()
   pushState()
+}
+
+function settingsAlive(): boolean {
+  return Boolean(settingsWin && !settingsWin.isDestroyed())
+}
+
+/** İlk açılışta pencere ana pencerenin ortasına düşer, sonrasında son yeri korunur. */
+function settingsSpotFor(): { x: number; y: number } | null {
+  if (settingsSpot) return settingsSpot
+  if (!win || win.isDestroyed()) return null
+  const bounds = win.getBounds()
+  return {
+    x: Math.round(bounds.x + (bounds.width - settingsSize.width) / 2),
+    y: Math.round(bounds.y + (bounds.height - settingsSize.height) / 2)
+  }
+}
+
+function openSettings(): void {
+  if (settingsAlive()) {
+    const open = settingsWin as BrowserWindow
+    if (open.isMinimized()) open.restore()
+    open.show()
+    open.focus()
+    return
+  }
+
+  const spot = settingsSpotFor()
+  const next = new BrowserWindow({
+    width: settingsSize.width,
+    height: settingsSize.height,
+    ...(spot ?? {}),
+    minWidth: SETTINGS_MIN_WIDTH,
+    minHeight: SETTINGS_MIN_HEIGHT,
+    title: 'Ayarlar',
+    icon: iconPath,
+    frame: false,
+    roundedCorners: false,
+    show: false,
+    skipTaskbar: true,
+    backgroundColor: chromeColor,
+    parent: win && !win.isDestroyed() ? win : undefined,
+    webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true }
+  })
+
+  settingsWin = next
+
+  const remember = (): void => {
+    if (next.isDestroyed()) return
+    const bounds = next.getBounds()
+    settingsSpot = { x: bounds.x, y: bounds.y }
+    settingsSize = { width: bounds.width, height: bounds.height }
+  }
+
+  next.once('ready-to-show', () => {
+    if (!next.isDestroyed()) next.show()
+  })
+  next.webContents.on('did-finish-load', () => {
+    if (prefs && !next.isDestroyed()) next.webContents.send('aft:prefs', prefs)
+  })
+  next.on('move', remember)
+  next.on('resize', remember)
+  next.on('closed', () => {
+    if (settingsWin === next) settingsWin = null
+    pushState()
+  })
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    void next
+      .loadURL(process.env['ELECTRON_RENDERER_URL'] + '?view=settings')
+      .catch(() => undefined)
+  } else {
+    void next
+      .loadFile(join(__dirname, '../renderer/index.html'), { query: { view: 'settings' } })
+      .catch(() => undefined)
+  }
+
+  pushState()
+}
+
+function closeSettings(): void {
+  if (!settingsAlive()) return
+  ;(settingsWin as BrowserWindow).close()
+}
+
+function setSettings(open: boolean): void {
+  if (open) openSettings()
+  else closeSettings()
+}
+
+/** Ana pencere tercihleri yayınlar, ayar penceresi bunları dinler. */
+function publishPrefs(value: unknown): void {
+  if (!value || typeof value !== 'object') return
+  const raw = value as Partial<AppPrefs>
+  if (typeof raw.theme !== 'string') return
+
+  prefs = {
+    theme: raw.theme,
+    autoTerminal: Boolean(raw.autoTerminal),
+    autoTerminalRestore: Boolean(raw.autoTerminalRestore)
+  }
+
+  if (settingsAlive()) (settingsWin as BrowserWindow).webContents.send('aft:prefs', prefs)
+}
+
+/** Ayar penceresinden gelen değişiklik ana pencereye iletilir, kayıt orada tutulur. */
+function patchPrefs(patch: unknown): void {
+  if (!patch || typeof patch !== 'object') return
+  if (!chatView || chatView.webContents.isDestroyed()) return
+  chatView.webContents.send('aft:prefs-patch', patch)
 }
 
 function setTerminal(open: boolean, focus: boolean): void {
@@ -575,6 +697,12 @@ app.whenReady().then(() => {
   ipcMain.on('aft:stage', (_e, rect: unknown) => setStage(rect))
 
   ipcMain.on('aft:modal', (_e, open: boolean) => setModal(Boolean(open)))
+
+  ipcMain.on('aft:settings', (_e, open: boolean) => setSettings(Boolean(open)))
+
+  ipcMain.on('aft:prefs', (_e, value: unknown) => publishPrefs(value))
+
+  ipcMain.on('aft:prefs-patch', (_e, patch: unknown) => patchPrefs(patch))
 
   ipcMain.on('aft:chrome', (_e, color: unknown) => setChrome(color))
 

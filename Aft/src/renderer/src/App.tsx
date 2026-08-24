@@ -8,7 +8,7 @@ import type {
   StageBox,
   WindowAction
 } from '../../main/browser/types'
-import { THEMES, paintTheme, readTheme, storeTheme, themeOf } from './themes'
+import { isThemeId, paintTheme, readTheme, storeTheme, themeOf } from './themes'
 import type { ThemeId } from './themes'
 import { Glyph, IconButton } from './icons'
 import RecordPanel from './RecordPanel'
@@ -37,6 +37,8 @@ const MAX_SUGGESTIONS = 6
 const CHAT_KEY = 'aft:chat-width'
 const TERM_KEY = 'aft:term-height'
 const REC_KEY = 'aft:rec-width'
+const AUTO_TERM_KEY = 'aft:auto-terminal'
+const AUTO_BACK_KEY = 'aft:auto-terminal-restore'
 const CHAT_SIZE = 320
 const TERM_SIZE = 268
 const REC_SIZE = 372
@@ -53,13 +55,6 @@ const ROLES: Record<LineKind, { label: string; glyph: string }> = {
   err: { label: 'Yapılamadı', glyph: 'alert' },
   note: { label: 'Bilgi', glyph: 'info' }
 }
-
-const SHORTCUTS: { name: string; code: string }[] = [
-  { name: 'Terminali aç / kapat', code: 'Ctrl + K' },
-  { name: 'Adres çubuğuna geç', code: 'Ctrl + L' },
-  { name: 'Tam ekran', code: 'F11' },
-  { name: 'Komut geçmişi', code: '↑ / ↓' }
-]
 
 function num(value: string | undefined): number | null {
   if (value === undefined || value.trim() === '') return null
@@ -287,6 +282,25 @@ function storeSize(key: string, value: number): void {
   }
 }
 
+function readFlag(key: string, fallback: boolean): boolean {
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (raw === '1') return true
+    if (raw === '0') return false
+    return fallback
+  } catch {
+    return fallback
+  }
+}
+
+function storeFlag(key: string, value: boolean): void {
+  try {
+    window.localStorage.setItem(key, value ? '1' : '0')
+  } catch {
+    return
+  }
+}
+
 const Logo = memo(function Logo(): React.JSX.Element {
   return (
     <svg width="18" height="18" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
@@ -341,6 +355,7 @@ const EMPTY_STATE: BrowserState = {
   loading: false,
   chatOpen: false,
   terminalOpen: false,
+  settingsOpen: false,
   vision: false,
   maximized: false,
   fullscreen: false
@@ -359,12 +374,13 @@ export default function App(): React.JSX.Element {
   const [urlDraft, setUrlDraft] = useState('')
   const [elements, setElements] = useState(0)
   const [lastMs, setLastMs] = useState(0)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [dock, setDock] = useState<DockTab>(null)
   const [recording, setRecording] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [library, setLibrary] = useState(0)
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
+  const [autoTerm, setAutoTerm] = useState(() => readFlag(AUTO_TERM_KEY, true))
+  const [autoBack, setAutoBack] = useState(() => readFlag(AUTO_BACK_KEY, false))
   const [chatWidth, setChatWidth] = useState(() => readSize(CHAT_KEY, CHAT_SIZE))
   const [termHeight, setTermHeight] = useState(() => readSize(TERM_KEY, TERM_SIZE))
   const [recWidth, setRecWidth] = useState(() => readSize(REC_KEY, REC_SIZE))
@@ -375,7 +391,6 @@ export default function App(): React.JSX.Element {
   const urlRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
   const spaceRef = useRef<HTMLDivElement | null>(null)
-  const closeSettingsRef = useRef<HTMLButtonElement | null>(null)
   const pinnedRef = useRef(true)
   const seqRef = useRef(0)
   const cmdRef = useRef('')
@@ -384,8 +399,14 @@ export default function App(): React.JSX.Element {
   const cursorRef = useRef(-1)
   const stageBoxRef = useRef<StageBox | null>(null)
   const dragRef = useRef<DragAxis | null>(null)
+  const autoTermRef = useRef(autoTerm)
+  const autoBackRef = useRef(autoBack)
+  const termOpenRef = useRef(false)
+  const autoOpenedRef = useRef(false)
+  const dockBackRef = useRef<Exclude<DockTab, null>>('record')
 
   const terminalOpen = state.terminalOpen
+  const settingsOpen = state.settingsOpen
   const chatSize = space.width
     ? clamp(chatWidth, CHAT_MIN, Math.floor(space.width * CHAT_MAX_RATIO))
     : chatWidth
@@ -495,9 +516,38 @@ export default function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    window.aft.setModal(settingsOpen)
-    if (settingsOpen) closeSettingsRef.current?.focus()
-  }, [settingsOpen])
+    autoTermRef.current = autoTerm
+    storeFlag(AUTO_TERM_KEY, autoTerm)
+  }, [autoTerm])
+
+  useEffect(() => {
+    autoBackRef.current = autoBack
+    storeFlag(AUTO_BACK_KEY, autoBack)
+  }, [autoBack])
+
+  useEffect(() => {
+    window.aft.publishPrefs({
+      theme,
+      autoTerminal: autoTerm,
+      autoTerminalRestore: autoBack
+    })
+  }, [autoBack, autoTerm, theme])
+
+  useEffect(() => {
+    return window.aft.onPrefsPatch((patch) => {
+      if (isThemeId(patch.theme)) setTheme(patch.theme)
+      if (typeof patch.autoTerminal === 'boolean') setAutoTerm(patch.autoTerminal)
+      if (typeof patch.autoTerminalRestore === 'boolean') setAutoBack(patch.autoTerminalRestore)
+    })
+  }, [])
+
+  useEffect(() => {
+    termOpenRef.current = terminalOpen
+  }, [terminalOpen])
+
+  useEffect(() => {
+    if (dock) dockBackRef.current = dock
+  }, [dock])
 
   useEffect(() => {
     const offUpdate = window.aftRecord.onUpdate((view) => {
@@ -533,7 +583,7 @@ export default function App(): React.JSX.Element {
   }, [lines, terminalOpen, termSize])
 
   useEffect(() => {
-    if (!terminalOpen || settingsOpen || urlFocused) return
+    if (!terminalOpen || urlFocused) return
 
     const keep = (): void => {
       const el = inputRef.current
@@ -557,7 +607,7 @@ export default function App(): React.JSX.Element {
       document.removeEventListener('focusin', keep)
       document.removeEventListener('visibilitychange', keep)
     }
-  }, [terminalOpen, settingsOpen, urlFocused, pending, state.url, state.loading, termSize])
+  }, [terminalOpen, urlFocused, pending, state.url, state.loading, termSize])
 
   useEffect(() => {
     return window.aft.onPointer((spot) => {
@@ -656,12 +706,9 @@ export default function App(): React.JSX.Element {
     window.aft.setTerminal(false)
   }, [])
 
-  const openSettings = useCallback((): void => setSettingsOpen(true), [])
-
-  const closeSettings = useCallback((): void => {
-    setSettingsOpen(false)
-    window.requestAnimationFrame(() => focusPrompt())
-  }, [focusPrompt])
+  const toggleSettings = useCallback((): void => {
+    window.aft.setSettings(!settingsOpen)
+  }, [settingsOpen])
 
   const clearLog = useCallback((): void => {
     setLines([])
@@ -703,6 +750,25 @@ export default function App(): React.JSX.Element {
   const showRecord = useCallback((): void => openDock('record'), [openDock])
 
   const showPlayback = useCallback((): void => openDock('playback'), [openDock])
+
+  const toggleDock = useCallback((): void => {
+    setDock((prev) => (prev ? null : dockBackRef.current))
+  }, [])
+
+  const onPlayBusy = useCallback((running: boolean): void => {
+    setPlaying(running)
+
+    if (running) {
+      if (!autoTermRef.current || termOpenRef.current) return
+      autoOpenedRef.current = true
+      window.aft.setTerminal(true)
+      return
+    }
+
+    if (!autoOpenedRef.current) return
+    autoOpenedRef.current = false
+    if (autoBackRef.current) window.aft.setTerminal(false)
+  }, [])
 
   const report = useCallback(
     (entry: { level: 'ok' | 'err' | 'note'; text: string; detail?: string[] }): void => {
@@ -958,15 +1024,6 @@ export default function App(): React.JSX.Element {
     [push, urlDraft]
   )
 
-  const onSheetKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>): void => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      closeSettings()
-    },
-    [closeSettings]
-  )
-
   return (
     <div className={'shell' + (drag ? ' drag-' + drag : '')}>
       <header className="shell-bar">
@@ -1019,8 +1076,8 @@ export default function App(): React.JSX.Element {
         <div className="bar-right">
           <IconButton
             name="settings"
-            title="Ayarlar"
-            onClick={openSettings}
+            title={settingsOpen ? 'Ayarları kapat' : 'Ayarları aç'}
+            onClick={toggleSettings}
             active={settingsOpen}
           />
           <span className="bar-gap" />
@@ -1048,17 +1105,11 @@ export default function App(): React.JSX.Element {
           active={chatOpen}
         />
         <IconButton
-          name="record"
-          title={dock === 'record' ? 'Kayıt panelini kapat' : 'Kayıt panelini aç'}
-          onClick={showRecord}
-          active={dock === 'record'}
-          danger={recording}
-        />
-        <IconButton
-          name="play"
-          title={dock === 'playback' ? 'Oynatma panelini kapat' : 'Oynatma panelini aç'}
-          onClick={showPlayback}
-          active={dock === 'playback'}
+          name="suite"
+          title={dock ? 'Kayıt ve oynatma panelini kapat' : 'Kayıt ve oynatma panelini aç'}
+          onClick={toggleDock}
+          active={Boolean(dock)}
+          danger={recording || playing}
         />
         <span className="side-gap" />
         <IconButton
@@ -1260,74 +1311,12 @@ export default function App(): React.JSX.Element {
                 revision={library}
                 blocked={recording}
                 onReport={report}
-                onBusy={setPlaying}
+                onBusy={onPlayBusy}
               />
             </div>
           </section>
         ) : null}
       </div>
-
-      {settingsOpen ? (
-        <div className="sheet" role="dialog" aria-modal="true" aria-label="Ayarlar">
-          <div className="sheet-card" onKeyDown={onSheetKeyDown}>
-            <header className="sheet-head">
-              <span className="sheet-title">AYARLAR</span>
-              <button
-                ref={closeSettingsRef}
-                className="ghost-btn"
-                title="Ayarları kapat"
-                aria-label="Ayarları kapat"
-                onClick={closeSettings}
-                type="button"
-              >
-                <Glyph name="close" size={15} />
-              </button>
-            </header>
-
-            <div className="sheet-body">
-              <section className="sheet-block">
-                <h3 className="sheet-label">Tema</h3>
-                <div className="theme-grid">
-                  {THEMES.map((item) => (
-                    <button
-                      key={item.id}
-                      className={'theme-card' + (item.id === theme ? ' sel' : '')}
-                      onClick={() => setTheme(item.id)}
-                      aria-pressed={item.id === theme}
-                      type="button"
-                    >
-                      <span className="theme-swatch">
-                        {item.swatch.map((color) => (
-                          <span key={color} style={{ background: color }} />
-                        ))}
-                      </span>
-                      <span className="theme-name">{item.label}</span>
-                      <span className="theme-note">{item.note}</span>
-                      {item.id === theme ? (
-                        <span className="theme-mark">
-                          <Glyph name="check" size={12} />
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              <section className="sheet-block">
-                <h3 className="sheet-label">Kısayollar</h3>
-                <div className="key-rows">
-                  {SHORTCUTS.map((item) => (
-                    <div key={item.code} className="key-row">
-                      <span className="key-name">{item.name}</span>
-                      <span className="key-code">{item.code}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       <footer className="shell-foot">
         <span className={'status-live' + (state.loading ? ' busy' : '')} />
