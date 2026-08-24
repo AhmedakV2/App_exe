@@ -8,7 +8,7 @@ import type {
   StageBox,
   WindowAction
 } from '../../main/browser/types'
-import { THEMES, paintTheme, readTheme, storeTheme, themeOf } from './themes'
+import { isThemeId, paintTheme, readTheme, storeTheme, themeOf } from './themes'
 import type { ThemeId } from './themes'
 import { Glyph, IconButton } from './icons'
 import RecordPanel from './RecordPanel'
@@ -27,7 +27,6 @@ type Line = {
 }
 type Extra = { ms?: number; facts?: Fact[]; detail?: string[] }
 type DockTab = 'record' | 'playback' | null
-type SetPlace = 'left' | 'right' | 'bottom'
 type Entry = { key: string; usage: string; hint: string }
 type ActionEntry = Entry & { build: (args: string[]) => AgentAction | null }
 
@@ -38,32 +37,17 @@ const MAX_SUGGESTIONS = 6
 const CHAT_KEY = 'aft:chat-width'
 const TERM_KEY = 'aft:term-height'
 const REC_KEY = 'aft:rec-width'
-const SET_W_KEY = 'aft:set-width'
-const SET_H_KEY = 'aft:set-height'
-const SET_PLACE_KEY = 'aft:set-place'
 const AUTO_TERM_KEY = 'aft:auto-terminal'
 const AUTO_BACK_KEY = 'aft:auto-terminal-restore'
 const CHAT_SIZE = 320
 const TERM_SIZE = 268
 const REC_SIZE = 372
-const SET_W_SIZE = 296
-const SET_H_SIZE = 236
 const CHAT_MIN = 220
 const TERM_MIN = 120
 const REC_MIN = 300
-const SET_W_MIN = 248
-const SET_H_MIN = 150
 const CHAT_MAX_RATIO = 0.6
 const TERM_MAX_RATIO = 0.72
 const REC_MAX_RATIO = 0.62
-const SET_W_MAX_RATIO = 0.5
-const SET_H_MAX_RATIO = 0.6
-
-const PLACES: { id: SetPlace; glyph: string; title: string }[] = [
-  { id: 'left', glyph: 'dockLeft', title: 'Sola yerleştir' },
-  { id: 'bottom', glyph: 'dockBottom', title: 'Alta yerleştir' },
-  { id: 'right', glyph: 'dockRight', title: 'Sağa yerleştir' }
-]
 
 const ROLES: Record<LineKind, { label: string; glyph: string }> = {
   in: { label: 'Komut', glyph: 'prompt' },
@@ -71,13 +55,6 @@ const ROLES: Record<LineKind, { label: string; glyph: string }> = {
   err: { label: 'Yapılamadı', glyph: 'alert' },
   note: { label: 'Bilgi', glyph: 'info' }
 }
-
-const SHORTCUTS: { name: string; code: string }[] = [
-  { name: 'Terminali aç / kapat', code: 'Ctrl + K' },
-  { name: 'Adres çubuğuna geç', code: 'Ctrl + L' },
-  { name: 'Tam ekran', code: 'F11' },
-  { name: 'Komut geçmişi', code: '↑ / ↓' }
-]
 
 function num(value: string | undefined): number | null {
   if (value === undefined || value.trim() === '') return null
@@ -324,27 +301,6 @@ function storeFlag(key: string, value: boolean): void {
   }
 }
 
-function isPlace(value: unknown): value is SetPlace {
-  return value === 'left' || value === 'right' || value === 'bottom'
-}
-
-function readPlace(): SetPlace {
-  try {
-    const raw = window.localStorage.getItem(SET_PLACE_KEY)
-    return isPlace(raw) ? raw : 'right'
-  } catch {
-    return 'right'
-  }
-}
-
-function storePlace(value: SetPlace): void {
-  try {
-    window.localStorage.setItem(SET_PLACE_KEY, value)
-  } catch {
-    return
-  }
-}
-
 const Logo = memo(function Logo(): React.JSX.Element {
   return (
     <svg width="18" height="18" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
@@ -399,6 +355,7 @@ const EMPTY_STATE: BrowserState = {
   loading: false,
   chatOpen: false,
   terminalOpen: false,
+  settingsOpen: false,
   vision: false,
   maximized: false,
   fullscreen: false
@@ -417,20 +374,16 @@ export default function App(): React.JSX.Element {
   const [urlDraft, setUrlDraft] = useState('')
   const [elements, setElements] = useState(0)
   const [lastMs, setLastMs] = useState(0)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [dock, setDock] = useState<DockTab>(null)
   const [recording, setRecording] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [library, setLibrary] = useState(0)
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
-  const [place, setPlace] = useState<SetPlace>(() => readPlace())
   const [autoTerm, setAutoTerm] = useState(() => readFlag(AUTO_TERM_KEY, true))
   const [autoBack, setAutoBack] = useState(() => readFlag(AUTO_BACK_KEY, false))
   const [chatWidth, setChatWidth] = useState(() => readSize(CHAT_KEY, CHAT_SIZE))
   const [termHeight, setTermHeight] = useState(() => readSize(TERM_KEY, TERM_SIZE))
   const [recWidth, setRecWidth] = useState(() => readSize(REC_KEY, REC_SIZE))
-  const [setWidth, setSetWidth] = useState(() => readSize(SET_W_KEY, SET_W_SIZE))
-  const [setHeight, setSetHeight] = useState(() => readSize(SET_H_KEY, SET_H_SIZE))
   const [space, setSpace] = useState({ width: 0, height: 0 })
 
   const logRef = useRef<HTMLDivElement | null>(null)
@@ -438,7 +391,6 @@ export default function App(): React.JSX.Element {
   const urlRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
   const spaceRef = useRef<HTMLDivElement | null>(null)
-  const closeSettingsRef = useRef<HTMLButtonElement | null>(null)
   const pinnedRef = useRef(true)
   const seqRef = useRef(0)
   const cmdRef = useRef('')
@@ -447,7 +399,6 @@ export default function App(): React.JSX.Element {
   const cursorRef = useRef(-1)
   const stageBoxRef = useRef<StageBox | null>(null)
   const dragRef = useRef<DragAxis | null>(null)
-  const placeRef = useRef<SetPlace>(place)
   const autoTermRef = useRef(autoTerm)
   const autoBackRef = useRef(autoBack)
   const termOpenRef = useRef(false)
@@ -455,6 +406,7 @@ export default function App(): React.JSX.Element {
   const dockBackRef = useRef<Exclude<DockTab, null>>('record')
 
   const terminalOpen = state.terminalOpen
+  const settingsOpen = state.settingsOpen
   const chatSize = space.width
     ? clamp(chatWidth, CHAT_MIN, Math.floor(space.width * CHAT_MAX_RATIO))
     : chatWidth
@@ -464,12 +416,6 @@ export default function App(): React.JSX.Element {
   const recSize = space.width
     ? clamp(recWidth, REC_MIN, Math.floor(space.width * REC_MAX_RATIO))
     : recWidth
-  const setWSize = space.width
-    ? clamp(setWidth, SET_W_MIN, Math.floor(space.width * SET_W_MAX_RATIO))
-    : setWidth
-  const setHSize = space.height
-    ? clamp(setHeight, SET_H_MIN, Math.floor(space.height * SET_H_MAX_RATIO))
-    : setHeight
 
   const push = useCallback((kind: LineKind, text: string, extra?: Extra): void => {
     seqRef.current += 1
@@ -570,15 +516,6 @@ export default function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    if (settingsOpen) closeSettingsRef.current?.focus()
-  }, [settingsOpen])
-
-  useEffect(() => {
-    placeRef.current = place
-    storePlace(place)
-  }, [place])
-
-  useEffect(() => {
     autoTermRef.current = autoTerm
     storeFlag(AUTO_TERM_KEY, autoTerm)
   }, [autoTerm])
@@ -587,6 +524,22 @@ export default function App(): React.JSX.Element {
     autoBackRef.current = autoBack
     storeFlag(AUTO_BACK_KEY, autoBack)
   }, [autoBack])
+
+  useEffect(() => {
+    window.aft.publishPrefs({
+      theme,
+      autoTerminal: autoTerm,
+      autoTerminalRestore: autoBack
+    })
+  }, [autoBack, autoTerm, theme])
+
+  useEffect(() => {
+    return window.aft.onPrefsPatch((patch) => {
+      if (isThemeId(patch.theme)) setTheme(patch.theme)
+      if (typeof patch.autoTerminal === 'boolean') setAutoTerm(patch.autoTerminal)
+      if (typeof patch.autoTerminalRestore === 'boolean') setAutoBack(patch.autoTerminalRestore)
+    })
+  }, [])
 
   useEffect(() => {
     termOpenRef.current = terminalOpen
@@ -630,7 +583,7 @@ export default function App(): React.JSX.Element {
   }, [lines, terminalOpen, termSize])
 
   useEffect(() => {
-    if (!terminalOpen || settingsOpen || urlFocused) return
+    if (!terminalOpen || urlFocused) return
 
     const keep = (): void => {
       const el = inputRef.current
@@ -654,7 +607,7 @@ export default function App(): React.JSX.Element {
       document.removeEventListener('focusin', keep)
       document.removeEventListener('visibilitychange', keep)
     }
-  }, [terminalOpen, settingsOpen, urlFocused, pending, state.url, state.loading, termSize])
+  }, [terminalOpen, urlFocused, pending, state.url, state.loading, termSize])
 
   useEffect(() => {
     return window.aft.onPointer((spot) => {
@@ -669,13 +622,6 @@ export default function App(): React.JSX.Element {
       }
       if (axis === 'record') {
         setRecWidth(Math.round(box.right - spot.x * view.clientWidth))
-        return
-      }
-      if (axis === 'settings') {
-        const where = placeRef.current
-        if (where === 'left') setSetWidth(Math.round(spot.x * view.clientWidth - box.left))
-        else if (where === 'right') setSetWidth(Math.round(box.right - spot.x * view.clientWidth))
-        else setSetHeight(Math.round(box.bottom - spot.y * view.clientHeight))
         return
       }
       setTermHeight(Math.round(box.bottom - spot.y * view.clientHeight))
@@ -716,9 +662,7 @@ export default function App(): React.JSX.Element {
     storeSize(CHAT_KEY, chatSize)
     storeSize(TERM_KEY, termSize)
     storeSize(REC_KEY, recSize)
-    storeSize(SET_W_KEY, setWSize)
-    storeSize(SET_H_KEY, setHSize)
-  }, [drag, chatSize, termSize, recSize, setWSize, setHSize])
+  }, [drag, chatSize, termSize, recSize])
 
   const onLogScroll = useCallback((): void => {
     const log = logRef.current
@@ -762,17 +706,9 @@ export default function App(): React.JSX.Element {
     window.aft.setTerminal(false)
   }, [])
 
-  const closeSettings = useCallback((): void => {
-    setSettingsOpen(false)
-    window.requestAnimationFrame(() => focusPrompt())
-  }, [focusPrompt])
-
   const toggleSettings = useCallback((): void => {
-    setSettingsOpen((prev) => {
-      if (prev) window.requestAnimationFrame(() => focusPrompt())
-      return !prev
-    })
-  }, [focusPrompt])
+    window.aft.setSettings(!settingsOpen)
+  }, [settingsOpen])
 
   const clearLog = useCallback((): void => {
     setLines([])
@@ -802,11 +738,6 @@ export default function App(): React.JSX.Element {
 
   const beginRecDrag = useCallback(
     (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('record', event),
-    [beginDrag]
-  )
-
-  const beginSetDrag = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('settings', event),
     [beginDrag]
   )
 
@@ -1093,143 +1024,8 @@ export default function App(): React.JSX.Element {
     [push, urlDraft]
   )
 
-  const onSheetKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLElement>): void => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      closeSettings()
-    },
-    [closeSettings]
-  )
-
-  const dragAxisClass =
-    drag === 'settings' ? (place === 'bottom' ? 'terminal' : 'chat') : (drag ?? '')
-
-  const settingsPanel = settingsOpen ? (
-    <section
-      className={'panel set-panel at-' + place}
-      style={place === 'bottom' ? { height: setHSize } : { width: setWSize }}
-      onKeyDown={onSheetKeyDown}
-      aria-label="Ayarlar"
-    >
-      <div
-        className="set-grip"
-        onPointerDown={beginSetDrag}
-        role="separator"
-        aria-orientation={place === 'bottom' ? 'horizontal' : 'vertical'}
-        aria-label="Ayarlar panelinin boyutunu değiştir"
-      />
-
-      <header className="panel-head set-head">
-        <span className="set-tab">
-          <Glyph name="settings" size={13} />
-          AYARLAR
-        </span>
-        <span className="dock-push" />
-        <span className="set-places">
-          {PLACES.map((item) => (
-            <button
-              key={item.id}
-              className={'ghost-btn' + (item.id === place ? ' on' : '')}
-              title={item.title}
-              aria-label={item.title}
-              aria-pressed={item.id === place}
-              onClick={() => setPlace(item.id)}
-              type="button"
-            >
-              <Glyph name={item.glyph} size={14} />
-            </button>
-          ))}
-        </span>
-        <button
-          ref={closeSettingsRef}
-          className="ghost-btn"
-          title="Ayarları kapat"
-          aria-label="Ayarları kapat"
-          onClick={closeSettings}
-          type="button"
-        >
-          <Glyph name="close" size={15} />
-        </button>
-      </header>
-
-      <div className="set-body">
-        <section className="sheet-block">
-          <h3 className="sheet-label">Tema</h3>
-          <div className="theme-grid">
-            {THEMES.map((item) => (
-              <button
-                key={item.id}
-                className={'theme-card' + (item.id === theme ? ' sel' : '')}
-                onClick={() => setTheme(item.id)}
-                aria-pressed={item.id === theme}
-                type="button"
-              >
-                <span className="theme-swatch">
-                  {item.swatch.map((color) => (
-                    <span key={color} style={{ background: color }} />
-                  ))}
-                </span>
-                <span className="theme-name">{item.label}</span>
-                <span className="theme-note">{item.note}</span>
-                {item.id === theme ? (
-                  <span className="theme-mark">
-                    <Glyph name="check" size={12} />
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="sheet-block">
-          <h3 className="sheet-label">Terminal</h3>
-          <label className="opt-row">
-            <input
-              type="checkbox"
-              checked={autoTerm}
-              onChange={(event) => setAutoTerm(event.target.checked)}
-            />
-            <span className="opt-text">
-              <span className="opt-name">Senaryo çalışınca terminali aç</span>
-              <span className="opt-note">
-                Oynatma başladığında terminal kendiliğinden açılır, koşum kayıtları anında görünür.
-              </span>
-            </span>
-          </label>
-          <label className={'opt-row' + (autoTerm ? '' : ' off')}>
-            <input
-              type="checkbox"
-              checked={autoBack}
-              disabled={!autoTerm}
-              onChange={(event) => setAutoBack(event.target.checked)}
-            />
-            <span className="opt-text">
-              <span className="opt-name">Koşum bitince terminali kapat</span>
-              <span className="opt-note">
-                Yalnızca terminali koşum açtıysa kapatılır, elle açılan terminal açık kalır.
-              </span>
-            </span>
-          </label>
-        </section>
-
-        <section className="sheet-block">
-          <h3 className="sheet-label">Kısayollar</h3>
-          <div className="key-rows">
-            {SHORTCUTS.map((item) => (
-              <div key={item.code} className="key-row">
-                <span className="key-name">{item.name}</span>
-                <span className="key-code">{item.code}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-    </section>
-  ) : null
-
   return (
-    <div className={'shell' + (drag ? ' drag-' + dragAxisClass : '')}>
+    <div className={'shell' + (drag ? ' drag-' + drag : '')}>
       <header className="shell-bar">
         <div className="bar-left">
           <span className="logo" title="AFT">
@@ -1325,8 +1121,6 @@ export default function App(): React.JSX.Element {
       </aside>
 
       <div className="workspace" ref={spaceRef}>
-        {place === 'left' ? settingsPanel : null}
-
         {chatOpen ? (
           <section className="panel" style={{ width: chatSize }}>
             <header className="panel-head">
@@ -1466,8 +1260,6 @@ export default function App(): React.JSX.Element {
               </div>
             </section>
           ) : null}
-
-          {place === 'bottom' ? settingsPanel : null}
         </div>
 
         {dock ? (
@@ -1524,8 +1316,6 @@ export default function App(): React.JSX.Element {
             </div>
           </section>
         ) : null}
-
-        {place === 'right' ? settingsPanel : null}
       </div>
 
       <footer className="shell-foot">

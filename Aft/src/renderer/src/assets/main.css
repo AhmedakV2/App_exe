@@ -113,6 +113,10 @@ body,
   overflow: hidden;
 }
 
+body[data-view='settings'] {
+  background: var(--panel);
+}
+
 body {
   background: var(--chrome);
   color: var(--text);
@@ -894,115 +898,61 @@ input {
   cursor: default;
 }
 
-.set-panel {
-  z-index: 6;
-}
-
-.set-panel.at-left {
-  margin-right: var(--gap);
-  box-shadow: 3px 0 10px var(--shadow);
-}
-
-.set-panel.at-right {
-  margin-right: 0;
-  margin-left: var(--gap);
-  box-shadow: -3px 0 10px var(--shadow);
-}
-
-.set-panel.at-bottom {
+.win {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   width: 100%;
-  height: auto;
-  margin-right: 0;
-  margin-top: var(--gap);
-  box-shadow: 0 -3px 12px var(--shadow);
-}
-
-.set-grip {
-  position: absolute;
-  z-index: 3;
-}
-
-.set-panel.at-left .set-grip {
-  top: 0;
-  bottom: 0;
-  right: calc(var(--gap) * -1 - 1px);
-  width: calc(var(--gap) + 3px);
-  cursor: ew-resize;
-}
-
-.set-panel.at-right .set-grip {
-  top: 0;
-  bottom: 0;
-  left: calc(var(--gap) * -1 - 1px);
-  width: calc(var(--gap) + 3px);
-  cursor: ew-resize;
-}
-
-.set-panel.at-bottom .set-grip {
-  top: -7px;
-  left: 0;
-  right: 0;
-  height: 9px;
-  cursor: ns-resize;
-}
-
-.set-grip:hover {
-  background: var(--accent-wash);
-}
-
-.set-head {
-  gap: 2px;
-  padding: 0 4px 0 6px;
-}
-
-.set-tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 22px;
-  padding: 0 9px;
-  color: var(--accent);
   background: var(--panel);
-  border: var(--line) solid var(--line-color);
-  font: 700 10.5px var(--ui);
-  letter-spacing: 0.1em;
+  border: var(--line) solid var(--panel-line);
+  overflow: hidden;
 }
 
-.set-places {
+.win-head {
   display: flex;
   align-items: center;
-  gap: 0;
-  margin-right: 2px;
-  padding-right: 4px;
-  border-right: var(--line) solid var(--line-color);
+  gap: 2px;
+  flex: 0 0 34px;
+  height: 34px;
+  padding: 0 4px 0 12px;
+  background: var(--raised);
+  border-bottom: var(--line) solid var(--panel-line);
+  -webkit-app-region: drag;
+  user-select: none;
 }
 
-.ghost-btn.on {
-  color: var(--accent);
-  background: var(--accent-wash);
+.win-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 700 11px var(--ui);
+  letter-spacing: 0.14em;
+  color: var(--text);
 }
 
-.set-body {
+.win-push {
+  flex: 1;
+}
+
+.win-close {
+  -webkit-app-region: no-drag;
+}
+
+.win-close:hover {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.win-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 16px;
   scrollbar-width: thin;
   scrollbar-color: var(--scroll) transparent;
-}
-
-.set-panel.at-bottom .set-body {
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 22px;
-}
-
-.set-panel.at-bottom .set-body > .sheet-block {
-  flex: 1 1 0;
-  min-width: 0;
 }
 
 .opt-row {
@@ -1062,7 +1012,7 @@ input {
 
 .theme-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
   gap: 10px;
 }
 
