@@ -19,7 +19,13 @@ export {
 } from './Consistency'
 export { verifyState, expectedFromCapture } from './StateVerifier'
 export { RunLog, renderLog } from './RunLog'
-export { ContextStore, buildContext, dumpElements, type ContextInput } from './FailureContext'
+export {
+  ContextStore,
+  buildContext,
+  dumpElements,
+  type ContextInput,
+  type StoredContextRef
+} from './FailureContext'
 export {
   StepExecutor,
   absolute,

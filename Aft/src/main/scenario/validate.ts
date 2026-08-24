@@ -288,6 +288,14 @@ function normalizeQuery(
   nested: Record<string, unknown>,
   source: Record<string, unknown>
 ): StepQuery | null {
+  const structured = asRecord(nested['query'])
+  const structuredKind = str(structured['kind'])
+  const structuredValue = str(structured['value'])
+
+  if (QUERY_KINDS.includes(structuredKind as QueryKind) && structuredValue) {
+    return buildQuery(structuredKind as QueryKind, structuredValue, structured)
+  }
+
   const explicit = str(nested['query'])
   const declared = str(nested['queryKind'])
   const kind = QUERY_KINDS.includes(declared as QueryKind) ? (declared as QueryKind) : null

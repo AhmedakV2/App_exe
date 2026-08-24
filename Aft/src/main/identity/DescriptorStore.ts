@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { quarantine, writeFileAtomic } from '../atomic'
 import {
   DESCRIPTOR_VERSION,
   SUPPORTED_DESCRIPTOR_VERSIONS,
@@ -26,25 +26,46 @@ export interface DescriptorSummary {
   capturedAt: number
 }
 
+function catalogFault(error: unknown, moved: string): string {
+  const detail = error instanceof Error ? error.message : String(error)
+  return 'Katalog bozuk: ' + detail + (moved ? ' | yedek: ' + moved : '')
+}
+
 export class DescriptorStore {
   private readonly items = new Map<string, Descriptor>()
+  private readonly problems: string[] = []
   private flushTimer: ReturnType<typeof setTimeout> | null = null
   private dirty = false
 
   constructor(private readonly filePath: string) {}
 
   async load(): Promise<number> {
+    this.items.clear()
+
+    let raw = ''
     try {
-      const parsed = JSON.parse(await readFile(this.filePath, 'utf8')) as CatalogFile
-      this.items.clear()
+      raw = await readFile(this.filePath, 'utf8')
+    } catch {
+      return 0
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as CatalogFile
       for (const descriptor of parsed.descriptors ?? []) {
         if (!SUPPORTED_DESCRIPTOR_VERSIONS.includes(descriptor.version)) continue
         this.items.set(descriptor.id, descriptor)
       }
-    } catch {
+    } catch (error) {
       this.items.clear()
+      const moved = await quarantine(this.filePath).catch(() => '')
+      this.problems.push(catalogFault(error, moved))
     }
+
     return this.items.size
+  }
+
+  faults(): string[] {
+    return [...this.problems]
   }
 
   save(descriptor: Descriptor): Descriptor {
@@ -106,8 +127,7 @@ export class DescriptorStore {
     }
 
     try {
-      await mkdir(dirname(this.filePath), { recursive: true })
-      await writeFile(this.filePath, JSON.stringify(payload), 'utf8')
+      await writeFileAtomic(this.filePath, JSON.stringify(payload))
     } catch (error) {
       this.dirty = true
       throw error

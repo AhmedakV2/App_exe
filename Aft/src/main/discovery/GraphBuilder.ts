@@ -117,11 +117,12 @@ function emitDoc(
 
   const children: number[][] = new Array(doc.nodes.length)
   for (let i = 0; i < doc.nodes.length; i++) children[i] = []
-  const stack: { index: number; depth: number; shadow: ShadowStep[] }[] = []
+  const opened = new Map<number, ShadowStep>()
+  const stack: { index: number; depth: number; shadow: ShadowStep[]; inShadow: boolean }[] = []
   for (let i = 0; i < doc.nodes.length; i++) {
     const parent = doc.nodes[i].parentIndex
     if (parent >= 0) children[parent].push(i)
-    else stack.push({ index: i, depth: 0, shadow: [] })
+    else stack.push({ index: i, depth: 0, shadow: [], inShadow: false })
   }
 
   while (stack.length > 0) {
@@ -132,8 +133,22 @@ function emitDoc(
     const key = ref.sessionId + ':' + raw.backendNodeId
     keys[item.index] = key
 
+    const inShadowTree = raw.shadowRootType !== ''
+    let shadow = item.shadow
+    let isRoot = false
+
+    if (inShadowTree && !item.inShadow) {
+      const known = opened.get(raw.parentIndex)
+      const hop = known ?? hostStep(doc, raw, ref, keys)
+      if (!known) {
+        opened.set(raw.parentIndex, hop)
+        isRoot = true
+      }
+      shadow = item.shadow.concat(hop)
+    }
+
     if (!lookup.has(key)) {
-      const node = toGraphNode(raw, ref, frameId, framePath, item.depth, item.shadow, doc, texts)
+      const node = toGraphNode(raw, ref, frameId, framePath, item.depth, shadow, doc, texts, isRoot)
       nodes.push(node)
       lookup.set(key, node)
       docOfNode.set(key, ref)
@@ -147,13 +162,9 @@ function emitDoc(
       if (parent) parent.childKeys.push(key)
     }
 
-    const nextShadow = raw.shadowRootType
-      ? item.shadow.concat(hostStep(doc, raw, ref, keys))
-      : item.shadow
-
     const kids = children[item.index]
     for (let i = kids.length - 1; i >= 0; i--) {
-      stack.push({ index: kids[i], depth: item.depth + 1, shadow: nextShadow })
+      stack.push({ index: kids[i], depth: item.depth + 1, shadow, inShadow: inShadowTree })
     }
   }
 }
@@ -175,7 +186,8 @@ function toGraphNode(
   depth: number,
   shadow: ShadowStep[],
   doc: DocSnap,
-  texts: string[]
+  texts: string[],
+  isShadowRoot: boolean
 ): GraphNode {
   return {
     key: ref.sessionId + ':' + raw.backendNodeId,
@@ -193,7 +205,7 @@ function toGraphNode(
     value: raw.inputValue || raw.textValue || raw.attrs['value'] || '',
     checked: raw.inputChecked,
     clickable: raw.isClickable,
-    isShadowRoot: raw.shadowRootType !== '',
+    isShadowRoot,
     shadowMode: raw.shadowRootType,
     shadowPath: shadow,
     docRect: doc.bounds[raw.index],

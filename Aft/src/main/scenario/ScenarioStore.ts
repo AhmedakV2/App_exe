@@ -1,5 +1,6 @@
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { readFile, readdir, rm } from 'node:fs/promises'
 import { basename, join } from 'node:path'
+import { writeFileAtomic } from '../atomic'
 import { assertScenario, parseScenario } from './validate'
 import { SCENARIO_VERSION, type Scenario } from './types'
 
@@ -53,8 +54,7 @@ export class ScenarioStore {
     const filePath = this.files.get(checked.id) ?? join(this.directory, checked.id + FILE_SUFFIX)
     const payload: Scenario = { ...checked, updatedAt: Date.now() }
 
-    await mkdir(this.directory, { recursive: true })
-    await writeFile(filePath, JSON.stringify(payload, null, 2), 'utf8')
+    await writeFileAtomic(filePath, JSON.stringify(payload, null, 2))
 
     this.items.set(payload.id, payload)
     this.files.set(payload.id, filePath)

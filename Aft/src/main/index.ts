@@ -3,7 +3,16 @@ import type { Rectangle, WebContents } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
-import { mountIdentity, mountPlayback, unmountIdentity, unmountPlayback } from './bridge'
+import {
+  mountData,
+  mountIdentity,
+  mountPlayback,
+  mountRecord,
+  unmountData,
+  unmountIdentity,
+  unmountPlayback,
+  unmountRecord
+} from './bridge'
 import { BrowserController } from './browser/BrowserController'
 import {
   AgentAction,
@@ -31,7 +40,7 @@ let chatView: WebContentsView
 let targetView: WebContentsView
 let controller: BrowserController
 let chatOpen = false
-let terminalOpen = true
+let terminalOpen = false
 let dragTimer: ReturnType<typeof setInterval> | null = null
 let dragAxis: DragAxis | null = null
 let dragStartedAt = 0
@@ -409,51 +418,6 @@ function bindWindowEvents(): void {
   win.on('blur', stopDrag)
 }
 
-function toggleFullScreen(): void {
-  if (!win || win.isDestroyed()) return
-  win.setFullScreen(!win.isFullScreen())
-}
-
-function windowAction(action: WindowAction): void {
-  if (!win || win.isDestroyed()) return
-  switch (action) {
-    case 'minimize':
-      win.minimize()
-      break
-    case 'maximize':
-      if (win.isMaximized()) win.unmaximize()
-      else win.maximize()
-      break
-    case 'fullscreen':
-      toggleFullScreen()
-      break
-    case 'close':
-      win.close()
-      break
-  }
-  pushState()
-}
-
-function bindFullScreenKey(wc: WebContents): void {
-  wc.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown' || input.key !== 'F11') return
-    event.preventDefault()
-    toggleFullScreen()
-  })
-}
-
-function bindWindowEvents(): void {
-  const sync = (): void => {
-    scheduleLayout()
-    pushState()
-  }
-  win.on('resize', scheduleLayout)
-  win.on('maximize', sync)
-  win.on('unmaximize', sync)
-  win.on('enter-full-screen', sync)
-  win.on('leave-full-screen', sync)
-}
-
 function bindTargetEvents(): void {
   const wc = targetView.webContents
 
@@ -530,20 +494,35 @@ function createWindow(): void {
   bindTargetEvents()
 
   void mountIdentity(controller)
-    .then((identity) =>
-      mountPlayback(controller, {
+    .then(async (identity) => {
+      const playback = await mountPlayback(controller, {
         identity: identity.identity(),
         descriptors: identity.catalog(),
         target: targetView.webContents,
         renderer: chatView.webContents
       })
-    )
+
+      const data = await mountData({ scenarios: playback.library() })
+      playback.setIndexer(data.indexer())
+
+      mountRecord(controller, {
+        identity: identity.identity(),
+        descriptors: identity.catalog(),
+        scenarios: playback.library(),
+        target: targetView.webContents,
+        renderer: chatView.webContents
+      })
+    })
     .catch(() => undefined)
   void targetView.webContents.loadURL(HOME_URL).catch(() => undefined)
 
   win.on('closed', () => {
     stopDrag()
-    void unmountPlayback()
+    void unmountRecord()
+      .catch(() => undefined)
+      .then(() => unmountData())
+      .catch(() => undefined)
+      .then(() => unmountPlayback())
       .catch(() => undefined)
       .then(() => unmountIdentity())
       .catch(() => undefined)
@@ -589,7 +568,7 @@ app.whenReady().then(() => {
   ipcMain.on('aft:terminal', (_e, open: boolean) => setTerminal(Boolean(open), Boolean(open)))
 
   ipcMain.on('aft:drag', (_e, axis: unknown) => {
-    if (axis === 'chat' || axis === 'terminal') startDrag(axis)
+    if (axis === 'chat' || axis === 'terminal' || axis === 'record') startDrag(axis)
     else stopDrag()
   })
 

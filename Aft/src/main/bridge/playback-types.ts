@@ -3,11 +3,11 @@ import type {
   PlaybackOptions,
   RunResult,
   Scenario,
-  ScenarioEntry,
   ScenarioReport,
   StepResult,
   StoredContext
-} from '../scenario'
+} from '../scenario/types'
+import type { ScenarioEntry } from '../scenario/ScenarioStore'
 
 export type PlaybackChannelName =
   | 'aft:playback:list'

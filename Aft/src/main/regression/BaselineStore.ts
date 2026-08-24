@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { writeFileAtomic } from '../atomic'
 import { round } from './Metrics'
 import {
   DEFAULT_THRESHOLDS,
@@ -60,8 +60,7 @@ export class BaselineStore {
       thresholds: thresholds ?? DEFAULT_THRESHOLDS,
       cases
     }
-    await mkdir(dirname(this.filePath), { recursive: true })
-    await writeFile(this.filePath, JSON.stringify(baseline, null, 2), 'utf8')
+    await writeFileAtomic(this.filePath, JSON.stringify(baseline, null, 2))
     this.current = baseline
     return baseline
   }

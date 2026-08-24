@@ -62,7 +62,7 @@ export const PLAYBACK_SCENARIO = `{
   "version": "scenario/1.0.0",
   "id": "aft-playback-fixture",
   "title": "Kayit formu akisi",
-  "description": "Faz 6 bitis kriteri icin elle yazilmis referans senaryo",
+  "description": "referans senaryo",
   "baseUrl": "http://127.0.0.1/",
   "defaults": {
     "scanLevel": 1,
