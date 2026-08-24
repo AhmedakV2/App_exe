@@ -11,10 +11,7 @@ const SHORTCUTS: { name: string; code: string }[] = [
   { name: 'Komut geçmişi', code: '↑ / ↓' }
 ]
 
-/**
- * Serbest gezen ayar penceresi. Tercihlerin sahibi ana penceredir; burada
- * yapılan her değişiklik köprüden oraya gider ve tam hâliyle geri döner.
- */
+
 export default function SettingsWindow(): React.JSX.Element {
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
   const [autoTerm, setAutoTerm] = useState(true)

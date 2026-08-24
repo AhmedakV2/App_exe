@@ -7,7 +7,6 @@ import { paintTheme, readTheme } from './themes'
 
 paintTheme(readTheme())
 
-// Ayar penceresi aynı paketi ayrı bir pencerede açar, ana kabuğu değil.
 const settings = new URLSearchParams(window.location.search).get('view') === 'settings'
 
 document.body.dataset.view = settings ? 'settings' : 'shell'

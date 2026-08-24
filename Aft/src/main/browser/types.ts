@@ -87,7 +87,6 @@ export interface BrowserState {
   fullscreen: boolean
 }
 
-/** Tercihler ana pencerede saklanır, ayar penceresine köprü üzerinden taşınır. */
 export interface AppPrefs {
   theme: string
   autoTerminal: boolean
