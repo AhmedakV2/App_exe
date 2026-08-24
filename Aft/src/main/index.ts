@@ -568,7 +568,8 @@ app.whenReady().then(() => {
   ipcMain.on('aft:terminal', (_e, open: boolean) => setTerminal(Boolean(open), Boolean(open)))
 
   ipcMain.on('aft:drag', (_e, axis: unknown) => {
-    if (axis === 'chat' || axis === 'terminal' || axis === 'record') startDrag(axis)
+    if (axis === 'chat' || axis === 'terminal' || axis === 'record' || axis === 'settings')
+      startDrag(axis)
     else stopDrag()
   })
 

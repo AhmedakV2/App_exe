@@ -171,6 +171,36 @@ const GLYPHS: Record<string, React.JSX.Element> = {
       <path d="M6 21V4" />
       <path d="M6 5h12l-3 4 3 4H6" />
     </>
+  ),
+  suite: (
+    <>
+      <circle cx="7" cy="12" r="4.5" fill="currentColor" stroke="none" />
+      <path d="M14 7l7 5-7 5z" fill="currentColor" stroke="none" />
+    </>
+  ),
+  dockLeft: (
+    <>
+      <rect x="3" y="4" width="18" height="16" />
+      <rect x="3" y="4" width="6" height="16" fill="currentColor" stroke="none" />
+    </>
+  ),
+  dockRight: (
+    <>
+      <rect x="3" y="4" width="18" height="16" />
+      <rect x="15" y="4" width="6" height="16" fill="currentColor" stroke="none" />
+    </>
+  ),
+  dockBottom: (
+    <>
+      <rect x="3" y="4" width="18" height="16" />
+      <rect x="3" y="14" width="18" height="6" fill="currentColor" stroke="none" />
+    </>
+  ),
+  zoom: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-4-4" />
+    </>
   )
 }
 
