@@ -13,6 +13,7 @@ export type ActionKind =
   | 'upload'
   | 'navigate'
   | 'wait'
+  | 'refresh'
 
 export type ActionErrorCode =
   | 'element-not-found'

@@ -247,6 +247,8 @@ export class BrowserController {
         return { kind: 'press-key', key: request.key ?? '', ...target }
       case 'wait':
         return { kind: 'wait' }
+      case 'refresh':
+        return { kind: 'refresh' }
       default:
         return { kind: 'wait' }
     }
