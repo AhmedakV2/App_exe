@@ -213,16 +213,7 @@ function shortUrl(raw: string): string {
   } catch {
     return raw
   }
-]
-
-const BUILTINS: Entry[] = [
-  { key: 'a', usage: 'a', hint: 'Komut listesini yazdırır' },
-  { key: 'cls', usage: 'cls', hint: 'Terminal geçmişini temizler' }
-]
-
-const PALETTE: Entry[] = [...ACTIONS, ...BUILTINS]
-const ACTION_MAP = new Map(ACTIONS.map((entry) => [entry.key, entry]))
-const PALETTE_KEYS = new Set(PALETTE.map((entry) => entry.key))
+}
 
 function stamp(): string {
   const now = new Date()
@@ -341,37 +332,6 @@ const LogRow = memo(function LogRow({ line }: { line: Line }): React.JSX.Element
     </div>
   )
 })
-
-function diagnose(result: ExecuteResult): string[] {
-  const outcome = result.outcome
-  if (!outcome) return []
-
-  const lines: string[] = []
-  if (!result.ok && outcome.code) lines.push('kod: ' + outcome.code)
-  if (result.ok && outcome.mode === 'direct-call') lines.push('yol: dogrudan cagri')
-
-  const report = outcome.actionability
-  if (!result.ok && report) {
-    lines.push(
-      'hazirlik: ' +
-        report.reason +
-        ' (gorunur ' +
-        report.visible +
-        ', etkin ' +
-        report.enabled +
-        ', kararli ' +
-        report.stable +
-        ', ustu acik ' +
-        report.unobstructed +
-        ')'
-    )
-  }
-  for (const dialog of outcome.dialogs) lines.push('diyalog: ' + dialog.type + ' ' + dialog.policy)
-  for (const download of outcome.downloads) {
-    lines.push('indirme: ' + download.fileName + ' ' + download.state)
-  }
-  return lines
-}
 
 const EMPTY_STATE: BrowserState = {
   url: '',
@@ -1107,7 +1067,6 @@ export default function App(): React.JSX.Element {
           onClick={toggleTerminal}
           active={terminalOpen}
         />
-        <IconButton name="settings" title="Ayarlar" onClick={openSettings} active={settingsOpen} />
       </aside>
 
       <div className="workspace" ref={spaceRef}>
