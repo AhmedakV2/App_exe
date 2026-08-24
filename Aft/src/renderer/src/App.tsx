@@ -1016,8 +1016,14 @@ export default function App(): React.JSX.Element {
         </div>
 
         <div className="bar-drag" onDoubleClick={maximizeWindow} />
-
         <div className="bar-right">
+          <IconButton
+            name="settings"
+            title="Ayarlar"
+            onClick={openSettings}
+            active={settingsOpen}
+          />
+          <span className="bar-gap" />
           <IconButton
             name="minimize"
             title="Simge durumuna küçült"
@@ -1061,7 +1067,6 @@ export default function App(): React.JSX.Element {
           onClick={toggleTerminal}
           active={terminalOpen}
         />
-        <IconButton name="settings" title="Ayarlar" onClick={openSettings} active={settingsOpen} />
       </aside>
 
       <div className="workspace" ref={spaceRef}>
@@ -1108,7 +1113,7 @@ export default function App(): React.JSX.Element {
               <header className="term-head">
                 <span className="term-tab">
                   <Glyph name="terminal" size={13} />
-                  aksiyonlar
+                  Terminal
                 </span>
 
                 {pending ? (
@@ -1334,8 +1339,6 @@ export default function App(): React.JSX.Element {
         <span className="status-sep" />
         <span className="status-item">görüş {state.vision ? 'açık' : 'kapalı'}</span>
         <span className="status-push" />
-        <span className="status-key">Ctrl+K terminal</span>
-        <span className="status-key">Ctrl+L adres</span>
       </footer>
     </div>
   )

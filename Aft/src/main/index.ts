@@ -40,7 +40,7 @@ let chatView: WebContentsView
 let targetView: WebContentsView
 let controller: BrowserController
 let chatOpen = false
-let terminalOpen = true
+let terminalOpen = false
 let dragTimer: ReturnType<typeof setInterval> | null = null
 let dragAxis: DragAxis | null = null
 let dragStartedAt = 0

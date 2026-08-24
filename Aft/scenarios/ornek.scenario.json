@@ -2,7 +2,7 @@
   "version": "scenario/1.0.0",
   "id": "ornek-kayit",
   "title": "Ornek kayit akisi",
-  "description": "Elle yazilan senaryo dosyasi icin referans bicim",
+  "description": " referans",
   "baseUrl": "https://ornek.test/",
   "defaults": {
     "scanLevel": 1,

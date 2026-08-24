@@ -277,6 +277,12 @@ input {
   padding-right: 4px;
   -webkit-app-region: no-drag;
 }
+.bar-gap {
+  flex: 0 0 15px;
+}
+.bar-gap2{
+  flex: 0 0 8px;
+}
 
 .omnibox {
   position: relative;
