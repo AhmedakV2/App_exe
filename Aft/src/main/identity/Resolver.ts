@@ -2,7 +2,14 @@ import type { ModelIndex } from '../model'
 import type { ElementModel } from '../model'
 import { scopeOf } from './DescriptorBuilder'
 import type { HistoryStore } from './HistoryStore'
-import { combine, contextScore, describeState, geometryScore, resolveState } from './Scoring'
+import {
+  anchorScore,
+  combine,
+  contextScore,
+  describeState,
+  geometryScore,
+  resolveState
+} from './Scoring'
 import { strategyByKind } from './strategies'
 import {
   DEFAULT_RESOLVE,
@@ -19,6 +26,15 @@ interface Bucket {
   element: ElementModel
   weight: number
   votes: StrategyKind[]
+}
+
+interface Evidence {
+  /** Aday ureten stratejilerin toplam agirligi. Oy payinin paydasi budur. */
+  informed: number
+  /** Hic aday uretmeyen, bu yuzden adaylar arasinda ayirt edici olmayan stratejiler. */
+  silent: StrategyKind[]
+  /** Tek bir eleman ureten stratejiler. */
+  uniqueKinds: Set<StrategyKind>
 }
 
 export class DescriptorVersionError extends Error {
@@ -45,7 +61,7 @@ export class Resolver {
     const scope = scopeOf(descriptor)
     const trace: StrategyTrace[] = []
     const buckets = new Map<string, Bucket>()
-    let attempted = 0
+    const evidence: Evidence = { informed: 0, silent: [], uniqueKinds: new Set<StrategyKind>() }
 
     for (const payload of descriptor.strategies) {
       const strategy = strategyByKind(payload.kind)
@@ -60,21 +76,30 @@ export class Resolver {
 
       const at = Date.now()
       const matches = strategy.match(payload, index)
-      attempted += weight
+
+      // Hic aday uretmeyen strateji adaylar arasinda ayrim yapmaz; paydaya
+      // katilirsa dogru elemanin puanini da bosuna dusurur. Sadece aday ureten
+      // stratejiler oylamaya girer.
+      if (matches.length) {
+        evidence.informed += weight
+        if (unique(matches)) evidence.uniqueKinds.add(payload.kind)
+      } else {
+        evidence.silent.push(payload.kind)
+      }
 
       trace.push({
         kind: payload.kind,
         weight: round(weight),
         matched: matches.length,
         skipped: false,
-        reason: matches.length ? 'eslesme bulundu' : 'aday uretmedi',
+        reason: matches.length ? 'eslesme bulundu' : 'aday uretmedi, oylama disi',
         durationMs: Date.now() - at
       })
 
       for (const element of matches) this.vote(buckets, element, weight, payload.kind)
     }
 
-    const candidates = this.rank(descriptor, index, buckets, attempted, options)
+    const candidates = this.rank(descriptor, index, buckets, evidence, options)
     const best = candidates[0] ?? null
     const runnerUp = candidates[1] ?? null
     const confidence = best?.score ?? 0
@@ -100,7 +125,7 @@ export class Resolver {
       candidates,
       trace,
       durationMs: Date.now() - started,
-      message: describeState(state, confidence, ambiguous)
+      message: describeState(state, confidence, ambiguous) + staleNote(evidence.silent)
     }
   }
 
@@ -125,7 +150,7 @@ export class Resolver {
     descriptor: Descriptor,
     index: ModelIndex,
     buckets: Map<string, Bucket>,
-    attempted: number,
+    evidence: Evidence,
     options: ResolveOptions
   ): ResolvedCandidate[] {
     const out: ResolvedCandidate[] = []
@@ -134,16 +159,18 @@ export class Resolver {
       const context = contextScore(descriptor, bucket.element, index)
       if (options.requireContext && context < 0.2) continue
 
-      const votes = attempted > 0 ? Math.min(1, bucket.weight / attempted) : 0
+      const votes = evidence.informed > 0 ? Math.min(1, bucket.weight / evidence.informed) : 0
       const geometry = geometryScore(descriptor, bucket.element)
+      const anchor = anchorScore(bucket.votes, evidence.uniqueKinds)
 
       out.push({
         ref: bucket.element.identity.ref,
         ordinal: bucket.element.identity.ordinal,
-        score: combine(votes, context, geometry),
+        score: combine(votes, context, geometry, anchor),
         voteScore: round(votes),
         contextScore: context,
         geometryScore: geometry,
+        anchorScore: anchor,
         votes: bucket.votes.slice()
       })
     }
@@ -151,6 +178,16 @@ export class Resolver {
     out.sort((a, b) => b.score - a.score || a.ordinal - b.ordinal)
     return out.slice(0, options.maxCandidates)
   }
+}
+
+function staleNote(silent: readonly StrategyKind[]): string {
+  return silent.length ? ' | aday uretmeyen strateji: ' + silent.join(', ') : ''
+}
+
+function unique(matches: readonly ElementModel[]): boolean {
+  if (matches.length === 1) return true
+  const first = matches[0]?.identity.ref
+  return matches.every((element) => element.identity.ref === first)
 }
 
 function skipped(kind: StrategyKind, weight: number, reason: string): StrategyTrace {

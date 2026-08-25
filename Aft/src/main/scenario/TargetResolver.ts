@@ -65,7 +65,13 @@ export class TargetResolver {
         record
       }
     }
-    if (resolution.state === 'low-confidence' && !allowLowConfidence) {
+    // Otomatik onarim yalnizca belirsizlik yokken ve guven onarim esiginin
+    // uzerindeyken calisir; kimlik bu adayla yeniden yazildiysa adim da bu
+    // adayla ilerlemelidir. Aksi halde descriptor guncellenir ama adim yine de
+    // "dusuk guven" diye duser.
+    const trusted = allowLowConfidence || outcome.healed
+
+    if (resolution.state === 'low-confidence' && !trusted) {
       return {
         ok: false,
         reason: resolution.message || 'dusuk guvenli eslesme',
@@ -74,7 +80,7 @@ export class TargetResolver {
         record
       }
     }
-    if (resolution.ambiguous && !allowLowConfidence) {
+    if (resolution.ambiguous && !trusted) {
       return {
         ok: false,
         reason: 'aday belirsiz, akis durduruldu',
@@ -167,6 +173,7 @@ export class TargetResolver {
         voteScore: confidence,
         contextScore: 0,
         geometryScore: 0,
+        anchorScore: 0,
         votes: [QUERY_STRATEGY[query.kind]]
       })),
       durationMs: Date.now() - started,

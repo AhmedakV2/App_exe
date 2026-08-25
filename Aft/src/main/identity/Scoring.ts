@@ -24,14 +24,54 @@ const STRONG_KINDS: ReadonlySet<StrategyKind> = new Set([
   'form-field'
 ])
 
+// Kararli tanimlayicilarin tek basina tasidigi kanit gucu. Sayfa degisip zayif
+// stratejiler bayatlasa bile bu capalar hedefi tek basina isaret edebilir.
+const ANCHOR_STRENGTH: Partial<Record<StrategyKind, number>> = {
+  'test-attribute': 1,
+  'element-id': 0.94,
+  'form-field': 0.86
+}
+
+// Capa yalnizca tek aday uretmisse tam guc, birden fazla aday uretmisse kismi guc alir.
+const SHARED_ANCHOR = 0.5
+
+// Capa puani asla puani dusurmez, kalan boslugun en fazla bu kadarini kapatir.
+const ANCHOR_LIFT = 0.5
+
 const STRONG_TIER = 0.72
 
 const FAIR_TIER = 0.48
 
-export function combine(voteScore: number, contextScore: number, geometryScore: number): number {
-  return round(
+export function combine(
+  voteScore: number,
+  contextScore: number,
+  geometryScore: number,
+  anchorScore = 0
+): number {
+  const base =
     voteScore * VOTE_SHARE + contextScore * CONTEXT_SHARE + geometryScore * GEOMETRY_SHARE
-  )
+
+  return round(base + (1 - base) * clamp01(anchorScore) * ANCHOR_LIFT)
+}
+
+/**
+ * Adayin lehine oy veren en guclu kararli tanimlayiciyi puanlar. Tek aday ureten
+ * bir test niteligi ya da kimlik alani neredeyse kesin kanittir; ayni degeri
+ * birden fazla eleman tasiyorsa kanit gucu yariya iner.
+ */
+export function anchorScore(
+  votes: readonly StrategyKind[],
+  uniqueKinds: ReadonlySet<StrategyKind>
+): number {
+  let best = 0
+
+  for (const kind of votes) {
+    const strength = ANCHOR_STRENGTH[kind]
+    if (strength === undefined) continue
+    const scaled = uniqueKinds.has(kind) ? strength : strength * SHARED_ANCHOR
+    if (scaled > best) best = scaled
+  }
+  return round(best)
 }
 
 export function contextScore(
@@ -128,6 +168,10 @@ function distance(a: Rect, b: Rect): number {
 
 function diagonal(viewport: { width: number; height: number }): number {
   return Math.sqrt(viewport.width * viewport.width + viewport.height * viewport.height)
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value))
 }
 
 function round(value: number): number {
