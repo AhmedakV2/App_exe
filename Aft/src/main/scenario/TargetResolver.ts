@@ -65,7 +65,9 @@ export class TargetResolver {
         record
       }
     }
-    if (resolution.state === 'low-confidence' && !allowLowConfidence) {
+    const trusted = allowLowConfidence || outcome.healed
+
+    if (resolution.state === 'low-confidence' && !trusted) {
       return {
         ok: false,
         reason: resolution.message || 'dusuk guvenli eslesme',
@@ -74,7 +76,7 @@ export class TargetResolver {
         record
       }
     }
-    if (resolution.ambiguous && !allowLowConfidence) {
+    if (resolution.ambiguous && !trusted) {
       return {
         ok: false,
         reason: 'aday belirsiz, akis durduruldu',
@@ -167,6 +169,7 @@ export class TargetResolver {
         voteScore: confidence,
         contextScore: 0,
         geometryScore: 0,
+        anchorScore: 0,
         votes: [QUERY_STRATEGY[query.kind]]
       })),
       durationMs: Date.now() - started,
