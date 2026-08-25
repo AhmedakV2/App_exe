@@ -17,6 +17,7 @@
     "playback": "electron-vite build && electron ./out/main/playback.js",
     "playback:verify": "electron-vite build && electron ./out/main/playback-verify.js",
     "record:verify": "electron-vite build && electron ./out/main/record-verify.js",
+    "repeat:verify": "electron-vite build && electron ./out/main/repeat-verify.js",
     "verify": "electron-vite build && electron ./out/main/verify.js",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",

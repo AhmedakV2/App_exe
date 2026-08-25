@@ -20,8 +20,22 @@ export class TargetResolver {
 
   resolve(target: StepTarget, index: ModelIndex, allowLowConfidence: boolean): TargetResolution {
     if (target.kind === 'ordinal') return this.byOrdinal(target, index)
-    if (target.kind === 'query') return this.byQuery(target, index, allowLowConfidence)
 
+    if (target.kind === 'query') {
+      const outcome = this.byQuery(target, index, allowLowConfidence)
+      if (outcome.ok || !this.descriptorOf(target)) return outcome
+      const fallback = this.byDescriptor(target, index, allowLowConfidence)
+      return fallback.ok ? fallback : outcome
+    }
+
+    return this.byDescriptor(target, index, allowLowConfidence)
+  }
+
+  private byDescriptor(
+    target: StepTarget,
+    index: ModelIndex,
+    allowLowConfidence: boolean
+  ): TargetResolution {
     const descriptor = this.descriptorOf(target)
     if (!descriptor) {
       return {

@@ -11,7 +11,6 @@ const SHORTCUTS: { name: string; code: string }[] = [
   { name: 'Komut geçmişi', code: '↑ / ↓' }
 ]
 
-
 export default function SettingsWindow(): React.JSX.Element {
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
   const [autoTerm, setAutoTerm] = useState(true)
