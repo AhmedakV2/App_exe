@@ -25,6 +25,8 @@ const SOURCE = `(function () {
   var TYPING_KEYS = ['Backspace','Delete','Insert',' '];
   var MODIFIER_KEYS = ['Shift','Control','Alt','Meta','AltGraph','CapsLock','NumLock','ScrollLock','Dead'];
   var CHANGE_QUIET_MS = 700;
+  var PROMOTE_HOPS = 4;
+  var PROMOTE_VIEW = 0.5;
   var TONES = { strong: '#3ecf8e', weak: '#f0a02a', blocked: '#ef4444' };
 
   function attr(el, name) {
@@ -141,6 +143,68 @@ const SOURCE = `(function () {
     return node && node.nodeType === 1 ? node : null;
   }
 
+  function parentOf(node) {
+    if (!node) return null;
+    return node.parentElement || (node.parentNode && node.parentNode.host) || null;
+  }
+
+  function areaOf(el) {
+    var rect = box(el);
+    return rect ? rect.w * rect.h : 0;
+  }
+
+  function viewArea() {
+    return Math.max(1, (window.innerWidth || 0) * (window.innerHeight || 0));
+  }
+
+  function alone(el, name, value) {
+    try {
+      var root = el.getRootNode ? el.getRootNode() : document;
+      if (!root || typeof root.querySelectorAll !== 'function') return false;
+      var safe = window.CSS && CSS.escape ? CSS.escape(value) : value;
+      return root.querySelectorAll('[' + name + '="' + safe + '"]').length === 1;
+    } catch (e) { return false; }
+  }
+
+  function speaks(text) {
+    if (!text || text.length < 2 || text.length > 64) return false;
+    if (/\\d{5,}/.test(text)) return false;
+    return /[a-z\\u00c0-\\u024f]/i.test(text);
+  }
+
+  function named(el) {
+    var mark = testAttribute(el);
+    if (mark.value && alone(el, mark.name, mark.value)) return true;
+    var id = attr(el, 'id');
+    if (id && alone(el, 'id', id)) return true;
+    var field = attr(el, 'name');
+    if (field && alone(el, 'name', field)) return true;
+    var label = attr(el, 'aria-label');
+    if (label && alone(el, 'aria-label', label)) return true;
+    return speaks(clip(el.innerText || el.textContent, 64));
+  }
+
+  function promote(el) {
+    if (!el || el.nodeType !== 1 || named(el)) return el;
+
+    var limit = viewArea() * PROMOTE_VIEW;
+    var cursor = el;
+
+    for (var hop = 0; hop < PROMOTE_HOPS; hop++) {
+      cursor = parentOf(cursor);
+      if (!cursor || cursor.nodeType !== 1) return el;
+      var tag = (cursor.tagName || '').toLowerCase();
+      if (tag === 'body' || tag === 'html') return el;
+      if (areaOf(cursor) > limit) return el;
+      if (named(cursor)) return cursor;
+    }
+    return el;
+  }
+
+  function pickTarget(event) {
+    return promote(pick(event));
+  }
+
   function post(item) {
     try {
       if (typeof window.__aftRecordSend !== 'function') return false;
@@ -192,7 +256,7 @@ const SOURCE = `(function () {
   }
 
   bind('mousedown', document, function (event) {
-    markProbe(pick(event));
+    markProbe(pickTarget(event));
   });
 
   bind('click', document, function (event) {
@@ -200,19 +264,19 @@ const SOURCE = `(function () {
     var now = Date.now();
     var forwarded = !event.detail && (now - lastPointerAt < CHANGE_QUIET_MS || now - lastKeyAt < CHANGE_QUIET_MS);
     if (forwarded) return;
-    var el = pick(event);
+    var el = pickTarget(event);
     lastPointerAt = now;
     if (el) emit('click', el, { detail: event.detail || 1 });
   });
 
   bind('dblclick', document, function (event) {
-    var el = pick(event);
+    var el = pickTarget(event);
     lastPointerAt = Date.now();
     if (el) emit('double-click', el, { detail: 2 });
   });
 
   bind('contextmenu', document, function (event) {
-    var el = pick(event);
+    var el = pickTarget(event);
     lastPointerAt = Date.now();
     if (el) emit('right-click', el, {});
   });
