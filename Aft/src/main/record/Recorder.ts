@@ -7,7 +7,7 @@ import { edit, renumber, type EditOutcome } from './Editor'
 import { labelOf, normalize, sourceKey } from './Normalizer'
 import { suppress } from './NoiseFilter'
 import { assess, blocked, degraded, plain } from './Quality'
-import { assertionOptions, build, descriptorTarget, scrollTitle, stepId } from './StepFactory'
+import { assertionOptions, build, scrollTitle, steadyTarget, stepId } from './StepFactory'
 import {
   DEFAULT_RECORD,
   RECORD_VERSION,
@@ -351,9 +351,10 @@ export class Recorder {
     this.config.descriptors?.save(captured.descriptor)
 
     const advice = assess(captured.descriptor, located.element, located.index, intent.raw.element)
-    const target = descriptorTarget(
+    const target = steadyTarget(
       captured.descriptor,
-      captured.descriptor.target.name || intent.label
+      captured.descriptor.target.name || intent.label,
+      advice
     )
     const step = build(id, intent, target, session.options)
 

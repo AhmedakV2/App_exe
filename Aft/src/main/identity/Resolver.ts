@@ -97,9 +97,10 @@ export class Resolver {
     const best = candidates[0] ?? null
     const runnerUp = candidates[1] ?? null
     const confidence = best?.score ?? 0
-    const ambiguous = Boolean(
-      best && runnerUp && best.score - runnerUp.score < options.ambiguityMargin
-    )
+    const decisive = Boolean(best && pinned(best.votes, evidence.uniqueKinds))
+    const ambiguous =
+      !decisive &&
+      Boolean(best && runnerUp && best.score - runnerUp.score < options.ambiguityMargin)
     const state = resolveState(confidence, ambiguous, options)
 
     if (this.history && options.useHistory) {
@@ -172,6 +173,10 @@ export class Resolver {
     out.sort((a, b) => b.score - a.score || a.ordinal - b.ordinal)
     return out.slice(0, options.maxCandidates)
   }
+}
+
+function pinned(votes: readonly StrategyKind[], uniqueKinds: ReadonlySet<StrategyKind>): boolean {
+  return votes.some((kind) => uniqueKinds.has(kind))
 }
 
 function staleNote(silent: readonly StrategyKind[]): string {

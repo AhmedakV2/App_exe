@@ -30,8 +30,6 @@ const ANCHOR_STRENGTH: Partial<Record<StrategyKind, number>> = {
   'form-field': 0.86
 }
 
-const SHARED_ANCHOR = 0.5
-
 const ANCHOR_LIFT = 0.5
 
 const STRONG_TIER = 0.72
@@ -57,10 +55,10 @@ export function anchorScore(
   let best = 0
 
   for (const kind of votes) {
+    if (!uniqueKinds.has(kind)) continue
     const strength = ANCHOR_STRENGTH[kind]
     if (strength === undefined) continue
-    const scaled = uniqueKinds.has(kind) ? strength : strength * SHARED_ANCHOR
-    if (scaled > best) best = scaled
+    if (strength > best) best = strength
   }
   return round(best)
 }
