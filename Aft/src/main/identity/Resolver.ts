@@ -29,11 +29,8 @@ interface Bucket {
 }
 
 interface Evidence {
-  /** Aday ureten stratejilerin toplam agirligi. Oy payinin paydasi budur. */
   informed: number
-  /** Hic aday uretmeyen, bu yuzden adaylar arasinda ayirt edici olmayan stratejiler. */
   silent: StrategyKind[]
-  /** Tek bir eleman ureten stratejiler. */
   uniqueKinds: Set<StrategyKind>
 }
 
@@ -77,9 +74,6 @@ export class Resolver {
       const at = Date.now()
       const matches = strategy.match(payload, index)
 
-      // Hic aday uretmeyen strateji adaylar arasinda ayrim yapmaz; paydaya
-      // katilirsa dogru elemanin puanini da bosuna dusurur. Sadece aday ureten
-      // stratejiler oylamaya girer.
       if (matches.length) {
         evidence.informed += weight
         if (unique(matches)) evidence.uniqueKinds.add(payload.kind)

@@ -65,10 +65,6 @@ export class TargetResolver {
         record
       }
     }
-    // Otomatik onarim yalnizca belirsizlik yokken ve guven onarim esiginin
-    // uzerindeyken calisir; kimlik bu adayla yeniden yazildiysa adim da bu
-    // adayla ilerlemelidir. Aksi halde descriptor guncellenir ama adim yine de
-    // "dusuk guven" diye duser.
     const trusted = allowLowConfidence || outcome.healed
 
     if (resolution.state === 'low-confidence' && !trusted) {

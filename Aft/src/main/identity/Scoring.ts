@@ -24,18 +24,14 @@ const STRONG_KINDS: ReadonlySet<StrategyKind> = new Set([
   'form-field'
 ])
 
-// Kararli tanimlayicilarin tek basina tasidigi kanit gucu. Sayfa degisip zayif
-// stratejiler bayatlasa bile bu capalar hedefi tek basina isaret edebilir.
 const ANCHOR_STRENGTH: Partial<Record<StrategyKind, number>> = {
   'test-attribute': 1,
   'element-id': 0.94,
   'form-field': 0.86
 }
 
-// Capa yalnizca tek aday uretmisse tam guc, birden fazla aday uretmisse kismi guc alir.
 const SHARED_ANCHOR = 0.5
 
-// Capa puani asla puani dusurmez, kalan boslugun en fazla bu kadarini kapatir.
 const ANCHOR_LIFT = 0.5
 
 const STRONG_TIER = 0.72
@@ -54,11 +50,6 @@ export function combine(
   return round(base + (1 - base) * clamp01(anchorScore) * ANCHOR_LIFT)
 }
 
-/**
- * Adayin lehine oy veren en guclu kararli tanimlayiciyi puanlar. Tek aday ureten
- * bir test niteligi ya da kimlik alani neredeyse kesin kanittir; ayni degeri
- * birden fazla eleman tasiyorsa kanit gucu yariya iner.
- */
 export function anchorScore(
   votes: readonly StrategyKind[],
   uniqueKinds: ReadonlySet<StrategyKind>

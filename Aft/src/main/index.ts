@@ -221,7 +221,6 @@ function settingsAlive(): boolean {
   return Boolean(settingsWin && !settingsWin.isDestroyed())
 }
 
-/** İlk açılışta pencere ana pencerenin ortasına düşer, sonrasında son yeri korunur. */
 function settingsSpotFor(): { x: number; y: number } | null {
   if (settingsSpot) return settingsSpot
   if (!win || win.isDestroyed()) return null
@@ -304,7 +303,6 @@ function setSettings(open: boolean): void {
   else closeSettings()
 }
 
-/** Ana pencere tercihleri yayınlar, ayar penceresi bunları dinler. */
 function publishPrefs(value: unknown): void {
   if (!value || typeof value !== 'object') return
   const raw = value as Partial<AppPrefs>
@@ -319,7 +317,6 @@ function publishPrefs(value: unknown): void {
   if (settingsAlive()) (settingsWin as BrowserWindow).webContents.send('aft:prefs', prefs)
 }
 
-/** Ayar penceresinden gelen değişiklik ana pencereye iletilir, kayıt orada tutulur. */
 function patchPrefs(patch: unknown): void {
   if (!patch || typeof patch !== 'object') return
   if (!chatView || chatView.webContents.isDestroyed()) return
