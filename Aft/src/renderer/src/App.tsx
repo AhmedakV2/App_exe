@@ -3,7 +3,6 @@ import type {
   AgentAction,
   BrowserState,
   DragAxis,
-  ExecuteResult,
   NavKind,
   StageBox,
   WindowAction
@@ -11,250 +10,52 @@ import type {
 import { isThemeId, paintTheme, readTheme, storeTheme, themeOf } from './themes'
 import type { ThemeId } from './themes'
 import { Glyph, IconButton } from './icons'
-import RecordPanel from './RecordPanel'
-import PlaybackPanel from './PlaybackPanel'
+import { clamp, formatMs, shortUrl, toUrl } from './format'
+import { useConsole } from './useConsole'
+import type { Report } from './report'
+import BrowserPage from './pages/BrowserPage'
+import RecordPage from './pages/RecordPage'
+import ScenarioPage from './pages/ScenarioPage'
+import RunPage from './pages/RunPage'
+import ResultPage from './pages/ResultPage'
+import IdentityPage from './pages/IdentityPage'
+import CoveragePage from './pages/CoveragePage'
+import DataPage from './pages/DataPage'
 
-type LineKind = 'in' | 'ok' | 'err' | 'note'
-type Fact = { label: string; ok: boolean }
-type Line = {
-  id: number
-  kind: LineKind
-  text: string
-  time: string
-  ms?: number
-  facts?: Fact[]
-  detail?: string[]
-}
-type Extra = { ms?: number; facts?: Fact[]; detail?: string[] }
-type DockTab = 'record' | 'playback' | null
-type Entry = { key: string; usage: string; hint: string }
-type ActionEntry = Entry & { build: (args: string[]) => AgentAction | null }
+type PageId =
+  'browser' | 'record' | 'scenarios' | 'run' | 'results' | 'identity' | 'coverage' | 'data'
 
-const MAX_LINES = 400
-const PIN_SLACK = 48
-const MAX_SUGGESTIONS = 6
+type NavItem = { id: PageId; label: string; glyph: string; stage: boolean }
 
-const CHAT_KEY = 'aft:chat-width'
+const NAV: NavItem[] = [
+  { id: 'browser', label: 'Tarayıcı', glyph: 'globe', stage: true },
+  { id: 'record', label: 'Kayıt', glyph: 'record', stage: true },
+  { id: 'scenarios', label: 'Senaryolar', glyph: 'library', stage: false },
+  { id: 'run', label: 'Koşum', glyph: 'play', stage: true },
+  { id: 'results', label: 'Sonuçlar', glyph: 'history', stage: false },
+  { id: 'identity', label: 'Kimlik', glyph: 'pulse', stage: false },
+  { id: 'coverage', label: 'Kapsam', glyph: 'radar', stage: false },
+  { id: 'data', label: 'Veri', glyph: 'database', stage: false }
+]
+
+const PAGE_MAP = new Map(NAV.map((item) => [item.id, item]))
+
+const LIST_KEY = 'aft:list-width'
 const TERM_KEY = 'aft:term-height'
-const REC_KEY = 'aft:rec-width'
+const SIDE_KEY = 'aft:side-width'
+const PAGE_KEY = 'aft:page'
 const AUTO_TERM_KEY = 'aft:auto-terminal'
 const AUTO_BACK_KEY = 'aft:auto-terminal-restore'
-const CHAT_SIZE = 320
+
+const LIST_SIZE = 300
 const TERM_SIZE = 268
-const REC_SIZE = 372
-const CHAT_MIN = 220
+const SIDE_SIZE = 380
+const LIST_MIN = 220
 const TERM_MIN = 120
-const REC_MIN = 300
-const CHAT_MAX_RATIO = 0.6
+const SIDE_MIN = 320
+const LIST_MAX_RATIO = 0.5
 const TERM_MAX_RATIO = 0.72
-const REC_MAX_RATIO = 0.62
-
-const ROLES: Record<LineKind, { label: string; glyph: string }> = {
-  in: { label: 'Komut', glyph: 'prompt' },
-  ok: { label: 'Tamamlandı', glyph: 'check' },
-  err: { label: 'Yapılamadı', glyph: 'alert' },
-  note: { label: 'Bilgi', glyph: 'info' }
-}
-
-function num(value: string | undefined): number | null {
-  if (value === undefined || value.trim() === '') return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-const ACTIONS: ActionEntry[] = [
-  {
-    key: 'go',
-    usage: 'go <adres>',
-    hint: 'Verilen adrese gider',
-    build: (a) => (a[0] ? { action: 'go_to_url', url: toUrl(a.join(' ')) } : null)
-  },
-  {
-    key: 'click',
-    usage: 'click <no>',
-    hint: 'Öğeye tıklar',
-    build: (a) => {
-      const index = num(a[0])
-      return index === null ? null : { action: 'click', index }
-    }
-  },
-  {
-    key: 'dbclick',
-    usage: 'dbclick <no>',
-    hint: 'Öğeye çift tıklar',
-    build: (a) => {
-      const index = num(a[0])
-      return index === null ? null : { action: 'double_click', index }
-    }
-  },
-  {
-    key: 'rclick',
-    usage: 'rclick <no>',
-    hint: 'Öğeye sağ tıklar',
-    build: (a) => {
-      const index = num(a[0])
-      return index === null ? null : { action: 'right_click', index }
-    }
-  },
-  {
-    key: 'type',
-    usage: 'type <no> <metin>',
-    hint: 'Alana metin yazar',
-    build: (a) => {
-      const index = num(a[0])
-      const text = a.slice(1).join(' ')
-      return index === null || !text ? null : { action: 'type', index, text }
-    }
-  },
-  {
-    key: 'clear',
-    usage: 'clear <no>',
-    hint: 'Alanı temizler',
-    build: (a) => {
-      const index = num(a[0])
-      return index === null ? null : { action: 'clear_type', index }
-    }
-  },
-  {
-    key: 'move',
-    usage: 'move <no>',
-    hint: 'İmleci öğenin üzerine taşır',
-    build: (a) => {
-      const index = num(a[0])
-      return index === null ? null : { action: 'mouse_move', index }
-    }
-  },
-  {
-    key: 'scroll',
-    usage: 'scroll <piksel>',
-    hint: 'Sayfayı dikey kaydırır',
-    build: (a) => {
-      const deltaY = num(a[0])
-      return deltaY === null ? null : { action: 'scroll', deltaY }
-    }
-  },
-  {
-    key: 'snap',
-    usage: 'snap',
-    hint: 'Sayfayı yeniden tarar',
-    build: () => ({ action: 'snapshot' })
-  },
-  {
-    key: 'press',
-    usage: 'press [no] <tuş>',
-    hint: 'Tuşa basar, Ctrl+A gibi bileşimleri de kabul eder',
-    build: (a) => {
-      if (a.length >= 2) {
-        const index = num(a[0])
-        return index === null || !a[1] ? null : { action: 'press_key', index, key: a[1] }
-      }
-      return a[0] ? { action: 'press_key', key: a[0] } : null
-    }
-  },
-  {
-    key: 'sel',
-    usage: 'sel <no> <değer>',
-    hint: 'Açılır listeden seçer',
-    build: (a) => {
-      const index = num(a[0])
-      const optionValue = a.slice(1).join(' ')
-      return index === null || !optionValue ? null : { action: 'select_option', index, optionValue }
-    }
-  },
-  {
-    key: 'upload',
-    usage: 'upload <no> <dosya...>',
-    hint: 'Dosya yükler',
-    build: (a) => {
-      const index = num(a[0])
-      const files = a.slice(1).filter(Boolean)
-      return index === null || !files.length ? null : { action: 'upload', index, files }
-    }
-  },
-  {
-    key: 'wait',
-    usage: 'wait',
-    hint: 'Sayfanın durulmasını bekler',
-    build: () => ({ action: 'wait' })
-  },
-  {
-    key: 'r',
-    usage: 'r',
-    hint: 'Sayfayı yeniler',
-    build: () => ({ action: 'refresh' })
-  }
-]
-
-const BUILTINS: Entry[] = [
-  { key: 'a', usage: 'a', hint: 'Komut listesini yazdırır' },
-  { key: 'c', usage: 'c', hint: 'Terminal geçmişini temizler' },
-  { key: 'rp', usage: 'rp', hint: 'Record & Playback panelini açar/kapatır' }
-]
-
-const PALETTE: Entry[] = [...ACTIONS, ...BUILTINS]
-const ACTION_MAP = new Map(ACTIONS.map((entry) => [entry.key, entry]))
-const PALETTE_KEYS = new Set(PALETTE.map((entry) => entry.key))
-
-function toUrl(input: string): string {
-  const text = input.trim()
-  if (!text) return ''
-  if (/^[a-z][a-z0-9+.-]*:/i.test(text)) return text
-  if (/^(localhost|\d{1,3}(\.\d{1,3}){3})(:\d+)?(\/|$)/i.test(text)) return 'http://' + text
-  if (/^[^\s/?#]+\.[^\s/?#]{2,}/.test(text)) return 'https://' + text
-  return 'https://www.google.com/search?q=' + encodeURIComponent(text)
-}
-
-function shortUrl(raw: string): string {
-  if (!raw) return ''
-  try {
-    const parsed = new URL(raw)
-    const path = parsed.pathname === '/' ? '' : parsed.pathname
-    return parsed.host + path + parsed.search
-  } catch {
-    return raw
-  }
-}
-
-function stamp(): string {
-  const now = new Date()
-  const pad = (value: number): string => String(value).padStart(2, '0')
-  return pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds())
-}
-
-function formatMs(ms: number): string {
-  if (ms < 1000) return ms + ' ms'
-  return (ms / 1000).toFixed(1).replace('.', ',') + ' sn'
-}
-
-function readOutcome(result: ExecuteResult): Extra {
-  const outcome = result.outcome
-  if (!outcome) return {}
-
-  const detail: string[] = []
-  let facts: Fact[] | undefined
-
-  if (!result.ok && outcome.code) detail.push('kod: ' + outcome.code)
-  if (result.ok && outcome.mode === 'direct-call') detail.push('yol: doğrudan çağrı')
-
-  const report = outcome.actionability
-  if (!result.ok && report) {
-    facts = [
-      { label: 'görünür', ok: report.visible },
-      { label: 'etkin', ok: report.enabled },
-      { label: 'kararlı', ok: report.stable },
-      { label: 'üstü açık', ok: report.unobstructed }
-    ]
-    if (report.reason) detail.push('hazırlık: ' + report.reason)
-  }
-
-  for (const dialog of outcome.dialogs)
-    detail.push('diyalog: ' + dialog.type + ' · ' + dialog.policy)
-  for (const download of outcome.downloads) {
-    detail.push('indirme: ' + download.fileName + ' · ' + download.state)
-  }
-
-  return { detail: detail.length ? detail : undefined, facts }
-}
+const SIDE_MAX_RATIO = 0.62
 
 function sameBox(a: StageBox | null, b: StageBox): boolean {
   if (!a) return false
@@ -264,10 +65,6 @@ function sameBox(a: StageBox | null, b: StageBox): boolean {
 function part(value: number, total: number): number {
   if (!total) return 0
   return Math.round((value / total) * 10000) / 10000
-}
-
-function clamp(value: number, low: number, high: number): number {
-  return Math.min(Math.max(value, low), Math.max(low, high))
 }
 
 function readSize(key: string, fallback: number): number {
@@ -306,49 +103,20 @@ function storeFlag(key: string, value: boolean): void {
   }
 }
 
+function readPage(): PageId {
+  try {
+    const raw = window.localStorage.getItem(PAGE_KEY)
+    return raw && PAGE_MAP.has(raw as PageId) ? (raw as PageId) : 'browser'
+  } catch {
+    return 'browser'
+  }
+}
+
 const Logo = memo(function Logo(): React.JSX.Element {
   return (
     <svg width="18" height="18" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
       <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
     </svg>
-  )
-})
-
-const LogRow = memo(function LogRow({ line }: { line: Line }): React.JSX.Element {
-  const role = ROLES[line.kind]
-  return (
-    <div className={'line ' + line.kind}>
-      <span className="line-mark">
-        <Glyph name={role.glyph} size={12} />
-      </span>
-      <div className="line-body">
-        <div className="line-meta">
-          <span className="line-role">{role.label}</span>
-          <span className="line-time">{line.time}</span>
-          {line.ms === undefined ? null : <span className="line-ms">{formatMs(line.ms)}</span>}
-        </div>
-        <div className="line-text">{line.text}</div>
-        {line.facts ? (
-          <div className="facts">
-            {line.facts.map((fact) => (
-              <span key={fact.label} className={fact.ok ? 'fact yes' : 'fact no'}>
-                <span className="fact-mark">{fact.ok ? '✓' : '✕'}</span>
-                {fact.label}
-              </span>
-            ))}
-          </div>
-        ) : null}
-        {line.detail ? (
-          <div className="detail">
-            {line.detail.map((row, index) => (
-              <div key={index} className="detail-row">
-                {row}
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </div>
   )
 })
 
@@ -368,92 +136,69 @@ const EMPTY_STATE: BrowserState = {
 
 export default function App(): React.JSX.Element {
   const [state, setState] = useState<BrowserState>(EMPTY_STATE)
-  const [chatOpen, setChatOpen] = useState(false)
-  const [lines, setLines] = useState<Line[]>([])
-  const [cmd, setCmd] = useState('')
-  const [pending, setPending] = useState(false)
-  const [sel, setSel] = useState(0)
-  const [paletteOff, setPaletteOff] = useState(false)
+  const [page, setPage] = useState<PageId>(() => readPage())
+  const [listOpen, setListOpen] = useState(false)
   const [drag, setDrag] = useState<DragAxis | null>(null)
   const [urlFocused, setUrlFocused] = useState(false)
   const [urlDraft, setUrlDraft] = useState('')
-  const [elements, setElements] = useState(0)
-  const [lastMs, setLastMs] = useState(0)
-  const [dock, setDock] = useState<DockTab>(null)
   const [recording, setRecording] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [library, setLibrary] = useState(0)
+  const [runRequest, setRunRequest] = useState('')
+  const [focusSeed, setFocusSeed] = useState(0)
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
   const [autoTerm, setAutoTerm] = useState(() => readFlag(AUTO_TERM_KEY, true))
   const [autoBack, setAutoBack] = useState(() => readFlag(AUTO_BACK_KEY, false))
-  const [chatWidth, setChatWidth] = useState(() => readSize(CHAT_KEY, CHAT_SIZE))
+  const [listWidth, setListWidth] = useState(() => readSize(LIST_KEY, LIST_SIZE))
   const [termHeight, setTermHeight] = useState(() => readSize(TERM_KEY, TERM_SIZE))
-  const [recWidth, setRecWidth] = useState(() => readSize(REC_KEY, REC_SIZE))
+  const [sideWidth, setSideWidth] = useState(() => readSize(SIDE_KEY, SIDE_SIZE))
   const [space, setSpace] = useState({ width: 0, height: 0 })
+  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null)
 
-  const logRef = useRef<HTMLDivElement | null>(null)
-  const inputRef = useRef<HTMLInputElement | null>(null)
+  const term = useConsole()
+  const { push: pushLine, absorb: absorbResult } = term
+
   const urlRef = useRef<HTMLInputElement | null>(null)
-  const stageRef = useRef<HTMLDivElement | null>(null)
   const spaceRef = useRef<HTMLDivElement | null>(null)
-  const pinnedRef = useRef(true)
-  const seqRef = useRef(0)
-  const cmdRef = useRef('')
-  const pendingRef = useRef(false)
-  const historyRef = useRef<string[]>([])
-  const cursorRef = useRef(-1)
   const stageBoxRef = useRef<StageBox | null>(null)
   const dragRef = useRef<DragAxis | null>(null)
   const autoTermRef = useRef(autoTerm)
   const autoBackRef = useRef(autoBack)
   const termOpenRef = useRef(false)
   const autoOpenedRef = useRef(false)
-  const dockBackRef = useRef<Exclude<DockTab, null>>('record')
 
   const terminalOpen = state.terminalOpen
   const settingsOpen = state.settingsOpen
-  const chatSize = space.width
-    ? clamp(chatWidth, CHAT_MIN, Math.floor(space.width * CHAT_MAX_RATIO))
-    : chatWidth
+  const current = PAGE_MAP.get(page) ?? NAV[0]
+
+  const listSize = space.width
+    ? clamp(listWidth, LIST_MIN, Math.floor(space.width * LIST_MAX_RATIO))
+    : listWidth
   const termSize = space.height
     ? clamp(termHeight, TERM_MIN, Math.floor(space.height * TERM_MAX_RATIO))
     : termHeight
-  const recSize = space.width
-    ? clamp(recWidth, REC_MIN, Math.floor(space.width * REC_MAX_RATIO))
-    : recWidth
+  const sideSize = space.width
+    ? clamp(sideWidth, SIDE_MIN, Math.floor(space.width * SIDE_MAX_RATIO))
+    : sideWidth
 
-  const push = useCallback((kind: LineKind, text: string, extra?: Extra): void => {
-    seqRef.current += 1
-    const line: Line = { id: seqRef.current, kind, text, time: stamp(), ...extra }
-    setLines((prev) => {
-      const next = prev.length >= MAX_LINES ? prev.slice(prev.length - MAX_LINES + 1) : prev.slice()
-      next.push(line)
-      return next
-    })
-  }, [])
-
-  const writeCmd = useCallback((value: string): void => {
-    cmdRef.current = value
-    setCmd(value)
-  }, [])
-
-  const focusPrompt = useCallback((): void => {
-    const el = inputRef.current
-    if (!el || el.disabled) return
-    if (document.activeElement === el) return
-    el.focus()
-  }, [])
+  const report = useCallback(
+    (entry: Report): void => {
+      pushLine(entry.level, entry.text, entry.detail?.length ? { detail: entry.detail } : undefined)
+    },
+    [pushLine]
+  )
 
   const reportStage = useCallback((): void => {
-    const el = stageRef.current
-    if (!el) return
+    if (!stageEl) return
 
     const view = document.documentElement
     const width = view.clientWidth
     const height = view.clientHeight
     if (!width || !height) return
 
-    const rect = el.getBoundingClientRect()
+    const rect = stageEl.getBoundingClientRect()
+    if (!rect.width || !rect.height) return
+
     const next: StageBox = {
       x: part(rect.left, width),
       y: part(rect.top, height),
@@ -464,13 +209,10 @@ export default function App(): React.JSX.Element {
     if (sameBox(stageBoxRef.current, next)) return
     stageBoxRef.current = next
     window.aft.setStage(next)
-  }, [])
+  }, [stageEl])
 
   useEffect(() => {
-    const off = window.aft.onState((next) => {
-      setState(next)
-      setChatOpen(next.chatOpen)
-    })
+    const off = window.aft.onState((next) => setState(next))
     window.aft.requestState()
     return off
   }, [])
@@ -482,20 +224,32 @@ export default function App(): React.JSX.Element {
   }, [theme])
 
   useEffect(() => {
-    const el = stageRef.current
-    if (!el) return
+    try {
+      window.localStorage.setItem(PAGE_KEY, page)
+    } catch {
+      return
+    }
+  }, [page])
+
+  useEffect(() => {
+    window.aft.setStageShown(current.stage)
+  }, [current.stage])
+
+  useEffect(() => {
+    if (!stageEl) return
 
     const observer = new ResizeObserver(() => reportStage())
-    observer.observe(el)
+    observer.observe(stageEl)
     observer.observe(document.documentElement)
     window.addEventListener('resize', reportStage)
+    stageBoxRef.current = null
     reportStage()
 
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', reportStage)
     }
-  }, [reportStage])
+  }, [reportStage, stageEl])
 
   useEffect(reportStage)
 
@@ -531,11 +285,7 @@ export default function App(): React.JSX.Element {
   }, [autoBack])
 
   useEffect(() => {
-    window.aft.publishPrefs({
-      theme,
-      autoTerminal: autoTerm,
-      autoTerminalRestore: autoBack
-    })
+    window.aft.publishPrefs({ theme, autoTerminal: autoTerm, autoTerminalRestore: autoBack })
   }, [autoBack, autoTerm, theme])
 
   useEffect(() => {
@@ -551,17 +301,13 @@ export default function App(): React.JSX.Element {
   }, [terminalOpen])
 
   useEffect(() => {
-    if (dock) dockBackRef.current = dock
-  }, [dock])
-
-  useEffect(() => {
     const offUpdate = window.aftRecord.onUpdate((view) => {
       setRecording(view.status === 'recording' || view.status === 'paused')
     })
 
     const offNotice = window.aftRecord.onNotice((notice) => {
       if (notice.level === 'info') return
-      push(notice.level === 'error' ? 'err' : 'note', notice.message, {
+      pushLine(notice.level === 'error' ? 'err' : 'note', notice.message, {
         detail: notice.detail.length ? notice.detail : undefined
       })
     })
@@ -570,49 +316,15 @@ export default function App(): React.JSX.Element {
       offUpdate()
       offNotice()
     }
-  }, [push])
+  }, [pushLine])
 
   useEffect(() => {
     return window.aft.onFocusUrl(() => urlRef.current?.focus())
   }, [])
 
   useEffect(() => {
-    return window.aft.onFocusTerminal(() => focusPrompt())
-  }, [focusPrompt])
-
-  useEffect(() => {
-    if (!terminalOpen || !pinnedRef.current) return
-    const log = logRef.current
-    if (!log) return
-    log.scrollTop = log.scrollHeight
-  }, [lines, terminalOpen, termSize])
-
-  useEffect(() => {
-    if (!terminalOpen || urlFocused) return
-
-    const keep = (): void => {
-      const el = inputRef.current
-      if (!el || el.disabled) return
-      const active = document.activeElement
-      if (active === el) return
-      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return
-      if (active instanceof HTMLSelectElement) return
-      el.focus()
-    }
-
-    keep()
-    const timer = window.setTimeout(keep, 60)
-    window.addEventListener('focus', keep)
-    document.addEventListener('focusin', keep)
-    document.addEventListener('visibilitychange', keep)
-
-    return () => {
-      window.clearTimeout(timer)
-      window.removeEventListener('focus', keep)
-      document.removeEventListener('focusin', keep)
-      document.removeEventListener('visibilitychange', keep)
-    }
-  }, [terminalOpen, urlFocused, pending, state.url, state.loading, termSize])
+    return window.aft.onFocusTerminal(() => setFocusSeed((prev) => prev + 1))
+  }, [])
 
   useEffect(() => {
     return window.aft.onPointer((spot) => {
@@ -622,11 +334,11 @@ export default function App(): React.JSX.Element {
 
       const view = document.documentElement
       if (axis === 'chat') {
-        setChatWidth(Math.round(spot.x * view.clientWidth - box.left))
+        setListWidth(Math.round(spot.x * view.clientWidth - box.left))
         return
       }
       if (axis === 'record') {
-        setRecWidth(Math.round(box.right - spot.x * view.clientWidth))
+        setSideWidth(Math.round(box.right - spot.x * view.clientWidth))
         return
       }
       setTermHeight(Math.round(box.bottom - spot.y * view.clientHeight))
@@ -664,20 +376,13 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     if (drag) return
-    storeSize(CHAT_KEY, chatSize)
+    storeSize(LIST_KEY, listSize)
     storeSize(TERM_KEY, termSize)
-    storeSize(REC_KEY, recSize)
-  }, [drag, chatSize, termSize, recSize])
+    storeSize(SIDE_KEY, sideSize)
+  }, [drag, listSize, termSize, sideSize])
 
-  const onLogScroll = useCallback((): void => {
-    const log = logRef.current
-    if (!log) return
-    pinnedRef.current = log.scrollHeight - log.scrollTop - log.clientHeight <= PIN_SLACK
-  }, [])
-
-  const nav = useCallback((kind: NavKind): void => {
-    window.aft.nav(kind)
-  }, [])
+  const nav = useCallback((kind: NavKind): void => window.aft.nav(kind), [])
+  const winAction = useCallback((action: WindowAction): void => window.aft.window(action), [])
 
   const goBack = useCallback(() => nav('back'), [nav])
   const goForward = useCallback(() => nav('forward'), [nav])
@@ -687,16 +392,12 @@ export default function App(): React.JSX.Element {
     [nav, state.loading]
   )
 
-  const winAction = useCallback((action: WindowAction): void => {
-    window.aft.window(action)
-  }, [])
-
   const minimizeWindow = useCallback(() => winAction('minimize'), [winAction])
   const maximizeWindow = useCallback(() => winAction('maximize'), [winAction])
   const closeWindow = useCallback(() => winAction('close'), [winAction])
 
-  const toggleChat = useCallback((): void => {
-    setChatOpen((prev) => {
+  const toggleList = useCallback((): void => {
+    setListOpen((prev) => {
       const next = !prev
       window.aft.setChat(next)
       return next
@@ -707,18 +408,11 @@ export default function App(): React.JSX.Element {
     window.aft.setTerminal(!terminalOpen)
   }, [terminalOpen])
 
-  const closeTerminal = useCallback((): void => {
-    window.aft.setTerminal(false)
-  }, [])
+  const closeTerminal = useCallback((): void => window.aft.setTerminal(false), [])
 
   const toggleSettings = useCallback((): void => {
     window.aft.setSettings(!settingsOpen)
   }, [settingsOpen])
-
-  const clearLog = useCallback((): void => {
-    setLines([])
-    pinnedRef.current = true
-  }, [])
 
   const beginDrag = useCallback(
     (axis: DragAxis, event: React.PointerEvent<HTMLDivElement>): void => {
@@ -731,34 +425,18 @@ export default function App(): React.JSX.Element {
     []
   )
 
-  const beginChatDrag = useCallback(
+  const beginListDrag = useCallback(
     (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('chat', event),
     [beginDrag]
   )
-
   const beginTermDrag = useCallback(
     (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('terminal', event),
     [beginDrag]
   )
-
-  const beginRecDrag = useCallback(
+  const beginSideDrag = useCallback(
     (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('record', event),
     [beginDrag]
   )
-
-  const openDock = useCallback((tab: Exclude<DockTab, null>): void => {
-    setDock((prev) => (prev === tab ? null : tab))
-  }, [])
-
-  const closeDock = useCallback((): void => setDock(null), [])
-
-  const showRecord = useCallback((): void => openDock('record'), [openDock])
-
-  const showPlayback = useCallback((): void => openDock('playback'), [openDock])
-
-  const toggleDock = useCallback((): void => {
-    setDock((prev) => (prev ? null : dockBackRef.current))
-  }, [])
 
   const onPlayBusy = useCallback((running: boolean): void => {
     setPlaying(running)
@@ -775,222 +453,42 @@ export default function App(): React.JSX.Element {
     if (autoBackRef.current) window.aft.setTerminal(false)
   }, [])
 
-  const report = useCallback(
-    (entry: { level: 'ok' | 'err' | 'note'; text: string; detail?: string[] }): void => {
-      push(entry.level, entry.text, entry.detail?.length ? { detail: entry.detail } : undefined)
-    },
-    [push]
-  )
-
   const onSaved = useCallback((): void => {
     setLibrary((prev) => prev + 1)
-    setDock('playback')
+    setPage('scenarios')
   }, [])
+
+  const onLibraryChanged = useCallback((): void => setLibrary((prev) => prev + 1), [])
+
+  const requestRun = useCallback((scenarioId: string): void => {
+    setRunRequest(scenarioId)
+    setPage('run')
+  }, [])
+
+  const runAction = useCallback(
+    (action: AgentAction): void => {
+      void window.aft
+        .execute(action)
+        .then((result) => {
+          absorbResult(result)
+          if (!result.ok) pushLine('err', result.result)
+        })
+        .catch((error: Error) => pushLine('err', 'Köprü hatası: ' + error.message))
+    },
+    [absorbResult, pushLine]
+  )
 
   const toggleVision = useCallback(async (): Promise<void> => {
     const next = !state.vision
     setState((prev) => ({ ...prev, vision: next }))
     try {
-      const result: ExecuteResult = await window.aft.setVision(next)
-      if (!result.ok) {
-        push('err', result.result)
-        return
-      }
-      if (result.page) setElements(result.page.elements.length)
-      push('note', result.result)
-    } catch (err) {
-      push('err', 'Köprü hatası: ' + (err as Error).message)
+      const result = await window.aft.setVision(next)
+      absorbResult(result)
+      pushLine(result.ok ? 'note' : 'err', result.result)
+    } catch (error) {
+      pushLine('err', 'Köprü hatası: ' + (error as Error).message)
     }
-  }, [push, state.vision])
-
-  const suggestions = useMemo(() => {
-    if (pending || paletteOff) return []
-    const text = cmd.trim().toLowerCase()
-    if (!text || /\s/.test(cmd.trim())) return []
-    return PALETTE.filter((entry) => entry.key.startsWith(text)).slice(0, MAX_SUGGESTIONS)
-  }, [cmd, pending, paletteOff])
-
-  const active = suggestions.length ? Math.min(sel, suggestions.length - 1) : -1
-
-  const complete = useCallback(
-    (entry: Entry): void => {
-      writeCmd(entry.key + (/[<[]/.test(entry.usage) ? ' ' : ''))
-      setSel(0)
-      inputRef.current?.focus()
-    },
-    [writeCmd]
-  )
-
-  const printHelp = useCallback((): void => {
-    push('note', 'Kullanılabilir komutlar', {
-      detail: PALETTE.map((entry) => entry.usage.padEnd(26, ' ') + entry.hint)
-    })
-  }, [push])
-
-  const run = useCallback(async (): Promise<void> => {
-    if (pendingRef.current) return
-
-    const input = cmdRef.current.trim()
-    if (!input) return
-
-    const [head = '', ...rest] = input.split(/\s+/)
-    const key = head.toLowerCase()
-
-    const history = historyRef.current
-    if (history[history.length - 1] !== input) history.push(input)
-    if (history.length > 100) history.shift()
-    cursorRef.current = -1
-
-    writeCmd('')
-    setPaletteOff(false)
-    setSel(0)
-    pinnedRef.current = true
-
-    if (key === 'c') {
-      clearLog()
-      focusPrompt()
-      return
-    }
-
-    push('in', input)
-
-    if (key === 'rp') {
-      const tab = key === 'rp' ? 'record' : 'playback'
-      setDock((prev) => {
-        const next = prev === tab ? null : tab
-        push(
-          'note',
-          next
-            ? key === 'rp'
-              ? 'Kayıt paneli açıldı'
-              : 'Oynatma paneli açıldı'
-            : 'Panel kapatıldı'
-        )
-        return next
-      })
-      focusPrompt()
-      return
-    }
-
-    if (key === 'a' || key === '?') {
-      printHelp()
-      focusPrompt()
-      return
-    }
-
-    const entry = ACTION_MAP.get(key)
-    if (!entry) {
-      push('err', 'Bilinmeyen komut: ' + head, { detail: ['Tüm komutlar için: a'] })
-      focusPrompt()
-      return
-    }
-
-    const action = entry.build(rest)
-    if (!action) {
-      push('err', 'Komut eksik veya geçersiz değer içeriyor.', {
-        detail: ['Kullanım: ' + entry.usage]
-      })
-      focusPrompt()
-      return
-    }
-
-    pendingRef.current = true
-    setPending(true)
-    const started = performance.now()
-
-    try {
-      const result = await window.aft.execute(action)
-      const ms = Math.round(performance.now() - started)
-      push(result.ok ? 'ok' : 'err', result.result, { ...readOutcome(result), ms })
-      if (result.page) setElements(result.page.elements.length)
-      setLastMs(ms)
-    } catch (err) {
-      push('err', 'Köprü hatası: ' + (err as Error).message)
-    } finally {
-      pendingRef.current = false
-      setPending(false)
-      window.requestAnimationFrame(() => focusPrompt())
-    }
-  }, [clearLog, focusPrompt, printHelp, push, writeCmd])
-
-  const stepHistory = useCallback(
-    (direction: number): void => {
-      const history = historyRef.current
-      if (!history.length) return
-      setPaletteOff(true)
-
-      if (direction < 0) {
-        const index =
-          cursorRef.current < 0 ? history.length - 1 : Math.max(0, cursorRef.current - 1)
-        cursorRef.current = index
-        writeCmd(history[index])
-        return
-      }
-
-      if (cursorRef.current < 0) return
-      const index = cursorRef.current + 1
-      if (index >= history.length) {
-        cursorRef.current = -1
-        writeCmd('')
-        return
-      }
-      cursorRef.current = index
-      writeCmd(history[index])
-    },
-    [writeCmd]
-  )
-
-  const onCmdChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>): void => {
-      writeCmd(event.target.value)
-      setPaletteOff(false)
-      setSel(0)
-      cursorRef.current = -1
-    },
-    [writeCmd]
-  )
-
-  const onCmdKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>): void => {
-      if (event.key === 'Escape') {
-        setPaletteOff(true)
-        return
-      }
-
-      if (event.key === 'ArrowUp') {
-        event.preventDefault()
-        if (suggestions.length)
-          setSel((prev) => (prev - 1 + suggestions.length) % suggestions.length)
-        else stepHistory(-1)
-        return
-      }
-
-      if (event.key === 'ArrowDown') {
-        event.preventDefault()
-        if (suggestions.length) setSel((prev) => (prev + 1) % suggestions.length)
-        else stepHistory(1)
-        return
-      }
-
-      if (event.key === 'Tab') {
-        if (!suggestions.length || active < 0) return
-        event.preventDefault()
-        complete(suggestions[active])
-        return
-      }
-
-      if (event.key !== 'Enter') return
-      event.preventDefault()
-
-      const typed = cmd.trim().toLowerCase()
-      if (suggestions.length && active >= 0 && !PALETTE_KEYS.has(typed)) {
-        complete(suggestions[active])
-        return
-      }
-      void run()
-    },
-    [active, cmd, complete, run, stepHistory, suggestions]
-  )
+  }, [absorbResult, pushLine, state.vision])
 
   const onUrlFocus = useCallback((): void => {
     setUrlFocused(true)
@@ -1018,16 +516,17 @@ export default function App(): React.JSX.Element {
       if (!url) return
 
       urlRef.current?.blur()
-      void window.aft
-        .execute({ action: 'go_to_url', url })
-        .then((result) => {
-          if (!result.ok) push('err', result.result, readOutcome(result))
-          if (result.page) setElements(result.page.elements.length)
-        })
-        .catch((err: Error) => push('err', 'Köprü hatası: ' + err.message))
+      runAction({ action: 'go_to_url', url })
     },
-    [push, urlDraft]
+    [runAction, urlDraft]
   )
+
+  const status = useMemo(() => {
+    if (recording) return { label: 'kayıtta', tone: 'rec' }
+    if (playing) return { label: 'koşumda', tone: 'run' }
+    if (state.loading) return { label: 'yükleniyor', tone: 'busy' }
+    return { label: 'hazır', tone: 'idle' }
+  }, [playing, recording, state.loading])
 
   return (
     <div className={'shell' + (drag ? ' drag-' + drag : '')}>
@@ -1037,61 +536,76 @@ export default function App(): React.JSX.Element {
             <Logo />
           </span>
 
-          <IconButton name="back" title="Geri" onClick={goBack} disabled={!state.canGoBack} />
-          <IconButton
-            name="forward"
-            title="İleri"
-            onClick={goForward}
-            disabled={!state.canGoForward}
-          />
-          <IconButton
-            name={state.loading ? 'stop' : 'reload'}
-            title={state.loading ? 'Durdur' : 'Yenile'}
-            onClick={refreshPage}
-          />
-          <IconButton name="home" title="Ana sayfa" onClick={goHome} />
-          <IconButton
-            name={state.vision ? 'eye' : 'eyeOff'}
-            title={state.vision ? 'Görüşü kapat' : 'Görüşü aç'}
-            onClick={() => void toggleVision()}
-            active={state.vision}
-            badge={state.vision ? elements : 0}
-          />
+          {current.stage ? (
+            <>
+              <IconButton name="back" title="Geri" onClick={goBack} disabled={!state.canGoBack} />
+              <IconButton
+                name="forward"
+                title="İleri"
+                onClick={goForward}
+                disabled={!state.canGoForward}
+              />
+              <IconButton
+                name={state.loading ? 'stop' : 'reload'}
+                title={state.loading ? 'Durdur' : 'Yenile'}
+                onClick={refreshPage}
+              />
+              <IconButton name="home" title="Ana sayfa" onClick={goHome} />
+              <IconButton
+                name={state.vision ? 'eye' : 'eyeOff'}
+                title="Görüş"
+                onClick={() => void toggleVision()}
+                active={state.vision}
+                badge={state.vision ? term.elements.length : 0}
+              />
+            </>
+          ) : (
+            <span className="bar-page">{current.label}</span>
+          )}
         </div>
 
         <div className="bar-drag" onDoubleClick={maximizeWindow} />
 
-        <div className={'omnibox' + (urlFocused ? ' focused' : '')}>
-          <input
-            ref={urlRef}
-            className="omni-input"
-            value={urlFocused ? urlDraft : shortUrl(state.url)}
-            onChange={(event) => setUrlDraft(event.target.value)}
-            onFocus={onUrlFocus}
-            onBlur={onUrlBlur}
-            onKeyDown={onUrlKeyDown}
-            placeholder="Adres veya arama"
-            spellCheck={false}
-            aria-label="Adres çubuğu"
-          />
-          {state.loading ? <span className="omni-load" /> : null}
-        </div>
+        {current.stage ? (
+          <div className={'omnibox' + (urlFocused ? ' focused' : '')}>
+            <input
+              ref={urlRef}
+              className="omni-input"
+              value={urlFocused ? urlDraft : shortUrl(state.url)}
+              onChange={(event) => setUrlDraft(event.target.value)}
+              onFocus={onUrlFocus}
+              onBlur={onUrlBlur}
+              onKeyDown={onUrlKeyDown}
+              placeholder="Adres"
+              spellCheck={false}
+              aria-label="Adres çubuğu"
+            />
+            {state.loading ? <span className="omni-load" /> : null}
+          </div>
+        ) : null}
 
         <div className="bar-drag" onDoubleClick={maximizeWindow} />
+
         <div className="bar-right">
+          {page === 'browser' ? (
+            <>
+              <IconButton name="grid" title="Öğeler" onClick={toggleList} active={listOpen} />
+              <IconButton
+                name="terminal"
+                title="Terminal Ctrl+K"
+                onClick={toggleTerminal}
+                active={terminalOpen}
+              />
+            </>
+          ) : null}
           <IconButton
             name="settings"
-            title={settingsOpen ? 'Ayarları kapat' : 'Ayarları aç'}
+            title="Ayarlar"
             onClick={toggleSettings}
             active={settingsOpen}
           />
           <span className="bar-gap" />
-          <IconButton
-            name="minimize"
-            title="Simge durumuna küçült"
-            onClick={minimizeWindow}
-            small
-          />
+          <IconButton name="minimize" title="Küçült" onClick={minimizeWindow} small />
           <IconButton
             name={state.maximized ? 'restore' : 'maximize'}
             title={state.maximized ? 'Önceki boyut' : 'Ekranı kapla'}
@@ -1103,235 +617,94 @@ export default function App(): React.JSX.Element {
       </header>
 
       <aside className="shell-side">
-        <IconButton
-          name="chat"
-          title={chatOpen ? 'Ajan sohbetini kapat' : 'Ajan sohbetini aç'}
-          onClick={toggleChat}
-          active={chatOpen}
-        />
-        <IconButton
-          name="suite"
-          title={dock ? 'Kayıt ve oynatma panelini kapat' : 'Kayıt ve oynatma panelini aç'}
-          onClick={toggleDock}
-          active={Boolean(dock)}
-          danger={recording || playing}
-        />
-        <span className="side-gap" />
-        <IconButton
-          name="terminal"
-          title={'Terminal Ctrl+K'}
-          onClick={toggleTerminal}
-          active={terminalOpen}
-        />
+        {NAV.map((item) => (
+          <button
+            key={item.id}
+            className={'nav-btn' + (item.id === page ? ' sel' : '')}
+            title={item.label}
+            aria-label={item.label}
+            aria-pressed={item.id === page}
+            onClick={() => setPage(item.id)}
+            type="button"
+          >
+            <Glyph name={item.glyph} size={17} />
+            {item.id === 'record' && recording ? <span className="nav-dot rec" /> : null}
+            {item.id === 'run' && playing ? <span className="nav-dot run" /> : null}
+          </button>
+        ))}
       </aside>
 
       <div className="workspace" ref={spaceRef}>
-        {chatOpen ? (
-          <section className="panel" style={{ width: chatSize }}>
-            <header className="panel-head">
-              <span className="panel-title">AJAN SOHBETİ</span>
-              <button
-                className="ghost-btn"
-                title="Paneli kapat"
-                aria-label="Paneli kapat"
-                onClick={toggleChat}
-                type="button"
-              >
-                <Glyph name="collapse" size={15} />
-              </button>
-            </header>
-
-            <div className="panel-body" />
-
-            <div
-              className="panel-grip"
-              onPointerDown={beginChatDrag}
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Sohbet panelinin genişliğini değiştir"
-            />
-          </section>
+        {page === 'browser' ? (
+          <BrowserPage
+            stageRef={setStageEl}
+            api={term}
+            vision={state.vision}
+            listOpen={listOpen}
+            listWidth={listSize}
+            terminalOpen={terminalOpen}
+            termHeight={termSize}
+            focusSeed={focusSeed}
+            onListGrip={beginListDrag}
+            onTermGrip={beginTermDrag}
+            onCloseList={toggleList}
+            onCloseTerminal={closeTerminal}
+            onAction={runAction}
+          />
         ) : null}
 
-        <div className="main">
-          <div className="stage" ref={stageRef} />
-
-          {terminalOpen ? (
-            <section className="terminal" style={{ height: termSize }}>
-              <div
-                className="term-grip"
-                onPointerDown={beginTermDrag}
-                role="separator"
-                aria-orientation="horizontal"
-                aria-label="Terminal yüksekliğini değiştir"
-              />
-
-              <header className="term-head">
-                <span className="term-tab">
-                  Local
-                </span>
-
-                {pending ? (
-                  <span className="term-running">
-                    <span className="spinner" />
-                    çalışıyor
-                  </span>
-                ) : null}
-
-                <span className="term-push" />
-
-                <button
-                  className="ghost-btn"
-                  title="Terminali temizle"
-                  aria-label="Terminali temizle"
-                  onClick={clearLog}
-                  type="button"
-                >
-                  <Glyph name="trash" size={14} />
-                </button>
-                <button
-                  className="ghost-btn"
-                  title="Terminali kapat"
-                  aria-label="Terminali kapat"
-                  onClick={closeTerminal}
-                  type="button"
-                >
-                  <Glyph name="minimize" size={14} />
-                </button>
-              </header>
-
-              <div className="term-body">
-                <div
-                  className="log"
-                  ref={logRef}
-                  onScroll={onLogScroll}
-                  role="log"
-                  aria-live="polite"
-                  aria-label="Terminal çıktısı"
-                >
-                  {lines.map((line) => (
-                    <LogRow key={line.id} line={line} />
-                  ))}
-                </div>
-
-                {suggestions.length ? (
-                  <div className="palette" role="listbox" aria-label="Komut önerileri">
-                    <div className="palette-head">
-                      KOMUTLAR · {suggestions.length} / {PALETTE.length}
-                    </div>
-                    {suggestions.map((entry, index) => (
-                      <button
-                        key={entry.key}
-                        className={'palette-row' + (index === active ? ' sel' : '')}
-                        role="option"
-                        aria-selected={index === active}
-                        onMouseEnter={() => setSel(index)}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => complete(entry)}
-                        type="button"
-                      >
-                        <span className="palette-key">{entry.usage}</span>
-                        <span className="palette-hint">{entry.hint}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="composer">
-                <span className="composer-caret">›</span>
-                <input
-                  ref={inputRef}
-                  value={cmd}
-                  onChange={onCmdChange}
-                  onKeyDown={onCmdKeyDown}
-                  placeholder={pending ? 'Komut çalışıyor…' : 'Komut yazın, liste için a'}
-                  spellCheck={false}
-                  disabled={pending}
-                  aria-label="Komut girişi"
-                />
-                <button
-                  className="send"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => void run()}
-                  disabled={pending || !cmd.trim()}
-                  title="Çalıştır"
-                  aria-label="Çalıştır"
-                  type="button"
-                >
-                  <Glyph name="send" size={15} />
-                </button>
-              </div>
-            </section>
-          ) : null}
-        </div>
-
-        {dock ? (
-          <section className="panel rec-panel" style={{ width: recSize }}>
-            <div
-              className="rec-grip"
-              onPointerDown={beginRecDrag}
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Panel genişliğini değiştir"
-            />
-
-            <header className="dock-head">
-              <button
-                className={'dock-tab' + (dock === 'record' ? ' sel' : '')}
-                onClick={showRecord}
-                type="button"
-              >
-                <Glyph name="record" size={13} />
-                KAYIT
-              </button>
-              <button
-                className={'dock-tab' + (dock === 'playback' ? ' sel' : '')}
-                onClick={showPlayback}
-                type="button"
-              >
-                <Glyph name="play" size={13} />
-                OYNATMA
-              </button>
-              <span className="dock-push" />
-              <button
-                className="ghost-btn"
-                title="Paneli kapat"
-                aria-label="Paneli kapat"
-                onClick={closeDock}
-                type="button"
-              >
-                <Glyph name="collapse" size={15} />
-              </button>
-            </header>
-
-            <div className="dock-body" hidden={dock !== 'record'}>
-              <RecordPanel blocked={playing} onReport={report} onSaved={onSaved} />
-            </div>
-
-            <div className="dock-body" hidden={dock !== 'playback'}>
-              <PlaybackPanel
-                active={dock === 'playback'}
-                revision={library}
-                blocked={recording}
-                onReport={report}
-                onBusy={onPlayBusy}
-              />
-            </div>
-          </section>
+        {page === 'record' ? (
+          <RecordPage
+            stageRef={setStageEl}
+            panelWidth={sideSize}
+            onGrip={beginSideDrag}
+            blocked={playing}
+            onReport={report}
+            onSaved={onSaved}
+          />
         ) : null}
+
+        {page === 'scenarios' ? (
+          <ScenarioPage
+            revision={library}
+            busy={playing || recording}
+            baseUrl={state.url}
+            onReport={report}
+            onRun={requestRun}
+            onChanged={onLibraryChanged}
+          />
+        ) : null}
+
+        {page === 'run' ? (
+          <RunPage
+            stageRef={setStageEl}
+            panelWidth={sideSize}
+            onGrip={beginSideDrag}
+            revision={library}
+            request={runRequest}
+            blocked={recording}
+            onReport={report}
+            onBusy={onPlayBusy}
+          />
+        ) : null}
+
+        {page === 'results' ? <ResultPage revision={library} onReport={report} /> : null}
+        {page === 'identity' ? <IdentityPage revision={library} onReport={report} /> : null}
+        {page === 'coverage' ? <CoveragePage revision={library} onReport={report} /> : null}
+        {page === 'data' ? <DataPage revision={library} onReport={report} /> : null}
       </div>
 
       <footer className="shell-foot">
-        <span className={'status-live' + (state.loading ? ' busy' : '')} />
-        <span className="status-item">{state.loading ? 'yükleniyor' : 'hazır'}</span>
+        <span className={'status-live ' + status.tone} />
+        <span className="status-item">{status.label}</span>
         <span className="status-sep" />
-        <span className="status-item">{elements} öğe</span>
+        <span className="status-item">{term.elements.length} öğe</span>
         <span className="status-sep" />
-        <span className="status-item">son işlem {lastMs ? formatMs(lastMs) : '—'}</span>
+        <span className="status-item">{term.lastMs ? formatMs(term.lastMs) : '—'}</span>
         <span className="status-sep" />
         <span className="status-item">görüş {state.vision ? 'açık' : 'kapalı'}</span>
         <span className="status-push" />
+        <span className="status-item dim">{state.title}</span>
       </footer>
     </div>
   )
