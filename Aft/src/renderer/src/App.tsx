@@ -1119,7 +1119,7 @@ export default function App(): React.JSX.Element {
         <span className="side-gap" />
         <IconButton
           name="terminal"
-          title={terminalOpen ? 'Terminali kapat (Ctrl+K)' : 'Terminali aç (Ctrl+K)'}
+          title={'Terminal Ctrl+K'}
           onClick={toggleTerminal}
           active={terminalOpen}
         />
@@ -1168,8 +1168,7 @@ export default function App(): React.JSX.Element {
 
               <header className="term-head">
                 <span className="term-tab">
-                  <Glyph name="terminal" size={13} />
-                  Terminal
+                  Local
                 </span>
 
                 {pending ? (
