@@ -28,7 +28,7 @@ import {
 import type { ScanLevel } from './discovery'
 
 const FRAME = 40
-const STAGE_RADIUS = 0
+const STAGE_RADIUS = 8
 const FRAME_COLOR = '#1e1f22'
 const HOME_URL = 'https://www.google.com'
 const DRAG_TICK = 16

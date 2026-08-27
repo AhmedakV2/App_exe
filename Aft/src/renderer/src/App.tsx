@@ -133,12 +133,9 @@ function readDock(): DockTab {
 const Brand = memo(function Brand(): React.JSX.Element {
   return (
     <span className="brand" title="AFT">
-      <span className="brand-mark">
-        <svg width="14" height="14" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
-          <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
-        </svg>
-      </span>
-      <span className="brand-name">AFT</span>
+      <svg width="26" height="26" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+        <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
+      </svg>
     </span>
   )
 })
@@ -427,6 +424,7 @@ export default function App(): React.JSX.Element {
   const closeWindow = useCallback(() => winAction('close'), [winAction])
 
   const toggleList = useCallback((): void => {
+    setPage('browser')
     setListOpen((prev) => {
       const next = !prev
       window.aft.setChat(next)
@@ -435,6 +433,7 @@ export default function App(): React.JSX.Element {
   }, [])
 
   const toggleTerminal = useCallback((): void => {
+    setPage('browser')
     window.aft.setTerminal(!terminalOpen)
   }, [terminalOpen])
 
@@ -608,9 +607,7 @@ export default function App(): React.JSX.Element {
                 badge={state.vision ? term.elements.length : 0}
               />
             </>
-          ) : (
-            <span className="bar-page">{PAGE_LABELS[page]}</span>
-          )}
+          ) : null}
         </div>
 
         <div className="bar-drag" onDoubleClick={maximizeWindow} />
@@ -636,24 +633,6 @@ export default function App(): React.JSX.Element {
         <div className="bar-drag" onDoubleClick={maximizeWindow} />
 
         <div className="bar-right">
-          {page === 'browser' ? (
-            <>
-              <IconButton name="grid" title="Öğeler" onClick={toggleList} active={listOpen} />
-              <IconButton
-                name="terminal"
-                title="Terminal Ctrl+K"
-                onClick={toggleTerminal}
-                active={terminalOpen}
-              />
-            </>
-          ) : null}
-          <IconButton
-            name="settings"
-            title="Ayarlar"
-            onClick={toggleSettings}
-            active={settingsOpen}
-          />
-          <span className="bar-gap" />
           <IconButton name="minimize" title="Küçült" onClick={minimizeWindow} small />
           <IconButton
             name={state.maximized ? 'restore' : 'maximize'}
@@ -666,24 +645,61 @@ export default function App(): React.JSX.Element {
       </header>
 
       <aside className="shell-side">
-        {NAV.map((item) => {
-          const on = item.suite ? Boolean(dock) : item.id === page
-          return (
-            <button
-              key={item.label}
-              className={'nav-btn' + (on ? ' sel' : '')}
-              title={item.label}
-              aria-label={item.label}
-              aria-pressed={on}
-              onClick={() => pick(item)}
-              type="button"
-            >
-              <Glyph name={item.glyph} size={17} />
-              {item.suite && recording ? <span className="nav-dot rec" /> : null}
-              {item.suite && !recording && playing ? <span className="nav-dot run" /> : null}
-            </button>
-          )
-        })}
+        <div className="rail-group">
+          {NAV.map((item) => {
+            const on = item.suite ? Boolean(dock) : item.id === page
+            return (
+              <button
+                key={item.label}
+                className={'nav-btn' + (on ? ' sel' : '')}
+                title={item.label}
+                aria-label={item.label}
+                aria-pressed={on}
+                onClick={() => pick(item)}
+                type="button"
+              >
+                <Glyph name={item.glyph} size={19} />
+                {item.suite && recording ? <span className="nav-dot rec" /> : null}
+                {item.suite && !recording && playing ? <span className="nav-dot run" /> : null}
+              </button>
+            )
+          })}
+        </div>
+
+        <span className="rail-gap" />
+
+        <div className="rail-group">
+          <button
+            className={'nav-btn' + (listOpen && page === 'browser' ? ' sel' : '')}
+            title="Öğeler"
+            aria-label="Öğeler"
+            aria-pressed={listOpen && page === 'browser'}
+            onClick={toggleList}
+            type="button"
+          >
+            <Glyph name="grid" size={19} />
+          </button>
+          <button
+            className={'nav-btn' + (terminalOpen && page === 'browser' ? ' sel' : '')}
+            title="Terminal Ctrl+K"
+            aria-label="Terminal"
+            aria-pressed={terminalOpen && page === 'browser'}
+            onClick={toggleTerminal}
+            type="button"
+          >
+            <Glyph name="terminal" size={19} />
+          </button>
+          <button
+            className={'nav-btn' + (settingsOpen ? ' sel' : '')}
+            title="Ayarlar"
+            aria-label="Ayarlar"
+            aria-pressed={settingsOpen}
+            onClick={toggleSettings}
+            type="button"
+          >
+            <Glyph name="settings" size={19} />
+          </button>
+        </div>
       </aside>
 
       <div className="workspace" ref={spaceRef}>
