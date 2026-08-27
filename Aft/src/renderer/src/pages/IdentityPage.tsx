@@ -169,9 +169,10 @@ export default function IdentityPage({
         title="Kimlik Sağlığı"
         meta={
           <>
-            <Pill tone={summary && summary.missing ? 'bad' : 'ok'}>
-              {catalog.length} descriptor
-            </Pill>
+            <Pill>{catalog.length} descriptor</Pill>
+            {summary && summary.missing ? (
+              <Pill tone="bad">{summary.missing} bulunamayan</Pill>
+            ) : null}
             {weak ? <Pill tone="warn">{weak} zayıf</Pill> : null}
             {approvals.length ? <Pill tone="accent">{approvals.length} onay</Pill> : null}
             {scope ? <Pill>{scope}</Pill> : null}

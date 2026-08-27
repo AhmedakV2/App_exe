@@ -26,10 +26,10 @@ export default memo(function ContextView({
 }): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('trace')
   const [filter, setFilter] = useState('')
-  const closeRef = useRef<HTMLButtonElement | null>(null)
+  const frameRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    closeRef.current?.focus()
+    frameRef.current?.focus()
     window.aft.setModal(true)
 
     const onKey = (event: KeyboardEvent): void => {
@@ -75,7 +75,12 @@ export default memo(function ContextView({
       aria-label="Hata bağlamı"
       onClick={onClose}
     >
-      <div className="sheet-frame" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="sheet-frame"
+        ref={frameRef}
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+      >
         <header className="sheet-head">
           <span className="sheet-title">
             <Glyph name="alert" size={14} />
@@ -83,7 +88,6 @@ export default memo(function ContextView({
           </span>
           <span className="sheet-push" />
           <button
-            ref={closeRef}
             className="ghost-btn"
             title="Kapat"
             aria-label="Kapat"
@@ -224,7 +228,7 @@ export default memo(function ContextView({
                       <span className="row-num">{item.ordinal}</span>
                       <span className="row-key">{item.tag}</span>
                       <span className="row-mid">{item.name || item.text || item.role}</span>
-                      {item.interactive ? <Pill tone="accent">etkileşilebilir</Pill> : null}
+                      {item.interactive ? <Pill>etkileşilebilir</Pill> : null}
                     </div>
                   ))}
                 </div>

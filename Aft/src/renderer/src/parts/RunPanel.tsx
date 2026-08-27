@@ -292,7 +292,6 @@ export default function RunPanel({
             />
             <Metric label="geçen" value={run.metrics.passed + '/' + run.metrics.steps} />
             <Metric label="güven" value={percent(run.metrics.meanConfidence)} />
-            <Metric label="tarama" value={run.metrics.scans} />
             <Metric label="süre" value={formatMs(run.metrics.totalMs)} />
           </div>
 

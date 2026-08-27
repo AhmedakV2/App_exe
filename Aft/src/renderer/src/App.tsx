@@ -130,11 +130,16 @@ function readDock(): DockTab {
   }
 }
 
-const Logo = memo(function Logo(): React.JSX.Element {
+const Brand = memo(function Brand(): React.JSX.Element {
   return (
-    <svg width="18" height="18" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
-      <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
-    </svg>
+    <span className="brand" title="AFT">
+      <span className="brand-mark">
+        <svg width="14" height="14" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+          <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
+        </svg>
+      </span>
+      <span className="brand-name">AFT</span>
+    </span>
   )
 })
 
@@ -482,14 +487,21 @@ export default function App(): React.JSX.Element {
     setDock(tab)
   }, [])
 
-  const pick = useCallback((item: NavItem): void => {
-    if (!item.suite) {
-      setPage(item.id)
-      return
-    }
-    setPage('browser')
-    setDock((prev) => (prev ? null : lastTabRef.current))
-  }, [])
+  const pick = useCallback(
+    (item: NavItem): void => {
+      if (!item.suite) {
+        setPage(item.id)
+        return
+      }
+      if (page === 'browser' && dock) {
+        setDock(null)
+        return
+      }
+      setPage('browser')
+      setDock(dock ?? lastTabRef.current)
+    },
+    [dock, page]
+  )
 
   const onSaved = useCallback((): void => {
     setLibrary((prev) => prev + 1)
@@ -571,9 +583,7 @@ export default function App(): React.JSX.Element {
     <div className={'shell' + (drag ? ' drag-' + drag : '')}>
       <header className="shell-bar">
         <div className="bar-left">
-          <span className="logo" title="AFT">
-            <Logo />
-          </span>
+          <Brand />
 
           {hasStage ? (
             <>

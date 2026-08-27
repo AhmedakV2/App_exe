@@ -278,7 +278,7 @@ export default memo(function Console({
             cursorRef.current = -1
           }}
           onKeyDown={onKeyDown}
-          placeholder={pending ? '' : 'a'}
+          placeholder={pending ? '' : 'komut'}
           spellCheck={false}
           disabled={pending}
           aria-label="Komut girişi"
