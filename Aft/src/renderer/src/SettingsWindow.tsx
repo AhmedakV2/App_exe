@@ -5,8 +5,8 @@ import type { ThemeId } from './themes'
 import { Glyph } from './icons'
 
 const SHORTCUTS: { name: string; code: string }[] = [
-  { name: 'Terminali aç / kapat', code: 'Ctrl + K' },
-  { name: 'Adres çubuğuna geç', code: 'Ctrl + L' },
+  { name: 'Terminal', code: 'Ctrl + K' },
+  { name: 'Adres çubuğu', code: 'Ctrl + L' },
   { name: 'Tam ekran', code: 'F11' },
   { name: 'Komut geçmişi', code: '↑ / ↓' }
 ]
@@ -95,7 +95,6 @@ export default function SettingsWindow(): React.JSX.Element {
                   ))}
                 </span>
                 <span className="theme-name">{item.label}</span>
-                <span className="theme-note">{item.note}</span>
                 {item.id === theme ? (
                   <span className="theme-mark">
                     <Glyph name="check" size={12} />
@@ -115,10 +114,7 @@ export default function SettingsWindow(): React.JSX.Element {
               onChange={(event) => toggleAutoTerm(event.target.checked)}
             />
             <span className="opt-text">
-              <span className="opt-name">Senaryo çalışınca terminali aç</span>
-              <span className="opt-note">
-                Oynatma başladığında terminal kendiliğinden açılır, koşum kayıtları anında görünür.
-              </span>
+              <span className="opt-name">Koşumda terminali aç</span>
             </span>
           </label>
           <label className={'opt-row' + (autoTerm ? '' : ' off')}>
@@ -129,10 +125,7 @@ export default function SettingsWindow(): React.JSX.Element {
               onChange={(event) => toggleAutoBack(event.target.checked)}
             />
             <span className="opt-text">
-              <span className="opt-name">Koşum bitince terminali kapat</span>
-              <span className="opt-note">
-                Yalnızca terminali koşum açtıysa kapatılır, elle açılan terminal açık kalır.
-              </span>
+              <span className="opt-name">Koşum bitince kapat</span>
             </span>
           </label>
         </section>

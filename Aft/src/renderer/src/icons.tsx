@@ -183,6 +183,117 @@ const GLYPHS: Record<string, React.JSX.Element> = {
       <circle cx="11" cy="11" r="7" />
       <path d="M20 20l-4-4" />
     </>
+  ),
+  library: (
+    <>
+      <path d="M4 4h5v16H4z" />
+      <path d="M11 4h4v16h-4z" />
+      <path d="M17 5l3 15" />
+    </>
+  ),
+  pulse: (
+    <>
+      <path d="M3 12h4l2-6 3 12 2-6h7" />
+    </>
+  ),
+  radar: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="4.5" />
+      <path d="M12 12l6-4" />
+    </>
+  ),
+  database: (
+    <>
+      <ellipse cx="12" cy="6" rx="8" ry="3" />
+      <path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6" />
+      <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+    </>
+  ),
+  history: (
+    <>
+      <path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1" />
+      <path d="M3 4v5h5" />
+      <path d="M12 8v4.5l3 1.8" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M20 20l-4.5-4.5" />
+    </>
+  ),
+  filter: <path d="M3 5h18l-7 8v6l-4 2v-8z" />,
+  copy: (
+    <>
+      <rect x="9" y="9" width="11" height="11" />
+      <path d="M5 15V4h11" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M10 14a4 4 0 0 0 6 .5l2-2a4 4 0 0 0-6-6l-1 1" />
+      <path d="M14 10a4 4 0 0 0-6-.5l-2 2a4 4 0 0 0 6 6l1-1" />
+    </>
+  ),
+  warn: (
+    <>
+      <path d="M12 3l9 17H3z" />
+      <path d="M12 10v4" />
+      <path d="M12 17v.01" />
+    </>
+  ),
+  layers: (
+    <>
+      <path d="M12 3l9 5-9 5-9-5z" />
+      <path d="M3 13l9 5 9-5" />
+    </>
+  ),
+  cloud: (
+    <>
+      <path d="M7 19a4 4 0 0 1 0-8 5.5 5.5 0 0 1 10.5 1.5A3.5 3.5 0 0 1 17 19z" />
+      <path d="M12 16v-5" />
+      <path d="M9.5 13.5L12 11l2.5 2.5" />
+    </>
+  ),
+  broom: (
+    <>
+      <path d="M14 3l7 7" />
+      <path d="M16.5 8.5L9 16" />
+      <path d="M9 16l-4 5h11l2-5z" />
+    </>
+  ),
+  grid: (
+    <>
+      <rect x="4" y="4" width="7" height="7" />
+      <rect x="13" y="4" width="7" height="7" />
+      <rect x="4" y="13" width="7" height="7" />
+      <rect x="13" y="13" width="7" height="7" />
+    </>
+  ),
+  right: <path d="M9 18l6-6-6-6" />,
+  expand: <path d="M9 6l6 6-6 6" />,
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z" />
+    </>
+  ),
+  sliders: (
+    <>
+      <path d="M4 8h10" />
+      <path d="M18 8h2" />
+      <path d="M4 16h4" />
+      <path d="M12 16h8" />
+      <circle cx="16" cy="8" r="2" />
+      <circle cx="10" cy="16" r="2" />
+    </>
+  ),
+  spark: (
+    <>
+      <path d="M13 2L5 14h6l-1 8 8-12h-6z" />
+    </>
   )
 }
 

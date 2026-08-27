@@ -21,10 +21,11 @@ import {
   DragAxis,
   ExecuteResult,
   NavKind,
+  ScanReport,
   StageBox,
   WindowAction
 } from './browser/types'
-import type { CoverageSummary, ScanLevel } from './discovery'
+import type { ScanLevel } from './discovery'
 
 const FRAME = 40
 const STAGE_RADIUS = 0
@@ -53,6 +54,7 @@ let layoutQueued = false
 let stateQueued = false
 let stageBox: StageBox | null = null
 let modalOpen = false
+let stageShown = true
 let pageHold = false
 let settingsWin: BrowserWindow | null = null
 let settingsSpot: { x: number; y: number } | null = null
@@ -151,12 +153,23 @@ function setStage(value: unknown): void {
   layout()
 }
 
+function applyStageVisible(): void {
+  if (!targetView || targetView.webContents.isDestroyed()) return
+  const visible = stageShown && !modalOpen
+  targetView.setVisible(visible)
+  if (visible) layout()
+}
+
 function setModal(open: boolean): void {
   if (open === modalOpen) return
   modalOpen = open
-  if (!targetView || targetView.webContents.isDestroyed()) return
-  targetView.setVisible(!open)
-  if (!open) layout()
+  applyStageVisible()
+}
+
+function setStageShown(open: boolean): void {
+  if (open === stageShown) return
+  stageShown = open
+  applyStageVisible()
 }
 
 function setChrome(color: unknown): void {
@@ -666,9 +679,28 @@ app.whenReady().then(() => {
     })
   )
 
-  ipcMain.handle('aft:coverage', async (): Promise<CoverageSummary | null> => {
+  ipcMain.handle('aft:coverage', async (): Promise<ScanReport | null> => {
     const graph = controller.currentGraph()
-    return graph ? graph.coverage : null
+    if (!graph) return null
+    return {
+      url: graph.url,
+      title: graph.title,
+      level: graph.coverage.level,
+      coverage: graph.coverage,
+      blindSpots: graph.blindSpots,
+      frames: graph.frames.map((frame) => ({
+        id: frame.frameId,
+        url: frame.url,
+        depth: frame.depth,
+        failed: frame.failed
+      })),
+      viewport: {
+        width: graph.viewport.width,
+        height: graph.viewport.height,
+        pageHeight: graph.viewport.pageHeight
+      },
+      capturedAt: Date.now()
+    }
   })
 
   ipcMain.handle('aft:vision', (_e, on: boolean): Promise<ExecuteResult> =>
@@ -694,6 +726,8 @@ app.whenReady().then(() => {
   ipcMain.on('aft:stage', (_e, rect: unknown) => setStage(rect))
 
   ipcMain.on('aft:modal', (_e, open: boolean) => setModal(Boolean(open)))
+
+  ipcMain.on('aft:stage-shown', (_e, open: boolean) => setStageShown(Boolean(open)))
 
   ipcMain.on('aft:settings', (_e, open: boolean) => setSettings(Boolean(open)))
 

@@ -5,10 +5,10 @@ import type {
   ExecuteResult,
   NavKind,
   PointerSpot,
+  ScanReport,
   StageBox,
   WindowAction
 } from '../main/browser/types'
-import type { CoverageSummary } from '../main/discovery'
 
 declare global {
   interface Window {
@@ -16,7 +16,7 @@ declare global {
       execute: (action: unknown) => Promise<ExecuteResult>
       setVision: (on: boolean) => Promise<ExecuteResult>
       scan: (level: number) => Promise<ExecuteResult>
-      coverage: () => Promise<CoverageSummary | null>
+      coverage: () => Promise<ScanReport | null>
       nav: (kind: NavKind) => void
       window: (action: WindowAction) => void
       setChat: (open: boolean) => void
@@ -25,6 +25,7 @@ declare global {
       endDrag: () => void
       setStage: (box: StageBox) => void
       setModal: (open: boolean) => void
+      setStageShown: (open: boolean) => void
       setSettings: (open: boolean) => void
       publishPrefs: (value: AppPrefs) => void
       patchPrefs: (patch: Partial<AppPrefs>) => void
