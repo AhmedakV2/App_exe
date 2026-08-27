@@ -1258,7 +1258,7 @@ input {
 }
 
 .rec-bar-gap {
-  flex: 1;
+  flex: 0 0 12px;
 }
 
 .rec-meta {
@@ -1918,7 +1918,6 @@ input {
 .card-body::-webkit-scrollbar,
 .side-list::-webkit-scrollbar,
 .side-foot::-webkit-scrollbar,
-.drawer-body::-webkit-scrollbar,
 .el-list::-webkit-scrollbar {
   width: 9px;
   height: 9px;
@@ -1927,7 +1926,6 @@ input {
 .card-body::-webkit-scrollbar-thumb,
 .side-list::-webkit-scrollbar-thumb,
 .side-foot::-webkit-scrollbar-thumb,
-.drawer-body::-webkit-scrollbar-thumb,
 .el-list::-webkit-scrollbar-thumb {
   background: var(--scroll);
 }
@@ -2799,66 +2797,6 @@ input {
   background: var(--hover);
 }
 
-.drawer {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 460px;
-  max-width: 62%;
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  background: var(--panel);
-  border-left: var(--line) solid var(--panel-line);
-  box-shadow: -8px 0 24px var(--shadow);
-}
-
-.drawer-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 var(--term-head);
-  height: var(--term-head);
-  padding: 0 6px 0 12px;
-  background: var(--raised);
-  border-bottom: var(--line) solid var(--panel-line);
-}
-
-.drawer-title {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font: 600 12px var(--ui);
-  color: var(--text);
-}
-
-.drawer-push {
-  flex: 1;
-}
-
-.drawer-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 10px;
-}
-
-.drawer-msg {
-  padding: 8px 10px;
-  background: var(--field);
-  border-left: 2px solid var(--error);
-  font: 500 11.5px/1.5 var(--ui);
-  color: var(--error);
-}
-
 .rows {
   display: flex;
   flex-direction: column;
@@ -2923,4 +2861,156 @@ input {
   display: block;
   width: 100%;
   height: auto;
+}
+
+.dock-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 var(--term-head);
+  height: var(--term-head);
+  padding: 0 4px 0 4px;
+  background: var(--raised);
+  border-bottom: var(--line) solid var(--panel-line);
+}
+
+.dock-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: calc(var(--term-head) - 1px);
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--faint);
+  font: 700 11px var(--ui);
+  letter-spacing: 0.11em;
+  cursor: pointer;
+}
+
+.dock-tab:hover {
+  color: var(--text);
+}
+
+.dock-tab.sel {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.dock-tab:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.dock-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--danger);
+}
+
+.dock-dot.run {
+  background: var(--accent);
+}
+
+.dock-push {
+  flex: 1;
+}
+
+.dock-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dock-body[hidden] {
+  display: none;
+}
+
+.run {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.rec-bar-push {
+  flex: 1;
+}
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--frame) + 12px);
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.sheet-frame {
+  display: flex;
+  flex-direction: column;
+  width: 960px;
+  max-width: 100%;
+  max-height: 100%;
+  background: var(--panel);
+  border: var(--line) solid var(--panel-line);
+  box-shadow: 0 18px 48px var(--shadow);
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 36px;
+  height: 36px;
+  padding: 0 6px 0 14px;
+  background: var(--raised);
+  border-bottom: var(--line) solid var(--panel-line);
+}
+
+.sheet-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 13px var(--ui);
+  color: var(--text);
+}
+
+.sheet-push {
+  flex: 1;
+}
+
+.sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.sheet-body::-webkit-scrollbar {
+  width: 9px;
+}
+
+.sheet-body::-webkit-scrollbar-thumb {
+  background: var(--scroll);
+}
+
+.sheet-msg {
+  padding: 9px 11px;
+  background: var(--field);
+  border-left: 2px solid var(--error);
+  font: 500 12px/1.5 var(--ui);
+  color: var(--error);
 }

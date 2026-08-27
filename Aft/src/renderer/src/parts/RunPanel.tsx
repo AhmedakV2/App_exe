@@ -11,8 +11,8 @@ import type {
 import { Glyph, IconButton } from '../icons'
 import { Bar, Empty, Metric, Pill, TextButton, Toggle } from '../ui'
 import { formatMs, percent } from '../format'
-import ContextView from '../parts/ContextView'
-import ShotView from '../parts/ShotView'
+import ContextView from './ContextView'
+import ShotView from './ShotView'
 import type { Report } from '../report'
 
 const STATUS_LABELS: Record<StepStatus, string> = {
@@ -44,19 +44,15 @@ function flatten(steps: readonly StepResult[]): StepResult[] {
   return out
 }
 
-export default function RunPage({
-  stageRef,
-  panelWidth,
-  onGrip,
+export default function RunPanel({
+  active,
   revision,
   request,
   blocked,
   onReport,
   onBusy
 }: {
-  stageRef: (node: HTMLDivElement | null) => void
-  panelWidth: number
-  onGrip: (event: React.PointerEvent<HTMLDivElement>) => void
+  active: boolean
   revision: number
   request: string
   blocked: boolean
@@ -91,6 +87,15 @@ export default function RunPage({
   useEffect(() => {
     busyRef.current(running)
   }, [running])
+
+  const refresh = useCallback((): void => {
+    window.aftPlayback
+      .list()
+      .then((result) => {
+        if (result.ok && result.data) setEntries(result.data.entries)
+      })
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     let alive = true
@@ -194,149 +199,129 @@ export default function RunPage({
   const activeId = live.length ? live[live.length - 1].stepId : ''
 
   return (
-    <div className="split">
-      <div className="stage" ref={stageRef} />
-
-      <section className="side" style={{ width: panelWidth }}>
-        <div
-          className="side-grip"
-          onPointerDown={onGrip}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Panel genişliği"
+    <section className="run">
+      <div className="side-bar">
+        <select
+          className="picker"
+          value={selected}
+          onChange={(event) => setPicked(event.target.value)}
+          disabled={running}
+          aria-label="Senaryo"
+        >
+          <option value="">senaryo seç</option>
+          {entries.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.title}
+            </option>
+          ))}
+        </select>
+        <IconButton
+          name="play"
+          title="Başlat"
+          onClick={() => void start()}
+          disabled={running || blocked || !selected}
+          small
+          active
         />
+        <IconButton name="square" title="Durdur" onClick={cancel} disabled={!running} small />
+        <IconButton name="reload" title="Yenile" onClick={refresh} disabled={running} small />
+      </div>
 
-        <header className="side-head">
-          <span className="side-title">
-            <Glyph name="play" size={13} />
-            KOŞUM
+      <div className="side-opts">
+        <Toggle
+          label="Hata görüntüsü"
+          checked={Boolean(options.screenshotOnFailure)}
+          disabled={running}
+          onChange={() => toggle('screenshotOnFailure')}
+        />
+        <Toggle
+          label="İlk hatada dur"
+          checked={Boolean(options.stopOnFailure)}
+          disabled={running}
+          onChange={() => toggle('stopOnFailure')}
+        />
+        <Toggle
+          label="Durum doğrula"
+          checked={Boolean(options.verifyState)}
+          disabled={running}
+          onChange={() => toggle('verifyState')}
+        />
+      </div>
+
+      {running ? (
+        <div className="progress">
+          <Bar value={percentDone} />
+          <span className="progress-text">
+            {progress.done} / {progress.total}
           </span>
-          <span className="side-push" />
-          {running ? <Pill tone="accent">çalışıyor</Pill> : null}
-        </header>
-
-        <div className="side-bar">
-          <select
-            className="picker"
-            value={selected}
-            onChange={(event) => setPicked(event.target.value)}
-            disabled={running}
-            aria-label="Senaryo"
-          >
-            <option value="">senaryo seç</option>
-            {entries.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.title}
-              </option>
-            ))}
-          </select>
-          <IconButton
-            name="play"
-            title="Başlat"
-            onClick={() => void start()}
-            disabled={running || blocked || !selected}
-            small
-            active
-          />
-          <IconButton name="square" title="Durdur" onClick={cancel} disabled={!running} small />
         </div>
+      ) : null}
 
-        <div className="side-opts">
-          <Toggle
-            label="Hata görüntüsü"
-            checked={Boolean(options.screenshotOnFailure)}
-            disabled={running}
-            onChange={() => toggle('screenshotOnFailure')}
-          />
-          <Toggle
-            label="İlk hatada dur"
-            checked={Boolean(options.stopOnFailure)}
-            disabled={running}
-            onChange={() => toggle('stopOnFailure')}
-          />
-          <Toggle
-            label="Durum doğrula"
-            checked={Boolean(options.verifyState)}
-            disabled={running}
-            onChange={() => toggle('verifyState')}
-          />
-        </div>
-
-        {running ? (
-          <div className="progress">
-            <Bar value={percentDone} />
-            <span className="progress-text">
-              {progress.done} / {progress.total}
-            </span>
-          </div>
-        ) : null}
-
-        <div className="side-list" ref={listRef}>
-          {shown.length ? (
-            shown.map((item) => (
-              <div
-                key={item.stepId + item.index}
-                className={
-                  'run-step ' +
-                  statusTone(item.status) +
-                  (item.stepId === activeId && running ? ' live' : '')
-                }
-              >
-                <span className="run-no">{item.index + 1}</span>
-                <span className="run-title">{item.title}</span>
-                {item.resolution ? (
-                  <span className="run-conf">{percent(item.resolution.confidence)}</span>
-                ) : null}
-                <span className="run-ms">{formatMs(item.durationMs)}</span>
-                <Pill tone={statusTone(item.status)}>{STATUS_LABELS[item.status]}</Pill>
-              </div>
-            ))
-          ) : (
-            <Empty glyph="play" text="Koşum yok" />
-          )}
-        </div>
-
-        {run ? (
-          <div className="side-foot">
-            <div className="metric-row tight">
-              <Metric
-                label="durum"
-                value={RUN_LABELS[run.status] ?? run.status}
-                tone={run.ok ? 'ok' : 'bad'}
-              />
-              <Metric label="geçen" value={run.metrics.passed + '/' + run.metrics.steps} />
-              <Metric label="güven" value={percent(run.metrics.meanConfidence)} />
-              <Metric label="tarama" value={run.metrics.scans} />
-              <Metric label="süre" value={formatMs(run.metrics.totalMs)} />
+      <div className="side-list" ref={listRef}>
+        {shown.length ? (
+          shown.map((item) => (
+            <div
+              key={item.stepId + item.index}
+              className={
+                'run-step ' +
+                statusTone(item.status) +
+                (item.stepId === activeId && running ? ' live' : '')
+              }
+            >
+              <span className="run-no">{item.index + 1}</span>
+              <span className="run-title">{item.title}</span>
+              {item.resolution ? (
+                <span className="run-conf">{percent(item.resolution.confidence)}</span>
+              ) : null}
+              <span className="run-ms">{formatMs(item.durationMs)}</span>
+              <Pill tone={statusTone(item.status)}>{STATUS_LABELS[item.status]}</Pill>
             </div>
+          ))
+        ) : (
+          <Empty glyph="play" text="Koşum yok" />
+        )}
+      </div>
 
-            {run.failures.slice(0, 3).map((failure, index) => (
-              <div key={index} className="issue bad">
-                <Glyph name="alert" size={12} />
-                {failure}
-              </div>
-            ))}
-
-            {contexts.length ? (
-              <div className="chip-row">
-                {contexts.slice(0, 8).map((entry) => (
-                  <TextButton
-                    key={entry.id}
-                    glyph="alert"
-                    label={entry.id.slice(0, 10)}
-                    onClick={() => void openContext(entry.id)}
-                  />
-                ))}
-              </div>
-            ) : null}
+      {run ? (
+        <div className="side-foot">
+          <div className="metric-row tight">
+            <Metric
+              label="durum"
+              value={RUN_LABELS[run.status] ?? run.status}
+              tone={run.ok ? 'ok' : 'bad'}
+            />
+            <Metric label="geçen" value={run.metrics.passed + '/' + run.metrics.steps} />
+            <Metric label="güven" value={percent(run.metrics.meanConfidence)} />
+            <Metric label="tarama" value={run.metrics.scans} />
+            <Metric label="süre" value={formatMs(run.metrics.totalMs)} />
           </div>
-        ) : null}
-      </section>
 
-      {context ? (
+          {run.failures.slice(0, 3).map((failure, index) => (
+            <div key={index} className="issue bad">
+              <Glyph name="alert" size={12} />
+              {failure}
+            </div>
+          ))}
+
+          {contexts.length ? (
+            <div className="chip-row">
+              {contexts.slice(0, 8).map((entry) => (
+                <TextButton
+                  key={entry.id}
+                  glyph="alert"
+                  label={entry.id.slice(0, 10)}
+                  onClick={() => void openContext(entry.id)}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {active && context ? (
         <ContextView context={context} onClose={() => setContext(null)} onShot={setShot} />
       ) : null}
-      {shot ? <ShotView data={shot} onClose={() => setShot(null)} /> : null}
-    </div>
+      {active && shot ? <ShotView data={shot} onClose={() => setShot(null)} /> : null}
+    </section>
   )
 }

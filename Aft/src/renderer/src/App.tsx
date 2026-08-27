@@ -14,48 +14,58 @@ import { clamp, formatMs, shortUrl, toUrl } from './format'
 import { useConsole } from './useConsole'
 import type { Report } from './report'
 import BrowserPage from './pages/BrowserPage'
-import RecordPage from './pages/RecordPage'
+import type { DockTab } from './pages/BrowserPage'
 import ScenarioPage from './pages/ScenarioPage'
-import RunPage from './pages/RunPage'
 import ResultPage from './pages/ResultPage'
 import IdentityPage from './pages/IdentityPage'
 import CoveragePage from './pages/CoveragePage'
 import DataPage from './pages/DataPage'
 
-type PageId =
-  'browser' | 'record' | 'scenarios' | 'run' | 'results' | 'identity' | 'coverage' | 'data'
+type PageId = 'browser' | 'scenarios' | 'results' | 'identity' | 'coverage' | 'data'
 
-type NavItem = { id: PageId; label: string; glyph: string; stage: boolean }
+type NavItem = { id: PageId; label: string; glyph: string; stage: boolean; dock?: DockTab }
 
 const NAV: NavItem[] = [
   { id: 'browser', label: 'Tarayıcı', glyph: 'globe', stage: true },
-  { id: 'record', label: 'Kayıt', glyph: 'record', stage: true },
+  { id: 'browser', label: 'Kayıt', glyph: 'record', stage: true, dock: 'record' },
+  { id: 'browser', label: 'Oynatma', glyph: 'play', stage: true, dock: 'playback' },
   { id: 'scenarios', label: 'Senaryolar', glyph: 'library', stage: false },
-  { id: 'run', label: 'Koşum', glyph: 'play', stage: true },
   { id: 'results', label: 'Sonuçlar', glyph: 'history', stage: false },
   { id: 'identity', label: 'Kimlik', glyph: 'pulse', stage: false },
   { id: 'coverage', label: 'Kapsam', glyph: 'radar', stage: false },
   { id: 'data', label: 'Veri', glyph: 'database', stage: false }
 ]
 
-const PAGE_MAP = new Map(NAV.map((item) => [item.id, item]))
+const PAGE_LABELS: Record<PageId, string> = {
+  browser: 'Tarayıcı',
+  scenarios: 'Senaryolar',
+  results: 'Sonuçlar',
+  identity: 'Kimlik',
+  coverage: 'Kapsam',
+  data: 'Veri'
+}
+
+function isPageId(value: unknown): value is PageId {
+  return typeof value === 'string' && value in PAGE_LABELS
+}
 
 const LIST_KEY = 'aft:list-width'
 const TERM_KEY = 'aft:term-height'
-const SIDE_KEY = 'aft:side-width'
+const DOCK_KEY = 'aft:dock-width'
+const DOCK_TAB_KEY = 'aft:dock-tab'
 const PAGE_KEY = 'aft:page'
 const AUTO_TERM_KEY = 'aft:auto-terminal'
 const AUTO_BACK_KEY = 'aft:auto-terminal-restore'
 
 const LIST_SIZE = 300
 const TERM_SIZE = 268
-const SIDE_SIZE = 380
+const DOCK_SIZE = 380
 const LIST_MIN = 220
 const TERM_MIN = 120
-const SIDE_MIN = 320
+const DOCK_MIN = 300
 const LIST_MAX_RATIO = 0.5
 const TERM_MAX_RATIO = 0.72
-const SIDE_MAX_RATIO = 0.62
+const DOCK_MAX_RATIO = 0.62
 
 function sameBox(a: StageBox | null, b: StageBox): boolean {
   if (!a) return false
@@ -106,9 +116,18 @@ function storeFlag(key: string, value: boolean): void {
 function readPage(): PageId {
   try {
     const raw = window.localStorage.getItem(PAGE_KEY)
-    return raw && PAGE_MAP.has(raw as PageId) ? (raw as PageId) : 'browser'
+    return isPageId(raw) ? raw : 'browser'
   } catch {
     return 'browser'
+  }
+}
+
+function readDock(): DockTab {
+  try {
+    const raw = window.localStorage.getItem(DOCK_TAB_KEY)
+    return raw === 'record' || raw === 'playback' ? raw : null
+  } catch {
+    return null
   }
 }
 
@@ -151,7 +170,8 @@ export default function App(): React.JSX.Element {
   const [autoBack, setAutoBack] = useState(() => readFlag(AUTO_BACK_KEY, false))
   const [listWidth, setListWidth] = useState(() => readSize(LIST_KEY, LIST_SIZE))
   const [termHeight, setTermHeight] = useState(() => readSize(TERM_KEY, TERM_SIZE))
-  const [sideWidth, setSideWidth] = useState(() => readSize(SIDE_KEY, SIDE_SIZE))
+  const [dockWidth, setDockWidth] = useState(() => readSize(DOCK_KEY, DOCK_SIZE))
+  const [dock, setDock] = useState<DockTab>(() => readDock())
   const [space, setSpace] = useState({ width: 0, height: 0 })
   const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null)
 
@@ -169,7 +189,7 @@ export default function App(): React.JSX.Element {
 
   const terminalOpen = state.terminalOpen
   const settingsOpen = state.settingsOpen
-  const current = PAGE_MAP.get(page) ?? NAV[0]
+  const hasStage = page === 'browser'
 
   const listSize = space.width
     ? clamp(listWidth, LIST_MIN, Math.floor(space.width * LIST_MAX_RATIO))
@@ -177,9 +197,9 @@ export default function App(): React.JSX.Element {
   const termSize = space.height
     ? clamp(termHeight, TERM_MIN, Math.floor(space.height * TERM_MAX_RATIO))
     : termHeight
-  const sideSize = space.width
-    ? clamp(sideWidth, SIDE_MIN, Math.floor(space.width * SIDE_MAX_RATIO))
-    : sideWidth
+  const dockSize = space.width
+    ? clamp(dockWidth, DOCK_MIN, Math.floor(space.width * DOCK_MAX_RATIO))
+    : dockWidth
 
   const report = useCallback(
     (entry: Report): void => {
@@ -226,14 +246,15 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     try {
       window.localStorage.setItem(PAGE_KEY, page)
+      window.localStorage.setItem(DOCK_TAB_KEY, dock ?? '')
     } catch {
       return
     }
-  }, [page])
+  }, [dock, page])
 
   useEffect(() => {
-    window.aft.setStageShown(current.stage)
-  }, [current.stage])
+    window.aft.setStageShown(hasStage)
+  }, [hasStage])
 
   useEffect(() => {
     if (!stageEl) return
@@ -338,7 +359,7 @@ export default function App(): React.JSX.Element {
         return
       }
       if (axis === 'record') {
-        setSideWidth(Math.round(box.right - spot.x * view.clientWidth))
+        setDockWidth(Math.round(box.right - spot.x * view.clientWidth))
         return
       }
       setTermHeight(Math.round(box.bottom - spot.y * view.clientHeight))
@@ -378,8 +399,8 @@ export default function App(): React.JSX.Element {
     if (drag) return
     storeSize(LIST_KEY, listSize)
     storeSize(TERM_KEY, termSize)
-    storeSize(SIDE_KEY, sideSize)
-  }, [drag, listSize, termSize, sideSize])
+    storeSize(DOCK_KEY, dockSize)
+  }, [drag, listSize, termSize, dockSize])
 
   const nav = useCallback((kind: NavKind): void => window.aft.nav(kind), [])
   const winAction = useCallback((action: WindowAction): void => window.aft.window(action), [])
@@ -433,7 +454,7 @@ export default function App(): React.JSX.Element {
     (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('terminal', event),
     [beginDrag]
   )
-  const beginSideDrag = useCallback(
+  const beginDockDrag = useCallback(
     (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('record', event),
     [beginDrag]
   )
@@ -453,16 +474,35 @@ export default function App(): React.JSX.Element {
     if (autoBackRef.current) window.aft.setTerminal(false)
   }, [])
 
+  const openDock = useCallback((tab: DockTab): void => {
+    setDock(tab)
+  }, [])
+
+  const pick = useCallback(
+    (item: NavItem): void => {
+      const next = item.dock ?? null
+      setPage(item.id)
+      if (item.id !== 'browser') return
+      if (!next) {
+        setDock(null)
+        return
+      }
+      setDock(page === 'browser' && dock === next ? null : next)
+    },
+    [dock, page]
+  )
+
   const onSaved = useCallback((): void => {
     setLibrary((prev) => prev + 1)
-    setPage('scenarios')
+    setDock('playback')
   }, [])
 
   const onLibraryChanged = useCallback((): void => setLibrary((prev) => prev + 1), [])
 
   const requestRun = useCallback((scenarioId: string): void => {
     setRunRequest(scenarioId)
-    setPage('run')
+    setPage('browser')
+    setDock('playback')
   }, [])
 
   const runAction = useCallback(
@@ -536,7 +576,7 @@ export default function App(): React.JSX.Element {
             <Logo />
           </span>
 
-          {current.stage ? (
+          {hasStage ? (
             <>
               <IconButton name="back" title="Geri" onClick={goBack} disabled={!state.canGoBack} />
               <IconButton
@@ -560,13 +600,13 @@ export default function App(): React.JSX.Element {
               />
             </>
           ) : (
-            <span className="bar-page">{current.label}</span>
+            <span className="bar-page">{PAGE_LABELS[page]}</span>
           )}
         </div>
 
         <div className="bar-drag" onDoubleClick={maximizeWindow} />
 
-        {current.stage ? (
+        {hasStage ? (
           <div className={'omnibox' + (urlFocused ? ' focused' : '')}>
             <input
               ref={urlRef}
@@ -617,21 +657,25 @@ export default function App(): React.JSX.Element {
       </header>
 
       <aside className="shell-side">
-        {NAV.map((item) => (
-          <button
-            key={item.id}
-            className={'nav-btn' + (item.id === page ? ' sel' : '')}
-            title={item.label}
-            aria-label={item.label}
-            aria-pressed={item.id === page}
-            onClick={() => setPage(item.id)}
-            type="button"
-          >
-            <Glyph name={item.glyph} size={17} />
-            {item.id === 'record' && recording ? <span className="nav-dot rec" /> : null}
-            {item.id === 'run' && playing ? <span className="nav-dot run" /> : null}
-          </button>
-        ))}
+        {NAV.map((item) => {
+          const on =
+            item.id === page && (item.dock ?? null) === (item.id === 'browser' ? dock : null)
+          return (
+            <button
+              key={item.label}
+              className={'nav-btn' + (on ? ' sel' : '')}
+              title={item.label}
+              aria-label={item.label}
+              aria-pressed={on}
+              onClick={() => pick(item)}
+              type="button"
+            >
+              <Glyph name={item.glyph} size={17} />
+              {item.dock === 'record' && recording ? <span className="nav-dot rec" /> : null}
+              {item.dock === 'playback' && playing ? <span className="nav-dot run" /> : null}
+            </button>
+          )
+        })}
       </aside>
 
       <div className="workspace" ref={spaceRef}>
@@ -645,22 +689,22 @@ export default function App(): React.JSX.Element {
             terminalOpen={terminalOpen}
             termHeight={termSize}
             focusSeed={focusSeed}
+            dock={dock}
+            dockWidth={dockSize}
+            revision={library}
+            runRequest={runRequest}
+            recording={recording}
+            playing={playing}
             onListGrip={beginListDrag}
             onTermGrip={beginTermDrag}
+            onDockGrip={beginDockDrag}
             onCloseList={toggleList}
             onCloseTerminal={closeTerminal}
+            onDock={openDock}
             onAction={runAction}
-          />
-        ) : null}
-
-        {page === 'record' ? (
-          <RecordPage
-            stageRef={setStageEl}
-            panelWidth={sideSize}
-            onGrip={beginSideDrag}
-            blocked={playing}
             onReport={report}
             onSaved={onSaved}
+            onBusy={onPlayBusy}
           />
         ) : null}
 
@@ -672,19 +716,6 @@ export default function App(): React.JSX.Element {
             onReport={report}
             onRun={requestRun}
             onChanged={onLibraryChanged}
-          />
-        ) : null}
-
-        {page === 'run' ? (
-          <RunPage
-            stageRef={setStageEl}
-            panelWidth={sideSize}
-            onGrip={beginSideDrag}
-            revision={library}
-            request={runRequest}
-            blocked={recording}
-            onReport={report}
-            onBusy={onPlayBusy}
           />
         ) : null}
 

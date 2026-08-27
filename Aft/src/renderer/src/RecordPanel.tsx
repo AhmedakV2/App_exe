@@ -501,15 +501,6 @@ export default function RecordPanel({
 
   return (
     <section className="rec">
-      <header className="side-head">
-        <span className="side-title">
-          <Glyph name="record" size={13} />
-          KAYIT
-        </span>
-        <span className="side-push" />
-        <span className={'rec-state ' + status}>{STATUS_LABELS[status]}</span>
-      </header>
-
       <div className="rec-bar">
         {status === 'recording' ? (
           <IconButton name="pause" title="Duraklat" onClick={pause} disabled={busy} small />
@@ -555,6 +546,8 @@ export default function RecordPanel({
           small
           danger
         />
+        <span className="rec-bar-push" />
+        <span className={'rec-state ' + status}>{STATUS_LABELS[status]}</span>
       </div>
 
       {summary || view?.baseUrl ? (
