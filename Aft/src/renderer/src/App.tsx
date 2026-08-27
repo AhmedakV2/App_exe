@@ -23,17 +23,16 @@ import DataPage from './pages/DataPage'
 
 type PageId = 'browser' | 'scenarios' | 'results' | 'identity' | 'coverage' | 'data'
 
-type NavItem = { id: PageId; label: string; glyph: string; stage: boolean; dock?: DockTab }
+type NavItem = { id: PageId; label: string; glyph: string; suite?: boolean }
 
 const NAV: NavItem[] = [
-  { id: 'browser', label: 'Tarayıcı', glyph: 'globe', stage: true },
-  { id: 'browser', label: 'Kayıt', glyph: 'record', stage: true, dock: 'record' },
-  { id: 'browser', label: 'Oynatma', glyph: 'play', stage: true, dock: 'playback' },
-  { id: 'scenarios', label: 'Senaryolar', glyph: 'library', stage: false },
-  { id: 'results', label: 'Sonuçlar', glyph: 'history', stage: false },
-  { id: 'identity', label: 'Kimlik', glyph: 'pulse', stage: false },
-  { id: 'coverage', label: 'Kapsam', glyph: 'radar', stage: false },
-  { id: 'data', label: 'Veri', glyph: 'database', stage: false }
+  { id: 'browser', label: 'Tarayıcı', glyph: 'globe' },
+  { id: 'browser', label: 'Kayıt ve oynatma', glyph: 'suite', suite: true },
+  { id: 'scenarios', label: 'Senaryolar', glyph: 'library' },
+  { id: 'results', label: 'Sonuçlar', glyph: 'history' },
+  { id: 'identity', label: 'Kimlik', glyph: 'pulse' },
+  { id: 'coverage', label: 'Kapsam', glyph: 'radar' },
+  { id: 'data', label: 'Veri', glyph: 'database' }
 ]
 
 const PAGE_LABELS: Record<PageId, string> = {
@@ -186,6 +185,7 @@ export default function App(): React.JSX.Element {
   const autoBackRef = useRef(autoBack)
   const termOpenRef = useRef(false)
   const autoOpenedRef = useRef(false)
+  const lastTabRef = useRef<Exclude<DockTab, null>>('record')
 
   const terminalOpen = state.terminalOpen
   const settingsOpen = state.settingsOpen
@@ -320,6 +320,10 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     termOpenRef.current = terminalOpen
   }, [terminalOpen])
+
+  useEffect(() => {
+    if (dock) lastTabRef.current = dock
+  }, [dock])
 
   useEffect(() => {
     const offUpdate = window.aftRecord.onUpdate((view) => {
@@ -478,19 +482,14 @@ export default function App(): React.JSX.Element {
     setDock(tab)
   }, [])
 
-  const pick = useCallback(
-    (item: NavItem): void => {
-      const next = item.dock ?? null
+  const pick = useCallback((item: NavItem): void => {
+    if (!item.suite) {
       setPage(item.id)
-      if (item.id !== 'browser') return
-      if (!next) {
-        setDock(null)
-        return
-      }
-      setDock(page === 'browser' && dock === next ? null : next)
-    },
-    [dock, page]
-  )
+      return
+    }
+    setPage('browser')
+    setDock((prev) => (prev ? null : lastTabRef.current))
+  }, [])
 
   const onSaved = useCallback((): void => {
     setLibrary((prev) => prev + 1)
@@ -658,8 +657,7 @@ export default function App(): React.JSX.Element {
 
       <aside className="shell-side">
         {NAV.map((item) => {
-          const on =
-            item.id === page && (item.dock ?? null) === (item.id === 'browser' ? dock : null)
+          const on = item.suite ? Boolean(dock) : item.id === page
           return (
             <button
               key={item.label}
@@ -671,8 +669,8 @@ export default function App(): React.JSX.Element {
               type="button"
             >
               <Glyph name={item.glyph} size={17} />
-              {item.dock === 'record' && recording ? <span className="nav-dot rec" /> : null}
-              {item.dock === 'playback' && playing ? <span className="nav-dot run" /> : null}
+              {item.suite && recording ? <span className="nav-dot rec" /> : null}
+              {item.suite && !recording && playing ? <span className="nav-dot run" /> : null}
             </button>
           )
         })}
