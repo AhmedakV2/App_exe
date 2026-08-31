@@ -141,16 +141,20 @@ export class StepExecutor {
   ): Promise<StepAttempt> {
     if (!step.assertion) return { ok: false, message: 'Dogrulama tanimi yok' }
 
+    const scanAt = Date.now()
     const graph = await this.graphFor(
       Boolean(step.assertion.target),
       step.scanLevel ?? ctx.options.scanLevel,
       force,
       profileFor(step.assertion.target, force)
     )
+    result.phases.scanMs += Date.now() - scanAt
     result.scanned = true
 
+    const resolveAt = Date.now()
     const index = this.identity.index(graph)
     const outcome = this.assertions.evaluate(step.assertion, index, step.allowLowConfidence)
+    result.phases.resolveMs += Date.now() - resolveAt
 
     result.assertions.push(outcome.record)
     if (outcome.resolution?.record) result.resolution = outcome.resolution.record
@@ -168,7 +172,10 @@ export class StepExecutor {
     ctx: ExecutionContext,
     result: StepResult
   ): Promise<StepAttempt> {
+    const actionAt = Date.now()
     const outcome = await this.dispatch(this.request(step, ctx, null), step.timeoutMs)
+    result.phases.actionMs += Date.now() - actionAt
+
     result.outcome = outcome
     return { ok: outcome.ok, message: outcome.message }
   }
@@ -179,16 +186,38 @@ export class StepExecutor {
     result: StepResult,
     force: boolean
   ): Promise<StepAttempt> {
-    const graph = await this.graphFor(
-      true,
-      step.scanLevel ?? ctx.options.scanLevel,
-      force,
-      profileFor(step.target, force)
-    )
-    result.scanned = true
+    const cached = force ? null : this.host.currentGraph()
+    const earlyAt = Date.now()
+    const early = cached
+      ? this.resolver.resolve(
+          step.target!,
+          this.identity.index(cached),
+          step.allowLowConfidence,
+          false
+        )
+      : null
+    result.phases.resolveMs += Date.now() - earlyAt
 
+    const reused = Boolean(cached && early && early.ok)
+    const scanAt = Date.now()
+    const graph =
+      reused && cached
+        ? cached
+        : await this.graphFor(
+            true,
+            step.scanLevel ?? ctx.options.scanLevel,
+            force,
+            profileFor(step.target, force)
+          )
+    result.phases.scanMs += Date.now() - scanAt
+
+    result.scanned = !reused
+
+    const resolveAt = Date.now()
     const index = this.identity.index(graph)
-    const resolution = this.resolver.resolve(step.target!, index, step.allowLowConfidence)
+    const resolution =
+      reused && early ? early : this.resolver.resolve(step.target!, index, step.allowLowConfidence)
+    result.phases.resolveMs += Date.now() - resolveAt
 
     result.resolution = resolution.record
     if (resolution.record) this.log.resolution(step.id, resolution.record)
@@ -197,6 +226,7 @@ export class StepExecutor {
     }
 
     if (ctx.options.verifyState) {
+      const verifyAt = Date.now()
       const strict = step.expectState !== null
       const expected =
         step.expectState ??
@@ -208,18 +238,22 @@ export class StepExecutor {
         this.log.state(step.id, check, strict)
 
         if (!check.ok && strict) {
+          result.phases.verifyMs += Date.now() - verifyAt
           return {
             ok: false,
             message: 'Sayfa durumu beklenenden farkli: ' + check.reasons.join(', ')
           }
         }
       }
+      result.phases.verifyMs += Date.now() - verifyAt
     }
 
+    const actionAt = Date.now()
     const outcome = await this.dispatch(
       this.request(step, ctx, resolution.element.identity),
       step.timeoutMs
     )
+    result.phases.actionMs += Date.now() - actionAt
 
     result.outcome = outcome
     return { ok: outcome.ok, message: outcome.message }
@@ -348,6 +382,10 @@ function reset(result: StepResult): void {
   result.stateCheck = null
   result.scanned = false
   result.message = ''
+  result.phases.scanMs = 0
+  result.phases.resolveMs = 0
+  result.phases.verifyMs = 0
+  result.phases.actionMs = 0
 }
 
 function empty(step: ScenarioStep, order: number, startedAt: number): StepResult {
@@ -367,6 +405,7 @@ function empty(step: ScenarioStep, order: number, startedAt: number): StepResult
     assertions: [],
     outcome: null,
     stateCheck: null,
+    phases: { scanMs: 0, resolveMs: 0, verifyMs: 0, actionMs: 0 },
     contextId: '',
     children: []
   }

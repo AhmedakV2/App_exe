@@ -118,16 +118,18 @@ export interface ActionabilityOptions {
   stableTolerance: number
   requireUnobstructed: boolean
   requireAnimationSettled: boolean
+  animationGraceMs: number
   scrollIntoView: boolean
 }
 
 export const DEFAULT_ACTIONABILITY: ActionabilityOptions = {
   timeoutMs: 8000,
-  pollMs: 90,
-  stableSamples: 2,
+  pollMs: 60,
+  stableSamples: 1,
   stableTolerance: 1,
   requireUnobstructed: true,
   requireAnimationSettled: true,
+  animationGraceMs: 400,
   scrollIntoView: true
 }
 
@@ -143,6 +145,14 @@ export const DEFAULT_NAVIGATION: NavigationOptions = {
   networkIdleMs: 500,
   networkTimeoutMs: 8000,
   inDocumentGraceMs: 350
+}
+
+export const NAVIGATION_GRACE: Partial<Record<ActionKind, number>> = {
+  hover: 0,
+  scroll: 0,
+  type: 120,
+  'clear-type': 120,
+  'select-option': 250
 }
 
 export interface ActionOptions {
@@ -161,6 +171,6 @@ export const DEFAULT_ACTION: ActionOptions = {
   dialogPolicy: 'accept',
   promptText: '',
   downloadPath: '',
-  typeDelayMs: 18,
+  typeDelayMs: 0,
   fallbackToDirect: true
 }

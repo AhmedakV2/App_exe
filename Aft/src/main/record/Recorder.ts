@@ -56,6 +56,7 @@ export class Recorder {
   private session: RecordSession | null = null
   private queue: Promise<void> = Promise.resolve()
   private warmTimer: ReturnType<typeof setTimeout> | null = null
+  private warmScan: Promise<ElementGraph | null> | null = null
   private interactedAt = 0
   private watching = false
 
@@ -260,7 +261,6 @@ export class Recorder {
     if (decision.mergeInto && this.merge(session, decision.mergeInto, intent)) {
       session.counters.merged++
       this.emit()
-      this.warm(session.options.warmDelayMs)
       return
     }
 
@@ -454,10 +454,12 @@ export class Recorder {
     const first = warm ? this.pick(warm, key) : null
     if (first) return first
 
-    const scanned = await this.host
-      .scan(session.options.scanLevel, false, 'record')
-      .catch(() => null)
-    if (scanned) {
+    const pending = this.warmScan
+    const scanned = pending
+      ? await pending.catch(() => null)
+      : await this.host.scan(session.options.scanLevel, false, 'record').catch(() => null)
+
+    if (scanned && scanned !== warm) {
       session.counters.scans++
       const hit = this.pick(scanned, key)
       if (hit) return hit
@@ -500,13 +502,21 @@ export class Recorder {
       () => {
         this.warmTimer = null
         if (this.session?.status !== 'recording') return
-        void this.host.scan(session.options.scanLevel, false, 'record').catch(() => undefined)
+        const task = this.host
+          .scan(session.options.scanLevel, false, 'record')
+          .catch(() => null)
+          .then((graph) => {
+            if (this.warmScan === task) this.warmScan = null
+            return graph
+          })
+        this.warmScan = task
       },
       Math.max(0, delayMs)
     )
   }
 
   private cancelWarm(): void {
+    this.warmScan = null
     if (!this.warmTimer) return
     clearTimeout(this.warmTimer)
     this.warmTimer = null

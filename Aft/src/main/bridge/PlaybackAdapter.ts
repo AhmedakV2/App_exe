@@ -14,6 +14,10 @@ export class PlaybackAdapter implements PlaybackHost {
     return this.controller.start()
   }
 
+  protocolCalls(): number {
+    return this.controller.transport.callCount
+  }
+
   execute(request: ActionRequest): Promise<ActionOutcome> {
     return this.controller.dispatch(request)
   }

@@ -170,7 +170,7 @@ export class BrowserController {
   }
 
   sync(): void {
-    this.engine.invalidate()
+    this.engine.reset()
     if (!this.vision) return
     this.cancelSync()
     this.syncTimer = setTimeout(() => {
@@ -184,7 +184,6 @@ export class BrowserController {
 
     const outcome = await this.actions.execute(request)
     if (request.kind === 'navigate') this.detachGraph()
-    else this.engine.invalidate()
 
     return outcome
   }
@@ -207,7 +206,6 @@ export class BrowserController {
 
   private async report(request: AgentAction, outcome: ActionOutcome): Promise<ActionReport> {
     if (request.action === 'go_to_url') this.detachGraph()
-    else this.engine.invalidate()
 
     const page = await this.refresh(this.level, request.action === 'go_to_url')
 

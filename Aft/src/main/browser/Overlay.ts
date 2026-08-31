@@ -23,21 +23,46 @@ const CLEAR = `(function(){ var o = document.getElementById('__aft_overlay'); if
 
 export class Overlay {
   private readonly contexts = new Map<string, number>()
+  private readonly drawn = new Map<string, string>()
 
-  constructor(private readonly tp: Transport) {}
+  constructor(private readonly tp: Transport) {
+    tp.on('Page.frameNavigated', (params, sessionId) => {
+      const frame = params['frame'] as { id?: string } | undefined
+      if (!frame?.id) return
+      const scope = sessionId + '|' + frame.id
+      this.contexts.delete(scope)
+      this.drawn.delete(scope)
+    })
+    tp.on('Runtime.executionContextsCleared', (_params, sessionId) => {
+      for (const scope of Array.from(this.contexts.keys())) {
+        if (scope.startsWith(sessionId + '|')) this.contexts.delete(scope)
+      }
+      for (const scope of Array.from(this.drawn.keys())) {
+        if (scope.startsWith(sessionId + '|')) this.drawn.delete(scope)
+      }
+    })
+  }
 
   async draw(graph: ElementGraph): Promise<void> {
     const root = graph.frames.find((f) => !f.parentFrameId)
     if (!root) return
+
     const items = graph
       .project('record')
       .candidates.map((c) => ({ i: c.index, x: c.rect.x, y: c.rect.y, w: c.rect.w, h: c.rect.h }))
-    await this.run(root.sessionId, root.frameId, DRAW(JSON.stringify(items)))
+
+    const payload = JSON.stringify(items)
+    const scope = root.sessionId + '|' + root.frameId
+    if (this.drawn.get(scope) === payload) return
+
+    this.drawn.set(scope, payload)
+    await this.run(root.sessionId, root.frameId, DRAW(payload))
   }
 
   async clear(graph: ElementGraph | null): Promise<void> {
     const root = graph?.frames.find((f) => !f.parentFrameId)
     if (!root) return
+    this.drawn.delete(root.sessionId + '|' + root.frameId)
     await this.run(root.sessionId, root.frameId, CLEAR)
   }
 
@@ -55,6 +80,9 @@ export class Overlay {
       this.contexts.set(key, contextId)
     }
     const res = await this.tp.trySend('Runtime.evaluate', { expression, contextId }, sessionId)
-    if (res === null) this.contexts.delete(key)
+    if (res === null) {
+      this.contexts.delete(key)
+      this.drawn.delete(key)
+    }
   }
 }

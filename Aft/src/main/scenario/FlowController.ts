@@ -1,6 +1,6 @@
 import type { RunLog } from './RunLog'
 import type { ExecutionContext, StepExecutor } from './StepExecutor'
-import type { ProgressHandler, Scenario, ScenarioStep, StepResult } from './types'
+import type { ProgressHandler, Scenario, ScenarioStep, StepPhases, StepResult } from './types'
 
 interface FlowState {
   order: number
@@ -125,6 +125,7 @@ export class FlowController {
       assertions: [],
       outcome: null,
       stateCheck: null,
+      phases: sumPhases(children),
       contextId: '',
       children
     }
@@ -152,6 +153,17 @@ export class FlowController {
     state.done++
     state.onProgress?.(state.done, state.total, result)
   }
+}
+
+function sumPhases(children: readonly StepResult[]): StepPhases {
+  const total: StepPhases = { scanMs: 0, resolveMs: 0, verifyMs: 0, actionMs: 0 }
+  for (const child of children) {
+    total.scanMs += child.phases.scanMs
+    total.resolveMs += child.phases.resolveMs
+    total.verifyMs += child.phases.verifyMs
+    total.actionMs += child.phases.actionMs
+  }
+  return total
 }
 
 export function select(steps: readonly ScenarioStep[], only: readonly string[]): ScenarioStep[] {

@@ -170,7 +170,10 @@ export class Actionability {
         report.rect = rect
         report.visible = !state.hidden && state.opacity > 0 && rect.w >= 1 && rect.h >= 1
         report.enabled = !state.disabled && state.pointerEvents !== 'none'
-        report.animationSettled = !options.requireAnimationSettled || state.animations === 0
+        report.animationSettled =
+          !options.requireAnimationSettled ||
+          state.animations === 0 ||
+          Date.now() - started >= options.animationGraceMs
 
         stableHits = sameRect(previous, rect, options.stableTolerance) ? stableHits + 1 : 0
         previous = rect
