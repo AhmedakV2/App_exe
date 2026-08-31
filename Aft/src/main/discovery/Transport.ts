@@ -15,10 +15,17 @@ export type EventHandler = (params: Record<string, unknown>, sessionId: string) 
 
 export const COMMAND_TIMEOUT_MS = 15000
 
+export interface ProtocolStats {
+  total: number
+  byMethod: Record<string, number>
+}
+
 export class Transport {
   private readonly handlers = new Map<string, Set<EventHandler>>()
   private readonly parents = new Map<string, string>()
+  private readonly counts = new Map<string, number>()
   private readonly order: string[] = ['']
+  private calls = 0
   private ready = false
 
   constructor(
@@ -72,7 +79,23 @@ export class Transport {
     }
   }
 
+  get callCount(): number {
+    return this.calls
+  }
+
+  stats(): ProtocolStats {
+    return { total: this.calls, byMethod: Object.fromEntries(this.counts) }
+  }
+
+  resetStats(): void {
+    this.calls = 0
+    this.counts.clear()
+  }
+
   async send<T>(method: string, params: object = {}, sessionId = ''): Promise<T> {
+    this.calls++
+    this.counts.set(method, (this.counts.get(method) ?? 0) + 1)
+
     try {
       const command = sessionId
         ? this.wc.debugger.sendCommand(method, params, sessionId)

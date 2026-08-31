@@ -1,6 +1,6 @@
 export { DiscoveryEngine } from './DiscoveryEngine'
 export { ElementGraph } from './ElementGraph'
-export { Transport, ProtocolError, COMMAND_TIMEOUT_MS } from './Transport'
+export { Transport, ProtocolError, COMMAND_TIMEOUT_MS, type ProtocolStats } from './Transport'
 export { StabilityWaiter, delay } from './StabilityWaiter'
 export { chunk, chunkOver, yieldToLoop } from './scheduler'
 export { FrameRegistry, type FrameRecord } from './FrameRegistry'

@@ -18,7 +18,12 @@ export class TargetResolver {
     private readonly descriptors: DescriptorStore | null = null
   ) {}
 
-  resolve(target: StepTarget, index: ModelIndex, allowLowConfidence: boolean): TargetResolution {
+  resolve(
+    target: StepTarget,
+    index: ModelIndex,
+    allowLowConfidence: boolean,
+    persist = true
+  ): TargetResolution {
     if (target.kind === 'ordinal') return this.byOrdinal(target, index)
 
     if (target.kind === 'query') {
@@ -51,7 +56,7 @@ export class TargetResolver {
     const resolution = outcome.resolution
     const candidate = resolution.candidate
 
-    if (outcome.healed && this.descriptors)
+    if (outcome.healed && persist && this.descriptors)
       this.descriptors.replace(descriptor.id, outcome.descriptor)
 
     const record: ResolutionRecord = {
@@ -94,6 +99,16 @@ export class TargetResolver {
       return {
         ok: false,
         reason: 'aday belirsiz, akis durduruldu',
+        element: null,
+        descriptor: outcome.descriptor,
+        record
+      }
+    }
+
+    if (outcome.healed && !persist) {
+      return {
+        ok: false,
+        reason: 'descriptor onarimi taze tarama istiyor',
         element: null,
         descriptor: outcome.descriptor,
         record

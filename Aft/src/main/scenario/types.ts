@@ -266,6 +266,13 @@ export interface StateCheck {
   reasons: string[]
 }
 
+export interface StepPhases {
+  scanMs: number
+  resolveMs: number
+  verifyMs: number
+  actionMs: number
+}
+
 export interface StepResult {
   stepId: string
   index: number
@@ -282,6 +289,7 @@ export interface StepResult {
   assertions: AssertionRecord[]
   outcome: ActionOutcome | null
   stateCheck: StateCheck | null
+  phases: StepPhases
   contextId: string
   children: StepResult[]
 }
@@ -302,6 +310,11 @@ export interface RunMetrics {
   meanConfidence: number
   scans: number
   retries: number
+  scanMs: number
+  resolveMs: number
+  verifyMs: number
+  actionMs: number
+  protocolCalls: number
   totalMs: number
 }
 
@@ -402,6 +415,7 @@ export interface StoredContext {
 
 export interface PlaybackHost {
   prepare?(): Promise<void>
+  protocolCalls?(): number
   execute(request: ActionRequest): Promise<ActionOutcome>
   scan(level: ScanLevel, force: boolean, profile?: ScanProfileName): Promise<ElementGraph>
   currentGraph(): ElementGraph | null
