@@ -29,17 +29,18 @@ export class TargetResolver {
     if (target.kind === 'query') {
       const outcome = this.byQuery(target, index, allowLowConfidence)
       if (outcome.ok || !this.descriptorOf(target)) return outcome
-      const fallback = this.byDescriptor(target, index, allowLowConfidence)
+      const fallback = this.byDescriptor(target, index, allowLowConfidence, persist)
       return fallback.ok ? fallback : outcome
     }
 
-    return this.byDescriptor(target, index, allowLowConfidence)
+    return this.byDescriptor(target, index, allowLowConfidence, persist)
   }
 
   private byDescriptor(
     target: StepTarget,
     index: ModelIndex,
-    allowLowConfidence: boolean
+    allowLowConfidence: boolean,
+    persist = true
   ): TargetResolution {
     const descriptor = this.descriptorOf(target)
     if (!descriptor) {
