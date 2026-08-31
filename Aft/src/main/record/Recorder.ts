@@ -455,14 +455,16 @@ export class Recorder {
     const first = warm ? this.pick(warm, key) : null
     if (first) return first
 
-    const scanned = await this.host.scan(session.options.scanLevel, false).catch(() => null)
+    const scanned = await this.host
+      .scan(session.options.scanLevel, false, 'record')
+      .catch(() => null)
     if (scanned) {
       session.counters.scans++
       const hit = this.pick(scanned, key)
       if (hit) return hit
     }
 
-    const forced = await this.host.scan(session.options.scanLevel, true).catch(() => null)
+    const forced = await this.host.scan(session.options.scanLevel, true, 'agent').catch(() => null)
     if (forced) {
       session.counters.scans++
       const hit = this.pick(forced, key)
@@ -499,7 +501,7 @@ export class Recorder {
       () => {
         this.warmTimer = null
         if (this.session?.status !== 'recording') return
-        void this.host.scan(session.options.scanLevel, false).catch(() => undefined)
+        void this.host.scan(session.options.scanLevel, false, 'record').catch(() => undefined)
       },
       Math.max(0, delayMs)
     )

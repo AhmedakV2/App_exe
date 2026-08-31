@@ -1,5 +1,12 @@
 import type { ActionKind, ActionOutcome, ActionRequest, InputMode } from '../action'
-import type { BlindSpot, CoverageSummary, ElementGraph, Rect, ScanLevel } from '../discovery'
+import type {
+  BlindSpot,
+  CoverageSummary,
+  ElementGraph,
+  Rect,
+  ScanLevel,
+  ScanProfileName
+} from '../discovery'
 import type {
   Descriptor,
   MatchState,
@@ -396,7 +403,7 @@ export interface StoredContext {
 export interface PlaybackHost {
   prepare?(): Promise<void>
   execute(request: ActionRequest): Promise<ActionOutcome>
-  scan(level: ScanLevel, force: boolean): Promise<ElementGraph>
+  scan(level: ScanLevel, force: boolean, profile?: ScanProfileName): Promise<ElementGraph>
   currentGraph(): ElementGraph | null
   screenshot(): Promise<string>
 }

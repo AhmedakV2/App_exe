@@ -2,9 +2,12 @@ import type { AxMap } from './AxCollector'
 import type { FrameRegistry } from './FrameRegistry'
 import type { DocNode, DocSnap, SessionSnap } from './SnapshotCollector'
 import { applyGeometry, applyInteractivity } from './Classify'
+import { chunkOver, yieldToLoop } from './scheduler'
 import type { BlindSpot, GraphNode, Point, Rect, ShadowStep, Viewport } from './types'
 
 const TEXT_CAP = 160
+
+const EMIT_BUDGET_MS = 8
 
 export const OVERLAY_ID = '__aft_overlay'
 
@@ -19,13 +22,13 @@ export interface BuildResult {
   blindSpots: BlindSpot[]
 }
 
-export function buildGraph(
+export async function buildGraph(
   snaps: SessionSnap[],
   frames: FrameRegistry,
   ax: AxMap,
   viewport: Viewport,
   margin: number
-): BuildResult {
+): Promise<BuildResult> {
   const docByFrame = new Map<string, DocRef>()
   for (const snap of snaps) {
     for (const doc of snap.docs) {
@@ -42,7 +45,7 @@ export function buildGraph(
 
   for (const [frameId, ref] of docByFrame) {
     const framePath = frames.get(frameId)?.path ?? [frameId]
-    emitDoc(ref, frameId, framePath, nodes, lookup, docOfNode)
+    await emitDoc(ref, frameId, framePath, nodes, lookup, docOfNode)
   }
 
   for (const frame of frames.ordered()) {
@@ -79,7 +82,7 @@ export function buildGraph(
     }
   }
 
-  for (const node of nodes) {
+  await chunkOver(nodes, (node) => {
     const ref = docOfNode.get(node.key)
     const frame = frames.get(node.frameId)
     if (node.docRect && ref && frame) {
@@ -98,19 +101,19 @@ export function buildGraph(
     node.ax = ax.get(node.key) ?? null
     applyGeometry(node, viewport, margin)
     applyInteractivity(node)
-  }
+  })
 
   return { nodes, lookup, blindSpots: detectBlindSpots(nodes, frames) }
 }
 
-function emitDoc(
+async function emitDoc(
   ref: DocRef,
   frameId: string,
   framePath: string[],
   nodes: GraphNode[],
   lookup: Map<string, GraphNode>,
   docOfNode: Map<string, DocRef>
-): void {
+): Promise<void> {
   const doc = ref.doc
   const texts = accumulateText(doc)
   const keys: (string | null)[] = new Array(doc.nodes.length).fill(null)
@@ -125,7 +128,15 @@ function emitDoc(
     else stack.push({ index: i, depth: 0, shadow: [], inShadow: false })
   }
 
+  let budget = Date.now()
+  let seen = 0
+
   while (stack.length > 0) {
+    seen++
+    if ((seen & 255) === 0 && Date.now() - budget >= EMIT_BUDGET_MS) {
+      await yieldToLoop()
+      budget = Date.now()
+    }
     const item = stack.pop()
     if (!item) break
     const raw = doc.nodes[item.index]

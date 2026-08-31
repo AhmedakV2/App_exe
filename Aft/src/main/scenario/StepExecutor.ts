@@ -1,12 +1,19 @@
 import type { ActionKind, ActionOutcome, ActionRequest } from '../action'
-import type { ElementGraph, ScanLevel } from '../discovery'
+import type { ElementGraph, ScanLevel, ScanProfileName } from '../discovery'
 import type { IdentityService } from '../identity'
 import type { AssertionEngine } from './AssertionEngine'
 import { ContextStore, buildContext } from './FailureContext'
 import type { RunLog } from './RunLog'
 import { expectedFromCapture, verifyState } from './StateVerifier'
 import type { TargetResolver } from './TargetResolver'
-import type { PlaybackHost, PlaybackOptions, Scenario, ScenarioStep, StepResult } from './types'
+import type {
+  PlaybackHost,
+  PlaybackOptions,
+  Scenario,
+  ScenarioStep,
+  StepResult,
+  StepTarget
+} from './types'
 
 export interface ExecutionContext {
   runId: string
@@ -96,7 +103,8 @@ export class StepExecutor {
     const graph = await this.graphFor(
       Boolean(condition.assertion.target),
       step.scanLevel ?? ctx.options.scanLevel,
-      false
+      false,
+      profileFor(condition.assertion.target, false)
     )
     const index = this.identity.index(graph)
     const passed = this.assertions.evaluate(condition.assertion, index, true).record.passed
@@ -136,7 +144,8 @@ export class StepExecutor {
     const graph = await this.graphFor(
       Boolean(step.assertion.target),
       step.scanLevel ?? ctx.options.scanLevel,
-      force
+      force,
+      profileFor(step.assertion.target, force)
     )
     result.scanned = true
 
@@ -170,7 +179,12 @@ export class StepExecutor {
     result: StepResult,
     force: boolean
   ): Promise<StepAttempt> {
-    const graph = await this.graphFor(true, step.scanLevel ?? ctx.options.scanLevel, force)
+    const graph = await this.graphFor(
+      true,
+      step.scanLevel ?? ctx.options.scanLevel,
+      force,
+      profileFor(step.target, force)
+    )
     result.scanned = true
 
     const index = this.identity.index(graph)
@@ -214,12 +228,13 @@ export class StepExecutor {
   private async graphFor(
     elementSearch: boolean,
     level: ScanLevel,
-    force: boolean
+    force: boolean,
+    profile: ScanProfileName
   ): Promise<ElementGraph> {
     const current = this.host.currentGraph()
     if (!force && current && !elementSearch) return current
 
-    const graph = await this.host.scan(level, force)
+    const graph = await this.host.scan(level, force, profile)
     if (graph !== current) this.counters.scans++
     return graph
   }
@@ -285,6 +300,12 @@ export class StepExecutor {
       return ''
     }
   }
+}
+
+export function profileFor(target: StepTarget | null, force: boolean): ScanProfileName {
+  if (force) return 'agent'
+  if (target && target.kind === 'ordinal') return 'agent'
+  return 'playback'
 }
 
 export function needsElements(step: ScenarioStep): boolean {

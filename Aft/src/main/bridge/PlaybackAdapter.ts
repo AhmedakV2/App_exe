@@ -1,7 +1,7 @@
 import type { WebContents } from 'electron'
 import type { ActionOutcome, ActionRequest } from '../action'
 import type { BrowserController } from '../browser/BrowserController'
-import type { ElementGraph, ScanLevel } from '../discovery'
+import type { ElementGraph, ScanLevel, ScanProfileName } from '../discovery'
 import type { PlaybackHost } from '../scenario'
 
 export class PlaybackAdapter implements PlaybackHost {
@@ -18,8 +18,12 @@ export class PlaybackAdapter implements PlaybackHost {
     return this.controller.dispatch(request)
   }
 
-  scan(level: ScanLevel, force: boolean): Promise<ElementGraph> {
-    return this.controller.scanGraph(level, force)
+  scan(
+    level: ScanLevel,
+    force: boolean,
+    profile: ScanProfileName = 'playback'
+  ): Promise<ElementGraph> {
+    return this.controller.scanGraph(level, force, profile)
   }
 
   currentGraph(): ElementGraph | null {

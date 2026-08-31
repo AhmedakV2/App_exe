@@ -41,6 +41,7 @@ export interface IdentityChannelOptions {
   getGraph: () => ElementGraph | null
   healing?: HealingPolicy
   resolve?: Partial<ResolveOptions>
+  validate?: boolean
 }
 
 export class IdentityChannel {
@@ -59,7 +60,8 @@ export class IdentityChannel {
     this.service = new IdentityService({
       historyPath: join(options.userDataDir, 'identity', 'history.json'),
       healing: options.healing ?? DEFAULT_HEALING,
-      resolve: options.resolve ?? {}
+      resolve: options.resolve ?? {},
+      validate: options.validate ?? false
     })
   }
 

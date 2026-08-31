@@ -5,10 +5,10 @@ import { ElementGraph } from './ElementGraph'
 import { FrameRegistry } from './FrameRegistry'
 import { buildGraph, type BuildResult } from './GraphBuilder'
 import { captureSession, type SessionSnap } from './SnapshotCollector'
-import { StabilityWaiter, delay } from './StabilityWaiter'
+import { StabilityWaiter } from './StabilityWaiter'
 import { Transport } from './Transport'
 import {
-  DEFAULT_SCAN,
+  scanOptions,
   SCHEMA_VERSION,
   type BlindSpot,
   type CoverageSummary,
@@ -22,8 +22,6 @@ interface LayoutMetrics {
   cssVisualViewport?: { pageX: number; pageY: number }
   cssContentSize?: { width: number; height: number }
 }
-
-const EXPAND_LIMIT = 12
 
 export class DiscoveryEngine {
   private readonly tp: Transport
@@ -51,14 +49,20 @@ export class DiscoveryEngine {
     this.lastSignal = ''
   }
 
+  reset(): void {
+    this.lastSignal = ''
+    this.frames.invalidate()
+  }
+
   dispose(): void {
     this.last = null
     this.lastSignal = ''
+    this.frames.invalidate()
     this.tp.detach()
   }
 
   scan(options: Partial<ScanOptions> = {}): Promise<ElementGraph> {
-    const task = (): Promise<ElementGraph> => this.run({ ...DEFAULT_SCAN, ...options })
+    const task = (): Promise<ElementGraph> => this.run(scanOptions(options))
     const next = this.queue.then(task, task)
     this.queue = next.then(
       () => undefined,
@@ -70,7 +74,6 @@ export class DiscoveryEngine {
   private async run(options: ScanOptions): Promise<ElementGraph> {
     const started = Date.now()
     await this.tp.start()
-    await delay(50)
     await this.frames.refresh()
 
     for (const sessionId of this.tp.sessions) await this.waiter.install(sessionId)
@@ -83,7 +86,13 @@ export class DiscoveryEngine {
       options.quietTimeoutMs
     )
 
-    const signal = [quiet.reading.url, quiet.reading.m, quiet.reading.sy, options.level].join('|')
+    const signal = [
+      quiet.reading.url,
+      quiet.reading.m,
+      quiet.reading.sy,
+      options.level,
+      options.profile
+    ].join('|')
     if (!options.force && this.last && signal === this.lastSignal) {
       this.last.coverage.reused = true
       return this.last
@@ -116,9 +125,9 @@ export class DiscoveryEngine {
 
     assignIndexes(nodes)
 
-    const occlusion = applyOcclusion(
+    const occlusion = await applyOcclusion(
       nodes,
-      new OcclusionIndex(nodes, merged.lookup),
+      options.occlusionBudget > 0 ? new OcclusionIndex(nodes, merged.lookup) : null,
       options.occlusionBudget
     )
 
@@ -176,7 +185,7 @@ export class DiscoveryEngine {
 
     const snaps = captured.filter((snap): snap is SessionSnap => snap !== null)
     return {
-      result: buildGraph(snaps, this.frames, ax, viewport, options.viewportMargin),
+      result: await buildGraph(snaps, this.frames, ax, viewport, options.viewportMargin),
       viewport
     }
   }
@@ -229,10 +238,12 @@ export class DiscoveryEngine {
     options: ScanOptions,
     dpr: number
   ): Promise<{ passes: number; viewport: Viewport | null }> {
+    if (options.expandLimit <= 0) return { passes: 0, viewport: null }
+
     const latest = results[results.length - 1]
     const targets = latest.nodes
       .filter((node) => node.visible && node.attrs['aria-expanded'] === 'false')
-      .slice(0, EXPAND_LIMIT)
+      .slice(0, options.expandLimit)
     if (targets.length === 0) return { passes: 0, viewport: null }
 
     for (const node of targets) await this.clickNode(node)

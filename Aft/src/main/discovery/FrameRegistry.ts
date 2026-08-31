@@ -27,13 +27,28 @@ interface RawFrameTree {
 
 export class FrameRegistry {
   private readonly map = new Map<string, FrameRecord>()
+  private readonly enabled = new Set<string>()
   private rootId = ''
   private failedSessions = 0
+  private dirty = true
 
-  constructor(private readonly tp: Transport) {}
+  constructor(private readonly tp: Transport) {
+    const touch = (): void => {
+      this.dirty = true
+    }
+    tp.on('Page.frameAttached', touch)
+    tp.on('Page.frameDetached', touch)
+    tp.on('Page.frameNavigated', touch)
+    tp.on('Target.attachedToTarget', touch)
+    tp.on('Target.detachedFromTarget', touch)
+  }
 
   get failedCount(): number {
     return this.failedSessions
+  }
+
+  invalidate(): void {
+    this.dirty = true
   }
 
   root(): FrameRecord {
@@ -55,15 +70,33 @@ export class FrameRegistry {
   }
 
   async refresh(): Promise<void> {
+    const sessions = this.tp.sessions
+    for (const sessionId of sessions) {
+      if (this.enabled.has(sessionId)) continue
+      this.dirty = true
+      if (await this.tp.enableDomains(sessionId)) this.enabled.add(sessionId)
+    }
+    for (const sessionId of Array.from(this.enabled)) {
+      if (!sessions.includes(sessionId)) {
+        this.enabled.delete(sessionId)
+        this.dirty = true
+      }
+    }
+
+    if (!this.dirty && this.map.size > 0) {
+      this.reset()
+      return
+    }
+
     this.map.clear()
     this.failedSessions = 0
 
-    for (const sessionId of this.tp.sessions) {
-      const enabled = await this.tp.enableDomains(sessionId)
-      if (!enabled) {
+    for (const sessionId of sessions) {
+      if (!this.enabled.has(sessionId)) {
         this.failedSessions++
         continue
       }
+      await this.tp.trySend('DOM.getDocument', { depth: 0 }, sessionId)
       const tree = await this.tp.trySend<{ frameTree: RawFrameTree }>(
         'Page.getFrameTree',
         {},
@@ -79,6 +112,14 @@ export class FrameRegistry {
 
     this.link()
     await this.resolveOwners()
+    this.dirty = false
+  }
+
+  private reset(): void {
+    for (const record of this.map.values()) {
+      record.failed = false
+      record.offset = { x: 0, y: 0 }
+    }
   }
 
   private walk(node: RawFrameTree, sessionId: string, override: boolean): void {

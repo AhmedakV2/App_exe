@@ -9,6 +9,8 @@ const POLL_MS = 120
 
 const PROBE_LIMIT = 16
 
+const HANDLE_GROUP = 'aft-record-handles'
+
 const SOURCE = `(function () {
   if (window.__aftRecord) return;
   var queue = [];
@@ -603,6 +605,7 @@ export class InteractionWatcher {
 
     try {
       const batch: RawInteraction[] = []
+      const touched = new Set<string>()
 
       for (const ref of Array.from(this.worlds.values())) {
         const raw = await this.evaluate(ref, DRAIN, true)
@@ -614,7 +617,12 @@ export class InteractionWatcher {
         const value = raw.result?.value
         if (typeof value !== 'string' || value.length < 3) continue
 
+        touched.add(ref.sessionId)
         for (const item of parse(value)) batch.push(await this.hydrate(ref, item))
+      }
+
+      for (const sessionId of touched) {
+        void this.tp.trySend('Runtime.releaseObjectGroup', { objectGroup: HANDLE_GROUP }, sessionId)
       }
 
       if (batch.length && this.sink) {
@@ -677,9 +685,21 @@ export class InteractionWatcher {
   }
 
   private async resolve(ref: WorldRef, seq: number): Promise<number> {
-    const handle = await this.evaluate(
-      ref,
-      'window.__aftRecord && window.__aftRecord.node(' + seq + ')'
+    const handle = await this.tp.trySend<EvalResult>(
+      'Runtime.evaluate',
+      {
+        expression:
+          '(function(){ var n = window.__aftRecord && window.__aftRecord.node(' +
+          seq +
+          '); if (window.__aftRecord) window.__aftRecord.release(' +
+          seq +
+          '); return n; })()',
+        contextId: ref.contextId,
+        returnByValue: false,
+        awaitPromise: false,
+        objectGroup: HANDLE_GROUP
+      },
+      ref.sessionId
     )
     const objectId = handle?.result?.objectId
     if (!objectId) return 0
@@ -689,9 +709,6 @@ export class InteractionWatcher {
       { objectId },
       ref.sessionId
     )
-
-    void this.tp.trySend('Runtime.releaseObject', { objectId }, ref.sessionId)
-    void this.evaluate(ref, 'window.__aftRecord && window.__aftRecord.release(' + seq + ')')
 
     return described?.node?.backendNodeId ?? 0
   }

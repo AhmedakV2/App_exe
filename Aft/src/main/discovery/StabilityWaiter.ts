@@ -2,16 +2,25 @@ import type { Transport } from './Transport'
 
 const WORLD = 'aft_probe'
 
+const PROBE_VERSION = 2
+
 const PROBE_SOURCE = `(function(){
-if (window.__aftProbe) return;
-var s = { m: 0, t: Date.now() };
+if (window.__aftProbe && window.__aftProbe.v === ${PROBE_VERSION}) return;
+var s = { v: ${PROBE_VERSION}, m: 0, t: Date.now() };
 window.__aftProbe = s;
 var bump = function(){ s.m = s.m + 1; s.t = Date.now(); };
-var opts = { subtree: true, childList: true, attributes: true };
-try { new MutationObserver(bump).observe(document, opts); } catch (e) { s.m = s.m; }
+var structural = function(records){
+  for (var i = 0; i < records.length; i++) {
+    var r = records[i];
+    if (r.type !== 'childList') continue;
+    if (r.addedNodes.length === 0 && r.removedNodes.length === 0) continue;
+    bump();
+    return;
+  }
+};
+var opts = { subtree: true, childList: true };
+try { new MutationObserver(structural).observe(document, opts); } catch (e) { s.m = s.m; }
 addEventListener('scroll', bump, true);
-addEventListener('transitionend', bump, true);
-addEventListener('animationend', bump, true);
 addEventListener('load', bump, true);
 })()`
 
@@ -75,9 +84,16 @@ interface EvalResult {
   exceptionDetails?: unknown
 }
 
+const RESTLESS_LIMIT = 2
+
+const RESTLESS_QUIET_MS = 60
+
+const RESTLESS_TIMEOUT_MS = 300
+
 export class StabilityWaiter {
   private readonly contexts = new Map<string, number>()
   private readonly installed = new Set<string>()
+  private readonly restless = new Map<string, number>()
 
   constructor(private readonly tp: Transport) {
     tp.on('Runtime.executionContextCreated', (params, sessionId) => {
@@ -143,15 +159,23 @@ export class StabilityWaiter {
     quietMs: number,
     timeoutMs: number
   ): Promise<QuietResult> {
+    const scope = this.ck(sessionId, frameId)
+    const restless = this.restless.get(scope) ?? 0
+    const wantedQuiet = restless >= RESTLESS_LIMIT ? Math.min(quietMs, RESTLESS_QUIET_MS) : quietMs
+    const budget = restless >= RESTLESS_LIMIT ? Math.min(timeoutMs, RESTLESS_TIMEOUT_MS) : timeoutMs
+
     const started = Date.now()
     let reading = await this.read(sessionId, frameId)
-    while (Date.now() - started < timeoutMs) {
-      if (reading.ok && reading.idle >= quietMs) {
+    while (Date.now() - started < budget) {
+      if (reading.ok && reading.idle >= wantedQuiet) {
+        this.restless.delete(scope)
         return { reading, timedOut: false, waitedMs: Date.now() - started }
       }
       await delay(40)
       reading = await this.read(sessionId, frameId)
     }
+
+    this.restless.set(scope, restless + 1)
     return { reading, timedOut: true, waitedMs: Date.now() - started }
   }
 
