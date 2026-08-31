@@ -112,6 +112,8 @@ export interface CoverageSummary {
   durationMs: number
 }
 
+export type ScanProfileName = 'agent' | 'record' | 'playback'
+
 export interface ScanOptions {
   level: ScanLevel
   quietMs: number
@@ -120,18 +122,43 @@ export interface ScanOptions {
   occlusionBudget: number
   listenerBudget: number
   lazyPasses: number
+  expandLimit: number
   force: boolean
+  profile: ScanProfileName
 }
 
 export const DEFAULT_SCAN: ScanOptions = {
   level: 1,
   quietMs: 180,
-  quietTimeoutMs: 2500,
+  quietTimeoutMs: 1000,
   viewportMargin: 160,
   occlusionBudget: 6000,
   listenerBudget: 200,
   lazyPasses: 6,
-  force: false
+  expandLimit: 12,
+  force: false,
+  profile: 'agent'
+}
+
+export const SCAN_PROFILES: Record<ScanProfileName, Partial<ScanOptions>> = {
+  agent: {},
+  record: {
+    occlusionBudget: 2000,
+    listenerBudget: 200,
+    lazyPasses: 0,
+    expandLimit: 0
+  },
+  playback: {
+    occlusionBudget: 0,
+    listenerBudget: 0,
+    lazyPasses: 0,
+    expandLimit: 0
+  }
+}
+
+export function scanOptions(overrides: Partial<ScanOptions> = {}): ScanOptions {
+  const profile = overrides.profile ?? DEFAULT_SCAN.profile
+  return { ...DEFAULT_SCAN, ...SCAN_PROFILES[profile], ...overrides, profile }
 }
 
 export const STYLE_KEYS: string[] = [

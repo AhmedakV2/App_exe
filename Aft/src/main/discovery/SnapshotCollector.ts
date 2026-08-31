@@ -1,3 +1,4 @@
+import { chunk } from './scheduler'
 import type { Transport } from './Transport'
 import { STYLE_KEYS, type Rect } from './types'
 
@@ -107,10 +108,15 @@ export async function captureSession(
     sessionId
   )
   if (!raw || !Array.isArray(raw.documents)) return null
-  return { sessionId, docs: raw.documents.map((doc, i) => decodeDoc(doc, i, raw.strings)) }
+
+  const docs: DocSnap[] = []
+  for (let i = 0; i < raw.documents.length; i++) {
+    docs.push(await decodeDoc(raw.documents[i], i, raw.strings))
+  }
+  return { sessionId, docs }
 }
 
-function decodeDoc(doc: RawDoc, docIndex: number, strings: string[]): DocSnap {
+async function decodeDoc(doc: RawDoc, docIndex: number, strings: string[]): Promise<DocSnap> {
   const shadow = stringMap(doc.nodes.shadowRootType, strings)
   const inputValue = stringMap(doc.nodes.inputValue, strings)
   const textValue = stringMap(doc.nodes.textValue, strings)
@@ -121,7 +127,7 @@ function decodeDoc(doc: RawDoc, docIndex: number, strings: string[]): DocSnap {
 
   const total = doc.nodes.nodeType.length
   const nodes: DocNode[] = new Array(total)
-  for (let i = 0; i < total; i++) {
+  await chunk(total, (i) => {
     nodes[i] = {
       index: i,
       parentIndex: doc.nodes.parentIndex[i] ?? -1,
@@ -139,7 +145,7 @@ function decodeDoc(doc: RawDoc, docIndex: number, strings: string[]): DocSnap {
       pseudoType: pseudo.get(i) ?? '',
       layoutIndex: -1
     }
-  }
+  })
   const bounds: (Rect | null)[] = new Array(total).fill(null)
   const clientRects: (Rect | null)[] = new Array(total).fill(null)
   const scrollRects: (Rect | null)[] = new Array(total).fill(null)
@@ -147,16 +153,16 @@ function decodeDoc(doc: RawDoc, docIndex: number, strings: string[]): DocSnap {
   const paintOrders: number[] = new Array(total).fill(0)
 
   const layout = doc.layout
-  for (let k = 0; k < layout.nodeIndex.length; k++) {
+  await chunk(layout.nodeIndex.length, (k) => {
     const at = layout.nodeIndex[k]
-    if (at === undefined || at < 0 || at >= total) continue
+    if (at === undefined || at < 0 || at >= total) return
     nodes[at].layoutIndex = k
     bounds[at] = toRect(layout.bounds?.[k])
     clientRects[at] = toRect(layout.clientRects?.[k])
     scrollRects[at] = toRect(layout.scrollRects?.[k])
     styles[at] = decodeStyle(layout.styles?.[k], strings)
     paintOrders[at] = layout.paintOrders?.[k] ?? 0
-  }
+  })
 
   return {
     index: docIndex,

@@ -1,5 +1,5 @@
 import type { ActionKind, InputMode } from '../action'
-import type { ElementGraph, Rect, ScanLevel } from '../discovery'
+import type { ElementGraph, Rect, ScanLevel, ScanProfileName } from '../discovery'
 import type { MatchState, QualityTier } from '../identity'
 import type { AssertionKind, ScenarioStep, StepKind, StepTarget } from '../scenario'
 
@@ -198,7 +198,7 @@ export type RawSink = (batch: RawInteraction[]) => void
 
 export interface RecordHost {
   prepare?(): Promise<void>
-  scan(level: ScanLevel, force: boolean): Promise<ElementGraph>
+  scan(level: ScanLevel, force: boolean, profile?: ScanProfileName): Promise<ElementGraph>
   currentGraph(): ElementGraph | null
   url(): string
   title(): string

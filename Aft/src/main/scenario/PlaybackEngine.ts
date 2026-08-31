@@ -89,6 +89,7 @@ export class PlaybackEngine {
     this.log.clear()
     this.executor.counters.scans = 0
     this.executor.counters.retries = 0
+    const callsAtStart = this.host.protocolCalls?.() ?? 0
 
     this.log.push('info', '', 'Senaryo baslatildi: ' + checked.title, [
       'adim ' + checked.steps.length,
@@ -120,7 +121,12 @@ export class PlaybackEngine {
     }
 
     const finishedAt = Date.now()
-    const metrics = aggregate(steps, this.executor.counters, finishedAt - startedAt)
+    const protocolCalls = Math.max(0, (this.host.protocolCalls?.() ?? 0) - callsAtStart)
+    const metrics = aggregate(
+      steps,
+      { ...this.executor.counters, protocolCalls },
+      finishedAt - startedAt
+    )
     const failures = opened ? [opened, ...collectFailures(steps)] : collectFailures(steps)
     const status = resolveStatus(steps, failures, aborted, Boolean(opened))
 
@@ -141,7 +147,13 @@ export class PlaybackEngine {
       contexts: contextIds(steps)
     }
 
-    this.log.push('info', '', 'Senaryo bitti: ' + status)
+    this.log.push('info', '', 'Senaryo bitti: ' + status, [
+      'tarama ' + metrics.scanMs + ' ms',
+      'cozumleme ' + metrics.resolveMs + ' ms',
+      'durum dogrulama ' + metrics.verifyMs + ' ms',
+      'aksiyon ' + metrics.actionMs + ' ms',
+      'protokol cagrisi ' + metrics.protocolCalls
+    ])
     run.log = this.log.all()
     this.lastRun = run
 

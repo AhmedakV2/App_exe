@@ -42,6 +42,18 @@ export function renderText(run: RunResult): string {
   )
   lines.push('Ortalama guven ' + percent(metrics.meanConfidence))
   lines.push('Tarama ' + metrics.scans + ', yeniden deneme ' + metrics.retries)
+  lines.push(
+    'Faz suresi tarama ' +
+      metrics.scanMs +
+      ' ms, cozumleme ' +
+      metrics.resolveMs +
+      ' ms, durum ' +
+      metrics.verifyMs +
+      ' ms, aksiyon ' +
+      metrics.actionMs +
+      ' ms'
+  )
+  lines.push('Protokol cagrisi ' + metrics.protocolCalls)
   lines.push('Toplam sure ' + metrics.totalMs + ' ms')
   lines.push('')
   lines.push('Adimlar')
@@ -104,6 +116,20 @@ function renderSteps(steps: readonly StepResult[], indent: number): string[] {
           '" gerceklesen "' +
           cut(assertion.actual, 40) +
           '"'
+      )
+    }
+    if (step.kind !== 'group') {
+      lines.push(
+        prefix +
+          '    faz tarama ' +
+          step.phases.scanMs +
+          ' ms, cozumleme ' +
+          step.phases.resolveMs +
+          ' ms, durum ' +
+          step.phases.verifyMs +
+          ' ms, aksiyon ' +
+          step.phases.actionMs +
+          ' ms'
       )
     }
     if (step.stateCheck && !step.stateCheck.ok) {

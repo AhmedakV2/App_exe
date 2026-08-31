@@ -12,6 +12,7 @@ export interface IdentityOptions {
   historyPath: string
   healing: HealingPolicy
   resolve: Partial<ResolveOptions>
+  validate?: boolean
 }
 
 export interface CaptureResult {
@@ -32,6 +33,7 @@ export class IdentityService {
   private readonly resolver: Resolver
   private readonly healer: Healer
   private readonly resolveOptions: Partial<ResolveOptions>
+  private readonly validate: boolean
   private readonly indexes = new WeakMap<ElementGraph, ModelIndex>()
 
   constructor(options: IdentityOptions) {
@@ -39,6 +41,7 @@ export class IdentityService {
     this.resolver = new Resolver(this.history)
     this.healer = new Healer(options.healing ?? DEFAULT_HEALING)
     this.resolveOptions = options.resolve ?? {}
+    this.validate = options.validate ?? false
   }
 
   load(): Promise<void> {
@@ -49,7 +52,8 @@ export class IdentityService {
     const cached = this.indexes.get(graph)
     if (cached) return cached
 
-    const index = new ModelIndex(assertSnapshot(toSnapshot(graph)))
+    const snapshot = toSnapshot(graph)
+    const index = new ModelIndex(this.validate ? assertSnapshot(snapshot) : snapshot)
     this.indexes.set(graph, index)
     return index
   }

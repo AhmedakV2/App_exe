@@ -66,6 +66,7 @@ function stepOf(id: string, overrides: Partial<StepResult> = {}): StepResult {
     assertions: [],
     outcome: null,
     stateCheck: null,
+    phases: { scanMs: 40, resolveMs: 12, verifyMs: 4, actionMs: 90 },
     contextId: '',
     children: [],
     ...overrides

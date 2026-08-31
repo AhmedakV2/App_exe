@@ -5,9 +5,13 @@ const WORLD = 'aft_record'
 
 const BINDING = '__aftRecordSend'
 
-const POLL_MS = 120
+const POLL_MS = 500
+
+const SAFETY_EVERY = 10
 
 const PROBE_LIMIT = 16
+
+const HANDLE_GROUP = 'aft-record-handles'
 
 const SOURCE = `(function () {
   if (window.__aftRecord) return;
@@ -418,6 +422,7 @@ export class InteractionWatcher {
   private relay: Promise<void> = Promise.resolve()
   private draining = false
   private active = false
+  private ticks = 0
 
   constructor(private readonly tp: Transport) {}
 
@@ -480,6 +485,7 @@ export class InteractionWatcher {
       clearInterval(this.timer)
       this.timer = null
     }
+    this.ticks = 0
 
     for (const off of this.offs.splice(0)) off()
 
@@ -603,8 +609,13 @@ export class InteractionWatcher {
 
     try {
       const batch: RawInteraction[] = []
+      const touched = new Set<string>()
+      this.ticks++
+      const sweep = this.ticks % SAFETY_EVERY === 0
 
       for (const ref of Array.from(this.worlds.values())) {
+        if (!sweep && this.bindings.has(ref.sessionId)) continue
+
         const raw = await this.evaluate(ref, DRAIN, true)
         if (raw === null) {
           this.worlds.delete(key(ref.sessionId, ref.contextId))
@@ -614,7 +625,13 @@ export class InteractionWatcher {
         const value = raw.result?.value
         if (typeof value !== 'string' || value.length < 3) continue
 
-        for (const item of parse(value)) batch.push(await this.hydrate(ref, item))
+        touched.add(ref.sessionId)
+        const hydrated = await Promise.all(parse(value).map((item) => this.hydrate(ref, item)))
+        for (const item of hydrated) batch.push(item)
+      }
+
+      for (const sessionId of touched) {
+        void this.tp.trySend('Runtime.releaseObjectGroup', { objectGroup: HANDLE_GROUP }, sessionId)
       }
 
       if (batch.length && this.sink) {
@@ -677,9 +694,21 @@ export class InteractionWatcher {
   }
 
   private async resolve(ref: WorldRef, seq: number): Promise<number> {
-    const handle = await this.evaluate(
-      ref,
-      'window.__aftRecord && window.__aftRecord.node(' + seq + ')'
+    const handle = await this.tp.trySend<EvalResult>(
+      'Runtime.evaluate',
+      {
+        expression:
+          '(function(){ var n = window.__aftRecord && window.__aftRecord.node(' +
+          seq +
+          '); if (window.__aftRecord) window.__aftRecord.release(' +
+          seq +
+          '); return n; })()',
+        contextId: ref.contextId,
+        returnByValue: false,
+        awaitPromise: false,
+        objectGroup: HANDLE_GROUP
+      },
+      ref.sessionId
     )
     const objectId = handle?.result?.objectId
     if (!objectId) return 0
@@ -689,9 +718,6 @@ export class InteractionWatcher {
       { objectId },
       ref.sessionId
     )
-
-    void this.tp.trySend('Runtime.releaseObject', { objectId }, ref.sessionId)
-    void this.evaluate(ref, 'window.__aftRecord && window.__aftRecord.release(' + seq + ')')
 
     return described?.node?.backendNodeId ?? 0
   }

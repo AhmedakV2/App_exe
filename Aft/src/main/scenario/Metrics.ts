@@ -18,13 +18,18 @@ export function emptyMetrics(): RunMetrics {
     meanConfidence: 0,
     scans: 0,
     retries: 0,
+    scanMs: 0,
+    resolveMs: 0,
+    verifyMs: 0,
+    actionMs: 0,
+    protocolCalls: 0,
     totalMs: 0
   }
 }
 
 export function aggregate(
   steps: readonly StepResult[],
-  counters: { scans: number; retries: number },
+  counters: { scans: number; retries: number; protocolCalls?: number },
   totalMs: number
 ): RunMetrics {
   const metrics = emptyMetrics()
@@ -34,6 +39,10 @@ export function aggregate(
     if (step.kind === 'group') continue
 
     metrics.steps++
+    metrics.scanMs += step.phases.scanMs
+    metrics.resolveMs += step.phases.resolveMs
+    metrics.verifyMs += step.phases.verifyMs
+    metrics.actionMs += step.phases.actionMs
     if (step.status === 'passed') metrics.passed++
     if (step.status === 'failed') metrics.failed++
     if (step.status === 'errored') metrics.errored++
@@ -58,6 +67,11 @@ export function aggregate(
   metrics.meanConfidence = mean(confidences)
   metrics.scans = counters.scans
   metrics.retries = counters.retries
+  metrics.protocolCalls = counters.protocolCalls ?? 0
+  metrics.scanMs = round(metrics.scanMs)
+  metrics.resolveMs = round(metrics.resolveMs)
+  metrics.verifyMs = round(metrics.verifyMs)
+  metrics.actionMs = round(metrics.actionMs)
   metrics.totalMs = round(totalMs)
   return metrics
 }

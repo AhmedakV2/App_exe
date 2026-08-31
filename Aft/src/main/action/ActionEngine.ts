@@ -9,6 +9,7 @@ import { NavigationWaiter } from './NavigationWaiter'
 import { ActionError, classify } from './errors'
 import {
   DEFAULT_ACTION,
+  NAVIGATION_GRACE,
   type ActionOptions,
   type ActionOutcome,
   type ActionRequest,
@@ -96,35 +97,36 @@ export class ActionEngine {
 
   private async perform(request: ActionRequest): Promise<ActionOutcome> {
     const started = Date.now()
+    const deadline = request.timeoutMs && request.timeoutMs > 0 ? started + request.timeoutMs : 0
     let target: ActionTarget | null = null
     let report: ActionabilityReport | null = null
     let mode: InputMode | null = null
 
     try {
       if (request.kind === 'navigate') {
-        const navigation = await this.navigate(request)
+        const navigation = await this.navigate(request, deadline)
         return this.done(request, null, null, null, navigation, started, 'Navigasyon tamam')
       }
       if (request.kind === 'wait') {
         const navigation = await this.navigation.observe(
           async () => undefined,
-          this.settings.navigation
+          this.navigationFor(request, deadline)
         )
         return this.done(request, null, null, null, navigation, started, 'Bekleme tamam')
       }
       if (request.kind === 'refresh') {
-        const navigation = await this.refresh()
+        const navigation = await this.refresh(deadline)
         return this.done(request, null, null, null, navigation, started, 'Sayfa yenilendi')
       }
       if (request.kind === 'scroll' && !targeted(request)) {
-        const navigation = await this.scrollPage(request)
+        const navigation = await this.scrollPage(request, deadline)
         return this.done(request, null, null, null, navigation, started, 'Kaydirma tamam')
       }
       if (request.kind === 'press-key' && !targeted(request)) {
         const key = requireKey(request)
         const navigation = await this.navigation.observe(
           () => this.input.press(key),
-          this.settings.navigation
+          this.navigationFor(request, deadline)
         )
         return this.done(request, null, null, null, navigation, started, 'Tus gonderildi: ' + key)
       }
@@ -134,15 +136,16 @@ export class ActionEngine {
       const probe: ActionabilityTarget = located.probe
 
       const lenient = request.force || directOnly(request.kind, located.node)
+      const budget = this.actionabilityFor(deadline)
 
       report = lenient
-        ? await this.actionability.wait(probe, this.settings.actionability)
-        : await this.actionability.require(probe, this.settings.actionability)
+        ? await this.actionability.wait(probe, budget)
+        : await this.actionability.require(probe, budget)
 
       const point = report.point
       if (!point && !lenient) throw new ActionError('element-not-ready', report.reason)
 
-      const outcome = await this.dispatch(request, located.node, point)
+      const outcome = await this.dispatch(request, located.node, point, deadline)
       mode = outcome.mode
 
       return this.done(request, target, report, mode, outcome.navigation, started, outcome.message)
@@ -164,10 +167,40 @@ export class ActionEngine {
     }
   }
 
+  private navigationFor(
+    request: ActionRequest,
+    deadline: number
+  ): Partial<ActionOptions['navigation']> {
+    const base = this.settings.navigation
+    const grace = NAVIGATION_GRACE[request.kind]
+    const options = {
+      ...base,
+      inDocumentGraceMs: grace === undefined ? base.inDocumentGraceMs : grace
+    }
+    if (!deadline) return options
+
+    const left = Math.max(0, deadline - Date.now())
+    return {
+      ...options,
+      inDocumentGraceMs: Math.min(options.inDocumentGraceMs, left),
+      lifecycleTimeoutMs: Math.min(options.lifecycleTimeoutMs, left),
+      networkTimeoutMs: Math.min(options.networkTimeoutMs, left)
+    }
+  }
+
+  private actionabilityFor(deadline: number): Partial<ActionOptions['actionability']> {
+    const base = this.settings.actionability
+    if (!deadline) return base
+
+    const left = Math.max(0, deadline - Date.now())
+    return { ...base, timeoutMs: Math.min(base.timeoutMs, Math.round(left * 0.7)) }
+  }
+
   private async dispatch(
     request: ActionRequest,
     node: GraphNode,
-    point: Point | null
+    point: Point | null,
+    deadline: number
   ): Promise<{ mode: InputMode; navigation: NavigationReport; message: string }> {
     const preferred: InputMode = request.mode ?? 'real-input'
     const objectId = await this.objectOf(node)
@@ -205,11 +238,14 @@ export class ActionEngine {
     let mode: InputMode = preferred
 
     try {
-      const navigation = await this.navigation.observe(async () => {
-        const result = await run()
-        mode = result.mode
-        message = result.message
-      }, this.settings.navigation)
+      const navigation = await this.navigation.observe(
+        async () => {
+          const result = await run()
+          mode = result.mode
+          message = result.message
+        },
+        this.navigationFor(request, deadline)
+      )
 
       return { mode, navigation, message }
     } finally {
@@ -395,20 +431,26 @@ export class ActionEngine {
     return { mode: 'real-input', message: 'Dosya secici karsilandi' }
   }
 
-  private async navigate(request: ActionRequest): Promise<NavigationReport> {
+  private async navigate(request: ActionRequest, deadline: number): Promise<NavigationReport> {
     const url = request.url ?? ''
     if (!/^https?:\/\//i.test(url)) throw new ActionError('invalid-request', 'gecersiz adres')
 
-    return this.navigation.observe(async () => {
-      await this.tp.send('Page.navigate', { url })
-    }, this.settings.navigation)
+    return this.navigation.observe(
+      async () => {
+        await this.tp.send('Page.navigate', { url })
+      },
+      this.navigationFor(request, deadline)
+    )
   }
 
-  private async scrollPage(request: ActionRequest): Promise<NavigationReport> {
+  private async scrollPage(request: ActionRequest, deadline: number): Promise<NavigationReport> {
     const deltaY = request.deltaY ?? 0
     const point = await this.viewportCenter()
 
-    return this.navigation.observe(() => this.input.scroll(point, deltaY), this.settings.navigation)
+    return this.navigation.observe(
+      () => this.input.scroll(point, deltaY),
+      this.navigationFor(request, deadline)
+    )
   }
 
   private async viewportCenter(): Promise<Point> {
@@ -428,10 +470,13 @@ export class ActionEngine {
     }
   }
 
-  private async refresh(): Promise<NavigationReport> {
-    return this.navigation.observe(async () => {
-      await this.tp.send('Page.reload', { ignoreCache: false })
-    }, this.settings.navigation)
+  private async refresh(deadline: number): Promise<NavigationReport> {
+    return this.navigation.observe(
+      async () => {
+        await this.tp.send('Page.reload', { ignoreCache: false })
+      },
+      this.navigationFor({ kind: 'refresh' }, deadline)
+    )
   }
 
   private locate(request: ActionRequest): {

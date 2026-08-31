@@ -70,11 +70,15 @@ export interface RecordChannelOptions {
   notify?: (channel: string, payload: unknown) => void
 }
 
+const VIEW_DEBOUNCE_MS = 120
+
 export class RecordChannel {
   private readonly recorder: Recorder
   private readonly scenarios: ScenarioStore
   private readonly notify: ((channel: string, payload: unknown) => void) | null
   private registered = false
+  private pendingSession: RecordSession | null = null
+  private viewTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(options: RecordChannelOptions) {
     this.scenarios = options.scenarios
@@ -83,9 +87,34 @@ export class RecordChannel {
     this.recorder = new Recorder(options.host, options.identity, {
       descriptors: options.descriptors ?? null,
       options: options.options,
-      onChange: (session) => this.notify?.(RECORD_UPDATE_EVENT, view(session)),
+      onChange: (session) => this.schedule(session),
       onNotice: (notice: RecordNotice) => this.notify?.(RECORD_NOTICE_EVENT, notice)
     })
+  }
+
+  private schedule(session: RecordSession): void {
+    this.pendingSession = session
+
+    if (session.status !== 'recording') {
+      this.flush()
+      return
+    }
+    if (this.viewTimer) return
+
+    this.viewTimer = setTimeout(() => {
+      this.viewTimer = null
+      this.flush()
+    }, VIEW_DEBOUNCE_MS)
+  }
+
+  private flush(): void {
+    if (this.viewTimer) {
+      clearTimeout(this.viewTimer)
+      this.viewTimer = null
+    }
+    const session = this.pendingSession
+    this.pendingSession = null
+    if (session) this.notify?.(RECORD_UPDATE_EVENT, view(session))
   }
 
   register(): void {
@@ -162,6 +191,7 @@ export class RecordChannel {
       this.registered = false
     }
     await this.recorder.discard().catch(() => undefined)
+    this.flush()
   }
 
   session(): RecordSession | null {
