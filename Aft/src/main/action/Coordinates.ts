@@ -1,6 +1,6 @@
 import type { Point, Rect, Viewport } from '../discovery'
 
-const PROBE_STEPS: Point[] = [
+export const PROBE_STEPS: Point[] = [
   { x: 0.5, y: 0.5 },
   { x: 0.5, y: 0.3 },
   { x: 0.5, y: 0.7 },

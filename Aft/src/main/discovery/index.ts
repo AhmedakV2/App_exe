@@ -2,6 +2,7 @@ export { DiscoveryEngine } from './DiscoveryEngine'
 export { ElementGraph } from './ElementGraph'
 export { Transport, ProtocolError, COMMAND_TIMEOUT_MS } from './Transport'
 export { StabilityWaiter, delay } from './StabilityWaiter'
+export { chunk, chunkOver, yieldToLoop } from './scheduler'
 export { FrameRegistry, type FrameRecord } from './FrameRegistry'
 export { captureSession, type DocSnap, type DocNode, type SessionSnap } from './SnapshotCollector'
 export { collectAx, type AxMap } from './AxCollector'
@@ -12,6 +13,7 @@ export {
   applyInteractivity,
   applyOcclusion,
   ambiguous,
-  probeListeners
+  probeListeners,
+  PROBE_GROUP
 } from './Classify'
 export * from './types'

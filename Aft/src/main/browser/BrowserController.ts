@@ -3,7 +3,7 @@ import { ActionEngine } from '../action'
 import type { ActionOutcome, ActionRequest, DescriptorLookup } from '../action'
 import { DiscoveryEngine } from '../discovery'
 import type { ElementGraph } from '../discovery'
-import type { ScanLevel, Transport } from '../discovery'
+import type { ScanLevel, ScanProfileName, Transport } from '../discovery'
 import { Overlay } from './Overlay'
 import type { AgentAction, PageState } from './types'
 
@@ -106,10 +106,14 @@ export class BrowserController {
     return this.enqueue(() => this.send(request))
   }
 
-  scanGraph(level: ScanLevel, force: boolean): Promise<ElementGraph> {
+  scanGraph(
+    level: ScanLevel,
+    force: boolean,
+    profile: ScanProfileName = 'agent'
+  ): Promise<ElementGraph> {
     return this.enqueue(async () => {
       await this.ready()
-      this.graph = await this.engine.scan({ level, force })
+      this.graph = await this.engine.scan({ level, force, profile })
       return this.graph
     })
   }
@@ -267,7 +271,7 @@ export class BrowserController {
   private detachGraph(): void {
     this.cancelSync()
     this.graph = null
-    this.engine.invalidate()
+    this.engine.reset()
   }
 
   private cancelSync(): void {

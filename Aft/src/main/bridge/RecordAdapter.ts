@@ -1,7 +1,7 @@
 import type { WebContents } from 'electron'
 import type { BrowserController } from '../browser/BrowserController'
 import { InteractionWatcher } from '../browser/InteractionWatcher'
-import type { ElementGraph, ScanLevel } from '../discovery'
+import type { ElementGraph, ScanLevel, ScanProfileName } from '../discovery'
 import type { HighlightMark, RawInteraction, RawSink, RecordHost } from '../record'
 
 export class RecordAdapter implements RecordHost {
@@ -21,8 +21,12 @@ export class RecordAdapter implements RecordHost {
     return this.controller.start()
   }
 
-  scan(level: ScanLevel, force: boolean): Promise<ElementGraph> {
-    return this.controller.scanGraph(level, force)
+  scan(
+    level: ScanLevel,
+    force: boolean,
+    profile: ScanProfileName = 'record'
+  ): Promise<ElementGraph> {
+    return this.controller.scanGraph(level, force, profile)
   }
 
   currentGraph(): ElementGraph | null {

@@ -1,3 +1,4 @@
+import { chunkOver } from './scheduler'
 import type { Transport } from './Transport'
 import type { GraphNode, Rect, Viewport } from './types'
 
@@ -118,23 +119,31 @@ export class OcclusionIndex {
   }
 }
 
-export function applyOcclusion(
+export async function applyOcclusion(
   nodes: GraphNode[],
-  index: OcclusionIndex,
+  index: OcclusionIndex | null,
   budget: number
-): { checked: number; skipped: number } {
+): Promise<{ checked: number; skipped: number }> {
   let checked = 0
   let skipped = 0
-  for (const node of nodes) {
-    if (!node.interactive || !node.inViewport) continue
+
+  if (!index || budget <= 0) {
+    for (const node of nodes) {
+      if (node.interactive && node.inViewport) skipped++
+    }
+    return { checked, skipped }
+  }
+
+  await chunkOver(nodes, (node) => {
+    if (!node.interactive || !node.inViewport) return
     if (checked >= budget) {
       skipped++
-      continue
+      return
     }
     checked++
     node.occlusionChecked = true
     node.occluded = index.occludes(node)
-  }
+  })
   return { checked, skipped }
 }
 
@@ -172,26 +181,40 @@ export function ambiguous(node: GraphNode): boolean {
 
 const PROBE_CONCURRENCY = 16
 
+export const PROBE_GROUP = 'aft-listener-probe'
+
 export async function probeListeners(
   tp: Transport,
   nodes: GraphNode[],
   budget: number
 ): Promise<{ probed: number; skipped: number }> {
+  if (budget <= 0) return { probed: 0, skipped: nodes.length }
+
   const ordered = nodes
     .slice()
     .sort((a, b) => Number(b.inViewport) - Number(a.inViewport) || a.depth - b.depth)
 
   const selected = ordered.slice(0, Math.max(0, budget))
+  const touched = new Set<string>()
   let probed = 0
   let skipped = ordered.length - selected.length
 
   for (let start = 0; start < selected.length; start += PROBE_CONCURRENCY) {
     const chunk = selected.slice(start, start + PROBE_CONCURRENCY)
-    const outcomes = await Promise.all(chunk.map((node) => probeOne(tp, node)))
+    const outcomes = await Promise.all(
+      chunk.map((node) => {
+        touched.add(node.sessionId)
+        return probeOne(tp, node)
+      })
+    )
     for (const outcome of outcomes) {
       if (outcome) probed++
       else skipped++
     }
+  }
+
+  for (const sessionId of touched) {
+    await tp.trySend('Runtime.releaseObjectGroup', { objectGroup: PROBE_GROUP }, sessionId)
   }
   return { probed, skipped }
 }
@@ -199,7 +222,7 @@ export async function probeListeners(
 async function probeOne(tp: Transport, node: GraphNode): Promise<boolean> {
   const resolved = await tp.trySend<{ object?: { objectId?: string } }>(
     'DOM.resolveNode',
-    { backendNodeId: node.backendNodeId },
+    { backendNodeId: node.backendNodeId, objectGroup: PROBE_GROUP },
     node.sessionId
   )
   const objectId = resolved?.object?.objectId
@@ -210,7 +233,6 @@ async function probeOne(tp: Transport, node: GraphNode): Promise<boolean> {
     { objectId, depth: 0 },
     node.sessionId
   )
-  await tp.trySend('Runtime.releaseObject', { objectId }, node.sessionId)
 
   if ((listeners?.listeners ?? []).some((entry) => LISTENER_TYPES.has(entry.type))) {
     node.interactive = true
