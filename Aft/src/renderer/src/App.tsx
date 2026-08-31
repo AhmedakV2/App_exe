@@ -233,40 +233,6 @@ export default function App(): React.JSX.Element {
     window.aft.setStage(next)
   }, [stageEl])
 
-  const writeCmd = useCallback((value: string): void => {
-    cmdRef.current = value
-    setCmd(value)
-  }, [])
-
-  const focusPrompt = useCallback((): void => {
-    const el = inputRef.current
-    if (!el || el.disabled) return
-    if (document.activeElement === el) return
-    el.focus()
-  }, [])
-
-  const reportStage = useCallback((): void => {
-    const el = stageRef.current
-    if (!el) return
-
-    const view = document.documentElement
-    const width = view.clientWidth
-    const height = view.clientHeight
-    if (!width || !height) return
-
-    const rect = el.getBoundingClientRect()
-    const next: StageBox = {
-      x: part(rect.left, width),
-      y: part(rect.top, height),
-      width: part(rect.width, width),
-      height: part(rect.height, height)
-    }
-
-    if (sameBox(stageBoxRef.current, next)) return
-    stageBoxRef.current = next
-    window.aft.setStage(next)
-  }, [])
-
   useEffect(() => {
     const off = window.aft.onState((next) => setState(next))
     window.aft.requestState()
