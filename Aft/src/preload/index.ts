@@ -18,6 +18,7 @@ const api = {
   endDrag: (): void => ipcRenderer.send('aft:drag', null),
   setStage: (box: unknown): void => ipcRenderer.send('aft:stage', box),
   setModal: (open: boolean): void => ipcRenderer.send('aft:modal', open),
+  setStageShown: (open: boolean): void => ipcRenderer.send('aft:stage-shown', open),
   setSettings: (open: boolean): void => ipcRenderer.send('aft:settings', open),
   publishPrefs: (value: unknown): void => ipcRenderer.send('aft:prefs', value),
   patchPrefs: (patch: unknown): void => ipcRenderer.send('aft:prefs-patch', patch),

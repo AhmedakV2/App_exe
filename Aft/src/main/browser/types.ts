@@ -1,4 +1,5 @@
 import type { ActionOutcome } from '../action'
+import type { BlindSpot, CoverageSummary, ScanLevel } from '../discovery'
 
 export interface PageElement {
   i: number
@@ -54,6 +55,24 @@ export interface ExecuteResult {
   page: PageState | null
   vision: boolean
   outcome: ActionOutcome | null
+}
+
+export interface FrameInfo {
+  id: string
+  url: string
+  depth: number
+  failed: boolean
+}
+
+export interface ScanReport {
+  url: string
+  title: string
+  level: ScanLevel
+  coverage: CoverageSummary
+  blindSpots: BlindSpot[]
+  frames: FrameInfo[]
+  viewport: { width: number; height: number; pageHeight: number }
+  capturedAt: number
 }
 
 export interface StageBox {

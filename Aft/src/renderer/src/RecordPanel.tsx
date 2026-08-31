@@ -134,7 +134,7 @@ const StepRow = memo(function StepRow({
 
           {step.alternatives.length ? (
             <div className="rec-block">
-              <span className="rec-block-label">Önerilen hedefler</span>
+              <span className="rec-block-label">Hedefler</span>
               <div className="rec-options">
                 {step.alternatives.map((option: AlternativeView) => (
                   <button
@@ -181,7 +181,7 @@ const StepRow = memo(function StepRow({
           ) : null}
 
           <div className="rec-block">
-            <span className="rec-block-label">Bekleme ekle</span>
+            <span className="rec-block-label">Bekleme</span>
             <div className="rec-options">
               {WAIT_PRESETS.map((preset) => (
                 <button
@@ -200,7 +200,7 @@ const StepRow = memo(function StepRow({
 
           {step.assertions.length ? (
             <div className="rec-block">
-              <span className="rec-block-label">Doğrulama ekle</span>
+              <span className="rec-block-label">Doğrulama</span>
               <div className="rec-options">
                 {step.assertions.map((option) => (
                   <button
@@ -226,7 +226,7 @@ const StepRow = memo(function StepRow({
               onChange={(event) => onTolerate(step.id, event.target.checked)}
               disabled={busy}
             />
-            <span>Hata olsa da akış devam etsin</span>
+            <span>Hatada devam</span>
           </label>
 
           <div className="rec-step-actions">
@@ -346,7 +346,7 @@ export default function RecordPanel({
 
   const start = useCallback(async (): Promise<void> => {
     const ok = await call('Kayıt başlatılamadı', () => window.aftRecord.start({}))
-    if (ok) say('note', 'Kayıt başladı, sayfada gezinin')
+    if (ok) say('note', 'Kayıt başladı')
   }, [call, say])
 
   const stop = useCallback(async (): Promise<void> => {
@@ -546,19 +546,18 @@ export default function RecordPanel({
           small
           danger
         />
+        <span className="rec-bar-push" />
+        <span className={'rec-state ' + status}>{STATUS_LABELS[status]}</span>
       </div>
 
-      {blocked ? <div className="play-note">Koşum sürerken kayıt başlatılamaz.</div> : null}
-
-      <div className="rec-meta">
-        <span className="rec-meta-row">
-          <span className={'rec-state ' + status}>{STATUS_LABELS[status]}</span>
-          {summary || 'kayıt bekleniyor'}
-        </span>
-        {view?.baseUrl ? (
-          <span className="rec-meta-row muted">başlangıç: {shortUrl(view.baseUrl)}</span>
-        ) : null}
-      </div>
+      {summary || view?.baseUrl ? (
+        <div className="rec-meta">
+          {summary ? <span className="rec-meta-row">{summary}</span> : null}
+          {view?.baseUrl ? (
+            <span className="rec-meta-row muted">{shortUrl(view.baseUrl)}</span>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="rec-list" ref={listRef} onScroll={onScroll}>
         {steps.length ? (
@@ -581,12 +580,8 @@ export default function RecordPanel({
           ))
         ) : (
           <div className="rec-empty">
-            <Glyph name="record" size={22} />
-            <span>Kaydı başlatın ve sayfada gezinin.</span>
-            <span className="muted">
-              Tıklama, yazma, seçim ve tuş adımları senaryoya dönüşür; gereksiz kaydırma ve odak
-              olayları elenir.
-            </span>
+            <Glyph name="record" size={20} />
+            <span>Adım yok</span>
           </div>
         )}
       </div>

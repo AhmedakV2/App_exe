@@ -2,7 +2,13 @@ import type { Descriptor } from '../identity'
 import { digest } from '../model'
 import type { ElementModel } from '../model'
 import type { Assertion, AssertionKind, ScenarioStep, StepKind, StepTarget } from '../scenario'
-import type { AssertionOption, AssertionSpec, RecordIntent, RecordOptions } from './types'
+import type {
+  AssertionOption,
+  AssertionSpec,
+  RecordIntent,
+  RecordOptions,
+  StepAdvice
+} from './types'
 
 const KIND_LABELS: Record<string, string> = {
   click: 'Tikla',
@@ -48,6 +54,25 @@ export function descriptorTarget(descriptor: Descriptor, label: string): StepTar
     descriptor,
     query: null,
     ordinal: -1
+  }
+}
+
+export function steadyTarget(
+  descriptor: Descriptor,
+  label: string,
+  advice: StepAdvice
+): StepTarget {
+  const base = descriptorTarget(descriptor, label)
+  if (advice.level === 'strong') return base
+
+  const unique = advice.alternatives.find((option) => option.unique)
+  if (!unique) return base
+
+  return {
+    ...unique.target,
+    label: base.label,
+    descriptorId: descriptor.id,
+    descriptor
   }
 }
 
