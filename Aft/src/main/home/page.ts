@@ -76,7 +76,6 @@ export function homePage(theme: string): string {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AFT</title>
     <style>
       :root {
         --bg: ${skin.bg};
@@ -361,7 +360,6 @@ export function homePage(theme: string): string {
         <svg width="21" height="21" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
           <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
         </svg>
-        <span>AFT</span>
       </div>
 
       <form id="form" autocomplete="off">
