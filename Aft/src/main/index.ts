@@ -26,11 +26,12 @@ import {
   WindowAction
 } from './browser/types'
 import type { ScanLevel } from './discovery'
+import { HOME_URL, isHomeUrl, mountHome, registerHomeScheme, setHomeTheme } from './home'
 
 const FRAME = 40
 const STAGE_RADIUS = 8
 const FRAME_COLOR = '#1e1f22'
-const HOME_URL = 'https://www.google.com'
+const AGENT_PARTITION = 'persist:aft-agent'
 const DRAG_TICK = 16
 const DRAG_MAX_MS = 30000
 const SETTINGS_WIDTH = 392
@@ -61,6 +62,8 @@ let settingsSpot: { x: number; y: number } | null = null
 let settingsSize = { width: SETTINGS_WIDTH, height: SETTINGS_HEIGHT }
 let chromeColor = FRAME_COLOR
 let prefs: AppPrefs | null = null
+
+registerHomeScheme()
 
 function preloadPath(): string {
   const mjs = join(__dirname, '../preload/index.mjs')
@@ -316,6 +319,13 @@ function setSettings(open: boolean): void {
   else closeSettings()
 }
 
+function repaintHome(): void {
+  if (!targetView || targetView.webContents.isDestroyed()) return
+  if (!isHomeUrl(targetView.webContents.getURL())) return
+  if (controller) controller.reload()
+  else targetView.webContents.reload()
+}
+
 function publishPrefs(value: unknown): void {
   if (!value || typeof value !== 'object') return
   const raw = value as Partial<AppPrefs>
@@ -328,6 +338,7 @@ function publishPrefs(value: unknown): void {
   }
 
   if (settingsAlive()) (settingsWin as BrowserWindow).webContents.send('aft:prefs', prefs)
+  if (setHomeTheme(prefs.theme)) repaintHome()
 }
 
 function patchPrefs(patch: unknown): void {
@@ -601,7 +612,7 @@ function createWindow(): void {
   })
 
   targetView = new WebContentsView({
-    webPreferences: { sandbox: true, contextIsolation: true, partition: 'persist:aft-agent' }
+    webPreferences: { sandbox: true, contextIsolation: true, partition: AGENT_PARTITION }
   })
 
   chatView.setBackgroundColor(FRAME_COLOR)
@@ -665,6 +676,7 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.aft.agent')
+  mountHome(AGENT_PARTITION)
 
   ipcMain.handle('aft:execute', (_e, action: AgentAction): Promise<ExecuteResult> =>
     respond(() => controller.execute(action))

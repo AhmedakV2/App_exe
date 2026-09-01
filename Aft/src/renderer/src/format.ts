@@ -1,3 +1,5 @@
+import { isHomeUrl, resolveInput } from '../../main/home/search'
+
 export function formatMs(ms: number): string {
   if (!Number.isFinite(ms)) return '—'
   if (ms < 1000) return Math.round(ms) + ' ms'
@@ -63,7 +65,7 @@ export function ratio(part: number, total: number): number {
 }
 
 export function shortUrl(raw: string): string {
-  if (!raw) return ''
+  if (!raw || isHomeUrl(raw)) return ''
   try {
     const parsed = new URL(raw)
     const path = parsed.pathname === '/' ? '' : parsed.pathname
@@ -83,12 +85,7 @@ export function hostOf(raw: string): string {
 }
 
 export function toUrl(input: string): string {
-  const text = input.trim()
-  if (!text) return ''
-  if (/^[a-z][a-z0-9+.-]*:/i.test(text)) return text
-  if (/^(localhost|\d{1,3}(\.\d{1,3}){3})(:\d+)?(\/|$)/i.test(text)) return 'http://' + text
-  if (/^[^\s/?#]+\.[^\s/?#]{2,}/.test(text)) return 'https://' + text
-  return 'https://www.google.com/search?q=' + encodeURIComponent(text)
+  return resolveInput(input)
 }
 
 export function clamp(value: number, low: number, high: number): number {
