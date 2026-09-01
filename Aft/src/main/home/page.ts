@@ -1,4 +1,4 @@
-import { SEARCH_ENDPOINT } from './search'
+import { FAVICON_ENDPOINT, SEARCH_ENDPOINT } from './search'
 
 interface HomeSkin {
   bg: string
@@ -232,6 +232,7 @@ export function homePage(theme: string): string {
       }
 
       .badge {
+        position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -243,6 +244,22 @@ export function homePage(theme: string): string {
         font: 600 12px var(--mono);
         text-transform: uppercase;
         color: var(--muted);
+      }
+
+      .badge img {
+        display: none;
+        width: 17px;
+        height: 17px;
+        border-radius: 3px;
+        object-fit: contain;
+      }
+
+      .badge.ready span {
+        display: none;
+      }
+
+      .badge.ready img {
+        display: block;
       }
 
       .label {
@@ -367,6 +384,7 @@ export function homePage(theme: string): string {
     <script>
       (function () {
         var SEARCH = '${SEARCH_ENDPOINT}'
+        var MIRROR = '${FAVICON_ENDPOINT}'
         var KEY = 'aft:home:links'
         var SLOTS = 5
         var form = document.getElementById('form')
@@ -433,14 +451,47 @@ export function homePage(theme: string): string {
           return svg
         }
 
+        function badgeOf(item) {
+          var badge = document.createElement('div')
+          badge.className = 'badge'
+
+          var letter = document.createElement('span')
+          letter.textContent = item.t.slice(0, 1)
+          badge.appendChild(letter)
+
+          var origin = ''
+          var host = ''
+          try {
+            var parsed = new URL(item.u)
+            origin = parsed.origin
+            host = parsed.host
+          } catch (err) {
+            return badge
+          }
+          if (!host || origin === 'null') return badge
+
+          var img = document.createElement('img')
+          img.alt = ''
+          var tried = 0
+          img.addEventListener('load', function () {
+            if (img.naturalWidth > 0) badge.className = 'badge ready'
+          })
+          img.addEventListener('error', function () {
+            tried += 1
+            if (tried === 1) img.src = MIRROR + encodeURIComponent(host)
+            else img.remove()
+          })
+          img.src = origin + '/favicon.ico'
+          badge.appendChild(img)
+          return badge
+        }
+
         function filled(item, index) {
           var slot = document.createElement('div')
           slot.className = 'slot'
           slot.title = item.u
 
-          var badge = document.createElement('div')
-          badge.className = 'badge'
-          badge.textContent = item.t.slice(0, 1)
+          var badge = badgeOf(item)
 
           var label = document.createElement('div')
           label.className = 'label'
