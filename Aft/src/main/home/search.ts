@@ -23,7 +23,7 @@ export function resolveInput(input: string): string {
   const text = input.trim()
   if (!text) return ''
   if (/^(localhost|\d{1,3}(\.\d{1,3}){3})(:\d+)?(\/|$)/i.test(text)) return 'http://' + text
-  if (/^[a-z][a-z0-9+.-]*:/i.test(text)) return text
+  if (/^(?!javascript:|data:)[a-z][a-z0-9+.-]*:(\/\/|[^0-9])/i.test(text)) return text
   if (/^[^\s/?#]+\.[^\s/?#]{2,}/.test(text)) return 'https://' + text
   return searchUrl(text)
 }
