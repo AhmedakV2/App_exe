@@ -1,7 +1,8 @@
 export const HOME_SCHEME = 'aft'
 export const HOME_HOST = 'home'
 export const HOME_URL = 'aft://home/'
-export const SEARCH_ENDPOINT = 'https://duckduckgo.com/?q='
+export const SEARCH_ENDPOINT = 'https://www.google.com/search?q='
+export const FAVICON_ENDPOINT = 'https://www.google.com/s2/favicons?sz=64&domain='
 
 export function searchUrl(query: string): string {
   const text = query.trim()
