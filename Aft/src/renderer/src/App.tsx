@@ -11,6 +11,7 @@ import { isThemeId, paintTheme, readTheme, storeTheme, themeOf } from './themes'
 import type { ThemeId } from './themes'
 import { Glyph, IconButton } from './icons'
 import { clamp, formatMs, shortUrl, toUrl } from './format'
+import { isHomeUrl } from '../../main/home/search'
 import { useConsole } from './useConsole'
 import type { Report } from './report'
 import BrowserPage from './pages/BrowserPage'
@@ -542,7 +543,7 @@ export default function App(): React.JSX.Element {
 
   const onUrlFocus = useCallback((): void => {
     setUrlFocused(true)
-    setUrlDraft(state.url)
+    setUrlDraft(isHomeUrl(state.url) ? '' : state.url)
     requestAnimationFrame(() => urlRef.current?.select())
   }, [state.url])
 
