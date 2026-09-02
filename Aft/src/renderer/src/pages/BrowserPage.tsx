@@ -1,5 +1,6 @@
 import React from 'react'
 import type { AgentAction } from '../../../main/browser/types'
+import type { PlaybackOptions } from '../../../main/scenario/types'
 import type { Console as ConsoleApi } from '../useConsole'
 import ConsolePanel from '../parts/Console'
 import ElementList from '../parts/ElementList'
@@ -25,6 +26,7 @@ export default function BrowserPage({
   runRequest,
   recording,
   playing,
+  playOptions,
   onListGrip,
   onTermGrip,
   onDockGrip,
@@ -50,6 +52,7 @@ export default function BrowserPage({
   runRequest: string
   recording: boolean
   playing: boolean
+  playOptions: Partial<PlaybackOptions>
   onListGrip: (event: React.PointerEvent<HTMLDivElement>) => void
   onTermGrip: (event: React.PointerEvent<HTMLDivElement>) => void
   onDockGrip: (event: React.PointerEvent<HTMLDivElement>) => void
@@ -138,6 +141,7 @@ export default function BrowserPage({
               revision={revision}
               request={runRequest}
               blocked={recording}
+              options={playOptions}
               onReport={onReport}
               onBusy={onBusy}
             />

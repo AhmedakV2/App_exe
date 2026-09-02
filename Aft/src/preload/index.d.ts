@@ -27,6 +27,7 @@ declare global {
       setModal: (open: boolean) => void
       setStageShown: (open: boolean) => void
       setSettings: (open: boolean) => void
+      setDevtools: (open: boolean) => void
       publishPrefs: (value: AppPrefs) => void
       patchPrefs: (patch: Partial<AppPrefs>) => void
       setChrome: (color: string) => void

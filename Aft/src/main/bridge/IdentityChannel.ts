@@ -18,12 +18,14 @@ import type {
   IdentityChannelName,
   ProjectionPayload,
   ResolvePayload,
+  ScanPayload,
   StatsPayload
 } from './types'
 
 const CHANNELS: IdentityChannelName[] = [
   'aft:identity:capture',
   'aft:identity:resolve',
+  'aft:identity:scan',
   'aft:identity:project',
   'aft:identity:validate',
   'aft:identity:list',
@@ -39,6 +41,7 @@ const RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 export interface IdentityChannelOptions {
   userDataDir: string
   getGraph: () => ElementGraph | null
+  ensureGraph?: () => Promise<ElementGraph | null>
   healing?: HealingPolicy
   resolve?: Partial<ResolveOptions>
   validate?: boolean
@@ -49,12 +52,14 @@ export class IdentityChannel {
   private readonly descriptors: DescriptorStore
   private readonly snapshots: ModelStore
   private readonly getGraph: () => ElementGraph | null
+  private readonly ensureGraph: (() => Promise<ElementGraph | null>) | null
   private cachedGraph: ElementGraph | null = null
   private cachedIndex: ModelIndex | null = null
   private registered = false
 
   constructor(options: IdentityChannelOptions) {
     this.getGraph = options.getGraph
+    this.ensureGraph = options.ensureGraph ?? null
     this.descriptors = new DescriptorStore(join(options.userDataDir, 'identity', 'catalog.json'))
     this.snapshots = new ModelStore(join(options.userDataDir, 'identity', 'snapshots'))
     this.service = new IdentityService({
@@ -83,12 +88,27 @@ export class IdentityChannel {
       this.guard('Cozumleme tamam', () => this.resolve(String(descriptorId)))
     )
 
+    ipcMain.handle('aft:identity:scan', () =>
+      this.guard('Sayfa tarandi', async (): Promise<ScanPayload> => {
+        const graph = await this.requireGraph()
+        const index = this.indexOf(graph)
+        return {
+          url: graph.url,
+          title: graph.title,
+          elements: index.elements().length,
+          capturedAt: Date.now()
+        }
+      })
+    )
+
     ipcMain.handle('aft:identity:project', (_event, kind: unknown) =>
       this.guard('Projeksiyon hazir', () => this.project(normalizeKind(kind)))
     )
 
     ipcMain.handle('aft:identity:validate', () =>
-      this.guard('Model dogrulandi', () => validateSnapshot(this.snapshotOf(this.requireGraph())))
+      this.guard('Model dogrulandi', async () =>
+        validateSnapshot(this.snapshotOf(await this.requireGraph()))
+      )
     )
 
     ipcMain.handle('aft:identity:list', () =>
@@ -165,7 +185,7 @@ export class IdentityChannel {
   private async capture(ordinal: number): Promise<CapturePayload> {
     if (!Number.isInteger(ordinal) || ordinal < 0) throw new Error('Gecersiz sira: ' + ordinal)
 
-    const index = this.indexOf(this.requireGraph())
+    const index = this.indexOf(await this.requireGraph())
     const descriptor = this.service.captureFromIndex(index, ordinal)
     this.descriptors.save(descriptor)
     await this.snapshots.put(index.snapshot)
@@ -176,9 +196,9 @@ export class IdentityChannel {
     return { descriptor, summary, warnings: descriptor.quality.reasons }
   }
 
-  private resolve(descriptorId: string): ResolvePayload {
+  private async resolve(descriptorId: string): Promise<ResolvePayload> {
     const descriptor = this.requireDescriptor(descriptorId)
-    const index = this.indexOf(this.requireGraph())
+    const index = this.indexOf(await this.requireGraph())
     const outcome = this.service.resolve(descriptor, index)
 
     if (outcome.healed) this.descriptors.replace(descriptorId, outcome.descriptor)
@@ -192,8 +212,8 @@ export class IdentityChannel {
     }
   }
 
-  private project(kind: ConsumerKind): ProjectionPayload {
-    const index = this.indexOf(this.requireGraph())
+  private async project(kind: ConsumerKind): Promise<ProjectionPayload> {
+    const index = this.indexOf(await this.requireGraph())
     return {
       projection: project(index, kind),
       validation: validateSnapshot(index.snapshot)
@@ -231,8 +251,12 @@ export class IdentityChannel {
     return this.indexOf(graph).snapshot
   }
 
-  private requireGraph(): ElementGraph {
-    const graph = this.getGraph()
+  private async requireGraph(): Promise<ElementGraph> {
+    const current = this.getGraph()
+    if (current) return current
+
+    const scanned = this.ensureGraph ? await this.ensureGraph().catch(() => null) : null
+    const graph = scanned ?? this.getGraph()
     if (!graph) throw new Error('Aktif tarama yok, once sayfa taranmali')
     return graph
   }

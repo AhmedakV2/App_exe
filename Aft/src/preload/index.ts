@@ -20,6 +20,7 @@ const api = {
   setModal: (open: boolean): void => ipcRenderer.send('aft:modal', open),
   setStageShown: (open: boolean): void => ipcRenderer.send('aft:stage-shown', open),
   setSettings: (open: boolean): void => ipcRenderer.send('aft:settings', open),
+  setDevtools: (open: boolean): void => ipcRenderer.send('aft:devtools', open),
   publishPrefs: (value: unknown): void => ipcRenderer.send('aft:prefs', value),
   patchPrefs: (patch: unknown): void => ipcRenderer.send('aft:prefs-patch', patch),
   setChrome: (color: string): void => ipcRenderer.send('aft:chrome', color),

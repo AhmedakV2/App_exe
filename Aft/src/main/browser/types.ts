@@ -103,6 +103,7 @@ export interface BrowserState {
   terminalOpen: boolean
   settingsOpen: boolean
   vision: boolean
+  devtoolsOpen: boolean
   maximized: boolean
   fullscreen: boolean
 }
@@ -111,4 +112,7 @@ export interface AppPrefs {
   theme: string
   autoTerminal: boolean
   autoTerminalRestore: boolean
+  screenshotOnFailure: boolean
+  stopOnFailure: boolean
+  verifyState: boolean
 }
