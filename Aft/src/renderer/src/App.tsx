@@ -14,6 +14,7 @@ import { clamp, formatMs, shortUrl, toUrl } from './format'
 import { isHomeUrl } from '../../main/home/search'
 import { useConsole } from './useConsole'
 import type { Report } from './report'
+import type { PlaybackOptions, StepResult } from '../../main/scenario/types'
 import BrowserPage from './pages/BrowserPage'
 import type { DockTab } from './pages/BrowserPage'
 import ScenarioPage from './pages/ScenarioPage'
@@ -56,6 +57,9 @@ const DOCK_TAB_KEY = 'aft:dock-tab'
 const PAGE_KEY = 'aft:page'
 const AUTO_TERM_KEY = 'aft:auto-terminal'
 const AUTO_BACK_KEY = 'aft:auto-terminal-restore'
+const SHOT_KEY = 'aft:play-screenshot'
+const STOP_KEY = 'aft:play-stop'
+const STATE_KEY = 'aft:play-verify'
 
 const LIST_SIZE = 300
 const TERM_SIZE = 268
@@ -141,6 +145,44 @@ const Brand = memo(function Brand(): React.JSX.Element {
   )
 })
 
+const STEP_LABELS: Record<string, string> = {
+  passed: 'geçti',
+  failed: 'kaldı',
+  errored: 'hata',
+  skipped: 'atlandı'
+}
+
+function stepDetail(step: StepResult): string[] {
+  const detail: string[] = []
+  if (step.resolution) {
+    detail.push(
+      'kimlik: ' +
+        step.resolution.state +
+        ' · güven ' +
+        Math.round(step.resolution.confidence * 100) +
+        '%'
+    )
+  }
+  for (const check of step.assertions) {
+    detail.push(
+      'doğrulama: ' +
+        check.kind +
+        ' · beklenen "' +
+        check.expected +
+        '" · gelen "' +
+        check.actual +
+        '"'
+    )
+  }
+  if (step.stateCheck && !step.stateCheck.ok) {
+    detail.push('durum: ' + step.stateCheck.reasons.join(', '))
+  }
+  if (step.outcome?.code) detail.push('kod: ' + step.outcome.code)
+  if (step.contextId) detail.push('bağlam: ' + step.contextId)
+  if (step.message) detail.push(step.message)
+  return detail
+}
+
 const EMPTY_STATE: BrowserState = {
   url: '',
   title: '',
@@ -151,6 +193,7 @@ const EMPTY_STATE: BrowserState = {
   terminalOpen: false,
   settingsOpen: false,
   vision: false,
+  devtoolsOpen: false,
   maximized: false,
   fullscreen: false
 }
@@ -170,6 +213,11 @@ export default function App(): React.JSX.Element {
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
   const [autoTerm, setAutoTerm] = useState(() => readFlag(AUTO_TERM_KEY, true))
   const [autoBack, setAutoBack] = useState(() => readFlag(AUTO_BACK_KEY, false))
+  const [playOptions, setPlayOptions] = useState<Partial<PlaybackOptions>>(() => ({
+    screenshotOnFailure: readFlag(SHOT_KEY, true),
+    stopOnFailure: readFlag(STOP_KEY, true),
+    verifyState: readFlag(STATE_KEY, true)
+  }))
   const [listWidth, setListWidth] = useState(() => readSize(LIST_KEY, LIST_SIZE))
   const [termHeight, setTermHeight] = useState(() => readSize(TERM_KEY, TERM_SIZE))
   const [dockWidth, setDockWidth] = useState(() => readSize(DOCK_KEY, DOCK_SIZE))
@@ -192,6 +240,7 @@ export default function App(): React.JSX.Element {
 
   const terminalOpen = state.terminalOpen
   const settingsOpen = state.settingsOpen
+  const devtoolsOpen = state.devtoolsOpen
   const hasStage = page === 'browser'
 
   const listSize = space.width
@@ -309,16 +358,47 @@ export default function App(): React.JSX.Element {
   }, [autoBack])
 
   useEffect(() => {
-    window.aft.publishPrefs({ theme, autoTerminal: autoTerm, autoTerminalRestore: autoBack })
-  }, [autoBack, autoTerm, theme])
+    storeFlag(SHOT_KEY, Boolean(playOptions.screenshotOnFailure))
+    storeFlag(STOP_KEY, Boolean(playOptions.stopOnFailure))
+    storeFlag(STATE_KEY, Boolean(playOptions.verifyState))
+  }, [playOptions])
+
+  useEffect(() => {
+    window.aft.publishPrefs({
+      theme,
+      autoTerminal: autoTerm,
+      autoTerminalRestore: autoBack,
+      screenshotOnFailure: Boolean(playOptions.screenshotOnFailure),
+      stopOnFailure: Boolean(playOptions.stopOnFailure),
+      verifyState: Boolean(playOptions.verifyState)
+    })
+  }, [autoBack, autoTerm, playOptions, theme])
 
   useEffect(() => {
     return window.aft.onPrefsPatch((patch) => {
       if (isThemeId(patch.theme)) setTheme(patch.theme)
       if (typeof patch.autoTerminal === 'boolean') setAutoTerm(patch.autoTerminal)
       if (typeof patch.autoTerminalRestore === 'boolean') setAutoBack(patch.autoTerminalRestore)
+
+      const keys = ['screenshotOnFailure', 'stopOnFailure', 'verifyState'] as const
+      const next: Partial<PlaybackOptions> = {}
+      for (const key of keys) if (typeof patch[key] === 'boolean') next[key] = patch[key]
+      if (Object.keys(next).length) setPlayOptions((prev) => ({ ...prev, ...next }))
     })
   }, [])
+
+  useEffect(() => {
+    return window.aftPlayback.onProgress((payload) => {
+      const step = payload.step
+      const label = STEP_LABELS[step.status] ?? step.status
+      const head =
+        'Adım ' + (step.index + 1) + '/' + payload.total + ' · ' + step.title + ' · ' + label
+      pushLine(step.status === 'passed' ? 'ok' : step.status === 'skipped' ? 'note' : 'err', head, {
+        ms: step.durationMs,
+        detail: stepDetail(step)
+      })
+    })
+  }, [pushLine])
 
   useEffect(() => {
     termOpenRef.current = terminalOpen
@@ -443,6 +523,11 @@ export default function App(): React.JSX.Element {
   const toggleSettings = useCallback((): void => {
     window.aft.setSettings(!settingsOpen)
   }, [settingsOpen])
+
+  const toggleDevtools = useCallback((): void => {
+    setPage('browser')
+    window.aft.setDevtools(!devtoolsOpen)
+  }, [devtoolsOpen])
 
   const beginDrag = useCallback(
     (axis: DragAxis, event: React.PointerEvent<HTMLDivElement>): void => {
@@ -607,6 +692,12 @@ export default function App(): React.JSX.Element {
                 active={state.vision}
                 badge={state.vision ? term.elements.length : 0}
               />
+              <IconButton
+                name="inspect"
+                title="Sayfayı incele F12"
+                onClick={toggleDevtools}
+                active={devtoolsOpen}
+              />
             </>
           ) : null}
         </div>
@@ -720,6 +811,7 @@ export default function App(): React.JSX.Element {
             runRequest={runRequest}
             recording={recording}
             playing={playing}
+            playOptions={playOptions}
             onListGrip={beginListDrag}
             onTermGrip={beginTermDrag}
             onDockGrip={beginDockDrag}
