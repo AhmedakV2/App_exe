@@ -23,6 +23,8 @@ interface LayoutMetrics {
   cssContentSize?: { width: number; height: number }
 }
 
+const EXPAND_LIMIT = 12
+
 export class DiscoveryEngine {
   private readonly tp: Transport
   private readonly waiter: StabilityWaiter

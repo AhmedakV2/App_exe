@@ -1,42 +1,23 @@
 import React, { memo } from 'react'
 import { Glyph } from './icons'
 
-export type Tone = 'ok' | 'warn' | 'bad' | 'flat' | 'accent' | 'info'
-
-const SYM_TEXT: Record<Tone, string> = {
-  ok: '✓',
-  bad: '✗',
-  warn: '!',
-  flat: '–',
-  accent: '●',
-  info: 'i'
-}
-
-export const Sym = memo(function Sym({
-  tone,
-  text
-}: {
-  tone: Tone
-  text?: string
-}): React.JSX.Element {
-  return <span className={'sym ' + tone}>{text ?? SYM_TEXT[tone]}</span>
-})
+export type Tone = 'ok' | 'warn' | 'bad' | 'flat' | 'accent'
 
 export const PageHead = memo(function PageHead({
   title,
   meta,
   actions
 }: {
-  title: React.ReactNode
+  title: string
   meta?: React.ReactNode
   actions?: React.ReactNode
 }): React.JSX.Element {
   return (
-    <header className="hdr">
-      <span className="t">{title}</span>
-      {meta}
-      <span className="push" />
-      {actions}
+    <header className="page-head">
+      <h1 className="page-title">{title}</h1>
+      {meta ? <div className="page-meta">{meta}</div> : null}
+      <span className="page-push" />
+      {actions ? <div className="page-actions">{actions}</div> : null}
     </header>
   )
 })
@@ -48,7 +29,7 @@ export const Pill = memo(function Pill({
   tone?: Tone
   children: React.ReactNode
 }): React.JSX.Element {
-  return <span className={'chip ' + tone}>{children}</span>
+  return <span className={'pill ' + tone}>{children}</span>
 })
 
 export const Metric = memo(function Metric({
@@ -64,8 +45,8 @@ export const Metric = memo(function Metric({
 }): React.JSX.Element {
   return (
     <div className={'metric ' + tone}>
-      <span className="metric-label">{label}</span>
       <span className="metric-value">{value}</span>
+      <span className="metric-label">{label}</span>
       {hint ? <span className="metric-hint">{hint}</span> : null}
     </div>
   )
@@ -85,15 +66,13 @@ export const Card = memo(function Card({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <section className={'col' + (grow ? ' grow' : '')} style={grow ? { flex: 1 } : undefined}>
-      <header className="ph">
-        <span>{label}</span>
-        <span className="push" />
+    <section className={'card' + (grow ? ' grow' : '')}>
+      <header className="card-head">
+        <span className="card-label">{label}</span>
+        <span className="card-push" />
         {actions}
       </header>
-      <div className={scroll ? 'col scroll' : 'col'} style={{ flex: 1, borderRight: 0 }}>
-        {children}
-      </div>
+      <div className={'card-body' + (scroll ? ' scroll' : '')}>{children}</div>
     </section>
   )
 })
@@ -164,7 +143,9 @@ export const Toggle = memo(function Toggle({
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
       />
-      <span className="toggle-box" />
+      <span className="toggle-box">
+        <Glyph name="check" size={11} />
+      </span>
       <span className="toggle-label">{label}</span>
     </label>
   )
@@ -175,29 +156,22 @@ export const TextButton = memo(function TextButton({
   label,
   onClick,
   disabled,
-  tone,
-  small
+  tone
 }: {
   glyph?: string
   label: string
   onClick: () => void
   disabled?: boolean
-  tone?: 'primary' | 'danger' | 'ghost'
-  small?: boolean
+  tone?: 'primary' | 'danger'
 }): React.JSX.Element {
-  const cls =
-    'btn' +
-    (tone === 'primary'
-      ? ' pri'
-      : tone === 'danger'
-        ? ' danger'
-        : tone === 'ghost'
-          ? ' ghost'
-          : '') +
-    (small ? ' sm' : '')
   return (
-    <button className={cls} onClick={onClick} disabled={disabled} type="button">
-      {glyph ? <Glyph name={glyph} size={12} /> : null}
+    <button
+      className={'txt-btn' + (tone ? ' ' + tone : '')}
+      onClick={onClick}
+      disabled={disabled}
+      type="button"
+    >
+      {glyph ? <Glyph name={glyph} size={13} /> : null}
       {label}
     </button>
   )
@@ -230,29 +204,5 @@ export const Segmented = memo(function Segmented({
         </button>
       ))}
     </div>
-  )
-})
-
-export const Switch = memo(function Switch({
-  on,
-  disabled,
-  onChange,
-  label
-}: {
-  on: boolean
-  disabled?: boolean
-  onChange: (next: boolean) => void
-  label: string
-}): React.JSX.Element {
-  return (
-    <button
-      className={'sw' + (on ? ' on' : '')}
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!on)}
-      type="button"
-    />
   )
 })

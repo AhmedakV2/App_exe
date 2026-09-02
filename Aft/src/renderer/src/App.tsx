@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AgentAction,
   BrowserState,
@@ -7,52 +7,139 @@ import type {
   StageBox,
   WindowAction
 } from '../../main/browser/types'
-import type { ScenarioEntry } from '../../main/scenario/ScenarioStore'
-import type { FragileStep, RunRow } from '../../main/data'
-import type { HealingProposal } from '../../main/identity'
-import { isThemeId, paintTheme, readTheme, storeTheme, themeOf, THEMES } from './themes'
+import { isThemeId, paintTheme, readTheme, storeTheme, themeOf } from './themes'
 import type { ThemeId } from './themes'
-import { Glyph } from './icons'
-import { clamp, formatMs, shortUrl } from './format'
+import { Glyph, IconButton } from './icons'
+import { clamp, formatMs, shortUrl, toUrl } from './format'
+import { isHomeUrl } from '../../main/home/search'
 import { useConsole } from './useConsole'
 import type { Report } from './report'
-import { BROWSER_TAB, FIXED_TABS, TAB_GLYPH, readJson, scenarioTab, writeJson } from './workbench'
-import type { Activity, BottomTab, OutlineItem, RightTab, Tab } from './workbench'
-import TitleBar from './parts/TitleBar'
-import type { MenuDef } from './parts/TitleBar'
-import ActivityBar from './parts/ActivityBar'
-import SidePanel from './parts/SidePanel'
-import BottomPanel from './parts/BottomPanel'
-import Inspector from './parts/Inspector'
-import CommandPalette from './parts/CommandPalette'
-import type { PaletteItem } from './parts/CommandPalette'
 import BrowserPage from './pages/BrowserPage'
-import OverviewPage from './pages/OverviewPage'
+import type { DockTab } from './pages/BrowserPage'
 import ScenarioPage from './pages/ScenarioPage'
 import ResultPage from './pages/ResultPage'
 import IdentityPage from './pages/IdentityPage'
 import CoveragePage from './pages/CoveragePage'
 import DataPage from './pages/DataPage'
 
-const SIDE_KEY = 'aft:wb:side'
-const RIGHT_KEY = 'aft:wb:right'
-const BOTTOM_KEY = 'aft:wb:bottom'
-const SIDE_OPEN_KEY = 'aft:wb:side-open'
-const RIGHT_OPEN_KEY = 'aft:wb:right-open'
-const RIGHT_TAB_KEY = 'aft:wb:right-tab'
-const TABS_KEY = 'aft:wb:tabs'
-const ACTIVE_KEY = 'aft:wb:active'
-const ACTIVITY_KEY = 'aft:wb:activity'
+type PageId = 'browser' | 'scenarios' | 'results' | 'identity' | 'coverage' | 'data'
+
+type NavItem = { id: PageId; label: string; glyph: string; suite?: boolean }
+
+const NAV: NavItem[] = [
+  { id: 'browser', label: 'Tarayıcı', glyph: 'globe' },
+  { id: 'browser', label: 'Kayıt ve oynatma', glyph: 'suite', suite: true },
+  { id: 'scenarios', label: 'Senaryolar', glyph: 'library' },
+  { id: 'results', label: 'Sonuçlar', glyph: 'history' },
+  { id: 'identity', label: 'Kimlik', glyph: 'pulse' },
+  { id: 'coverage', label: 'Kapsam', glyph: 'radar' },
+  { id: 'data', label: 'Veri', glyph: 'database' }
+]
+
+const PAGE_LABELS: Record<PageId, string> = {
+  browser: 'Tarayıcı',
+  scenarios: 'Senaryolar',
+  results: 'Sonuçlar',
+  identity: 'Kimlik',
+  coverage: 'Kapsam',
+  data: 'Veri'
+}
+
+function isPageId(value: unknown): value is PageId {
+  return typeof value === 'string' && value in PAGE_LABELS
+}
+
+const LIST_KEY = 'aft:list-width'
+const TERM_KEY = 'aft:term-height'
+const DOCK_KEY = 'aft:dock-width'
+const DOCK_TAB_KEY = 'aft:dock-tab'
+const PAGE_KEY = 'aft:page'
 const AUTO_TERM_KEY = 'aft:auto-terminal'
 const AUTO_BACK_KEY = 'aft:auto-terminal-restore'
 
-const SIDE_SIZE = 260
-const RIGHT_SIZE = 360
-const BOTTOM_SIZE = 220
-const SIDE_MIN = 180
-const RIGHT_MIN = 280
-const BOTTOM_MIN = 110
-const ACT_WIDTH = 46
+const LIST_SIZE = 300
+const TERM_SIZE = 268
+const DOCK_SIZE = 380
+const LIST_MIN = 220
+const TERM_MIN = 120
+const DOCK_MIN = 300
+const LIST_MAX_RATIO = 0.5
+const TERM_MAX_RATIO = 0.72
+const DOCK_MAX_RATIO = 0.62
+
+function sameBox(a: StageBox | null, b: StageBox): boolean {
+  if (!a) return false
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+}
+
+function part(value: number, total: number): number {
+  if (!total) return 0
+  return Math.round((value / total) * 10000) / 10000
+}
+
+function readSize(key: string, fallback: number): number {
+  try {
+    const raw = Number(window.localStorage.getItem(key))
+    return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function storeSize(key: string, value: number): void {
+  try {
+    window.localStorage.setItem(key, String(Math.round(value)))
+  } catch {
+    return
+  }
+}
+
+function readFlag(key: string, fallback: boolean): boolean {
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (raw === '1') return true
+    if (raw === '0') return false
+    return fallback
+  } catch {
+    return fallback
+  }
+}
+
+function storeFlag(key: string, value: boolean): void {
+  try {
+    window.localStorage.setItem(key, value ? '1' : '0')
+  } catch {
+    return
+  }
+}
+
+function readPage(): PageId {
+  try {
+    const raw = window.localStorage.getItem(PAGE_KEY)
+    return isPageId(raw) ? raw : 'browser'
+  } catch {
+    return 'browser'
+  }
+}
+
+function readDock(): DockTab {
+  try {
+    const raw = window.localStorage.getItem(DOCK_TAB_KEY)
+    return raw === 'record' || raw === 'playback' ? raw : null
+  } catch {
+    return null
+  }
+}
+
+const Brand = memo(function Brand(): React.JSX.Element {
+  return (
+    <span className="brand" title="AFT">
+      <svg width="26" height="26" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+        <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
+      </svg>
+    </span>
+  )
+})
 
 const EMPTY_STATE: BrowserState = {
   url: '',
@@ -68,96 +155,54 @@ const EMPTY_STATE: BrowserState = {
   fullscreen: false
 }
 
-function sameBox(a: StageBox | null, b: StageBox): boolean {
-  if (!a) return false
-  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
-}
-
-function part(value: number, total: number): number {
-  if (!total) return 0
-  return Math.round((value / total) * 10000) / 10000
-}
-
-function readSize(key: string, fallback: number): number {
-  const raw = readJson<number>(key, fallback)
-  return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : fallback
-}
-
-function readTabs(): Tab[] {
-  const stored = readJson<Tab[]>(TABS_KEY, [])
-  const valid = stored.filter((tab) => tab && typeof tab.id === 'string' && tab.id !== 'browser')
-  return [BROWSER_TAB, ...(valid.length ? valid : [FIXED_TABS.overview])]
-}
-
 export default function App(): React.JSX.Element {
   const [state, setState] = useState<BrowserState>(EMPTY_STATE)
-  const [activity, setActivity] = useState<Activity>(() =>
-    readJson<Activity>(ACTIVITY_KEY, 'files')
-  )
-  const [tabs, setTabs] = useState<Tab[]>(() => readTabs())
-  const [active, setActive] = useState<string>(() => readJson<string>(ACTIVE_KEY, 'overview'))
-  const [sideOpen, setSideOpen] = useState(() => readJson<boolean>(SIDE_OPEN_KEY, true))
-  const [rightOpen, setRightOpen] = useState(() => readJson<boolean>(RIGHT_OPEN_KEY, true))
-  const [rightTab, setRightTab] = useState<RightTab>(() =>
-    readJson<RightTab>(RIGHT_TAB_KEY, 'record')
-  )
-  const [bottomTab, setBottomTab] = useState<BottomTab>('console')
-  const [sideWidth, setSideWidth] = useState(() => readSize(SIDE_KEY, SIDE_SIZE))
-  const [rightWidth, setRightWidth] = useState(() => readSize(RIGHT_KEY, RIGHT_SIZE))
-  const [bottomHeight, setBottomHeight] = useState(() => readSize(BOTTOM_KEY, BOTTOM_SIZE))
+  const [page, setPage] = useState<PageId>(() => readPage())
+  const [listOpen, setListOpen] = useState(false)
   const [drag, setDrag] = useState<DragAxis | null>(null)
-  const [space, setSpace] = useState({ width: 0, height: 0 })
-  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null)
-  const [palette, setPalette] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [urlFocused, setUrlFocused] = useState(false)
+  const [urlDraft, setUrlDraft] = useState('')
   const [recording, setRecording] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [library, setLibrary] = useState(0)
   const [runRequest, setRunRequest] = useState('')
   const [focusSeed, setFocusSeed] = useState(0)
-  const [urlSeed, setUrlSeed] = useState(0)
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
-  const [autoTerm, setAutoTerm] = useState(() => readJson<boolean>(AUTO_TERM_KEY, true))
-  const [autoBack, setAutoBack] = useState(() => readJson<boolean>(AUTO_BACK_KEY, false))
-  const [scenarios, setScenarios] = useState<ScenarioEntry[]>([])
-  const [runs, setRuns] = useState<RunRow[]>([])
-  const [approvals, setApprovals] = useState<HealingProposal[]>([])
-  const [fragile, setFragile] = useState<FragileStep[]>([])
-  const [outline, setOutline] = useState<OutlineItem[]>([])
-  const [outlineSel, setOutlineSel] = useState('')
-  const [outlineSeed, setOutlineSeed] = useState({ id: '', n: 0 })
-  const [runFocus, setRunFocus] = useState('')
-  const [identityTab, setIdentityTab] = useState('approvals')
-  const [dirtyTabs, setDirtyTabs] = useState<Record<string, boolean>>({})
+  const [autoTerm, setAutoTerm] = useState(() => readFlag(AUTO_TERM_KEY, true))
+  const [autoBack, setAutoBack] = useState(() => readFlag(AUTO_BACK_KEY, false))
+  const [listWidth, setListWidth] = useState(() => readSize(LIST_KEY, LIST_SIZE))
+  const [termHeight, setTermHeight] = useState(() => readSize(TERM_KEY, TERM_SIZE))
+  const [dockWidth, setDockWidth] = useState(() => readSize(DOCK_KEY, DOCK_SIZE))
+  const [dock, setDock] = useState<DockTab>(() => readDock())
+  const [space, setSpace] = useState({ width: 0, height: 0 })
+  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null)
 
   const term = useConsole()
   const { push: pushLine, absorb: absorbResult } = term
 
-  const mainRef = useRef<HTMLDivElement | null>(null)
+  const urlRef = useRef<HTMLInputElement | null>(null)
+  const spaceRef = useRef<HTMLDivElement | null>(null)
   const stageBoxRef = useRef<StageBox | null>(null)
   const dragRef = useRef<DragAxis | null>(null)
   const autoTermRef = useRef(autoTerm)
   const autoBackRef = useRef(autoBack)
   const termOpenRef = useRef(false)
   const autoOpenedRef = useRef(false)
+  const lastTabRef = useRef<Exclude<DockTab, null>>('record')
 
   const terminalOpen = state.terminalOpen
   const settingsOpen = state.settingsOpen
-  const activeTab = useMemo(
-    () => tabs.find((tab) => tab.id === active) ?? BROWSER_TAB,
-    [active, tabs]
-  )
-  const hasStage = activeTab.kind === 'browser'
+  const hasStage = page === 'browser'
 
-  const sideSize = space.width
-    ? clamp(sideWidth, SIDE_MIN, Math.floor(space.width * 0.45))
-    : sideWidth
-  const rightSize = space.width
-    ? clamp(rightWidth, RIGHT_MIN, Math.floor(space.width * 0.55))
-    : rightWidth
-  const bottomSize = space.height
-    ? clamp(bottomHeight, BOTTOM_MIN, Math.floor(space.height * 0.7))
-    : bottomHeight
+  const listSize = space.width
+    ? clamp(listWidth, LIST_MIN, Math.floor(space.width * LIST_MAX_RATIO))
+    : listWidth
+  const termSize = space.height
+    ? clamp(termHeight, TERM_MIN, Math.floor(space.height * TERM_MAX_RATIO))
+    : termHeight
+  const dockSize = space.width
+    ? clamp(dockWidth, DOCK_MIN, Math.floor(space.width * DOCK_MAX_RATIO))
+    : dockWidth
 
   const report = useCallback(
     (entry: Report): void => {
@@ -168,18 +213,22 @@ export default function App(): React.JSX.Element {
 
   const reportStage = useCallback((): void => {
     if (!stageEl) return
+
     const view = document.documentElement
     const width = view.clientWidth
     const height = view.clientHeight
     if (!width || !height) return
+
     const rect = stageEl.getBoundingClientRect()
     if (!rect.width || !rect.height) return
+
     const next: StageBox = {
       x: part(rect.left, width),
       y: part(rect.top, height),
       width: part(rect.width, width),
       height: part(rect.height, height)
     }
+
     if (sameBox(stageBoxRef.current, next)) return
     stageBoxRef.current = next
     window.aft.setStage(next)
@@ -198,40 +247,28 @@ export default function App(): React.JSX.Element {
   }, [theme])
 
   useEffect(() => {
-    writeJson(
-      TABS_KEY,
-      tabs.filter((tab) => tab.id !== 'browser')
-    )
-    writeJson(ACTIVE_KEY, active)
-    writeJson(ACTIVITY_KEY, activity)
-  }, [active, activity, tabs])
-
-  useEffect(() => {
-    writeJson(SIDE_OPEN_KEY, sideOpen)
-    writeJson(RIGHT_OPEN_KEY, rightOpen)
-    writeJson(RIGHT_TAB_KEY, rightTab)
-  }, [rightOpen, rightTab, sideOpen])
+    try {
+      window.localStorage.setItem(PAGE_KEY, page)
+      window.localStorage.setItem(DOCK_TAB_KEY, dock ?? '')
+    } catch {
+      return
+    }
+  }, [dock, page])
 
   useEffect(() => {
     window.aft.setStageShown(hasStage)
   }, [hasStage])
 
   useEffect(() => {
-    window.aft.setChat(sideOpen)
-  }, [sideOpen])
-
-  useEffect(() => {
-    window.aft.setModal(palette || menuOpen)
-  }, [menuOpen, palette])
-
-  useEffect(() => {
     if (!stageEl) return
+
     const observer = new ResizeObserver(() => reportStage())
     observer.observe(stageEl)
     observer.observe(document.documentElement)
     window.addEventListener('resize', reportStage)
     stageBoxRef.current = null
     reportStage()
+
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', reportStage)
@@ -241,8 +278,9 @@ export default function App(): React.JSX.Element {
   useEffect(reportStage)
 
   useEffect(() => {
-    const el = mainRef.current
+    const el = spaceRef.current
     if (!el) return
+
     const measure = (): void => {
       const rect = el.getBoundingClientRect()
       setSpace((prev) => {
@@ -252,20 +290,22 @@ export default function App(): React.JSX.Element {
         return { width, height }
       })
     }
+
     const observer = new ResizeObserver(measure)
     observer.observe(el)
     measure()
+
     return () => observer.disconnect()
   }, [])
 
   useEffect(() => {
     autoTermRef.current = autoTerm
-    writeJson(AUTO_TERM_KEY, autoTerm)
+    storeFlag(AUTO_TERM_KEY, autoTerm)
   }, [autoTerm])
 
   useEffect(() => {
     autoBackRef.current = autoBack
-    writeJson(AUTO_BACK_KEY, autoBack)
+    storeFlag(AUTO_BACK_KEY, autoBack)
   }, [autoBack])
 
   useEffect(() => {
@@ -285,15 +325,21 @@ export default function App(): React.JSX.Element {
   }, [terminalOpen])
 
   useEffect(() => {
+    if (dock) lastTabRef.current = dock
+  }, [dock])
+
+  useEffect(() => {
     const offUpdate = window.aftRecord.onUpdate((view) => {
       setRecording(view.status === 'recording' || view.status === 'paused')
     })
+
     const offNotice = window.aftRecord.onNotice((notice) => {
       if (notice.level === 'info') return
       pushLine(notice.level === 'error' ? 'err' : 'note', notice.message, {
         detail: notice.detail.length ? notice.detail : undefined
       })
     })
+
     return () => {
       offUpdate()
       offNotice()
@@ -301,34 +347,29 @@ export default function App(): React.JSX.Element {
   }, [pushLine])
 
   useEffect(() => {
-    return window.aft.onFocusUrl(() => {
-      setActive('browser')
-      setUrlSeed((prev) => prev + 1)
-    })
+    return window.aft.onFocusUrl(() => urlRef.current?.focus())
   }, [])
 
   useEffect(() => {
-    return window.aft.onFocusTerminal(() => {
-      setBottomTab('console')
-      setFocusSeed((prev) => prev + 1)
-    })
+    return window.aft.onFocusTerminal(() => setFocusSeed((prev) => prev + 1))
   }, [])
 
   useEffect(() => {
     return window.aft.onPointer((spot) => {
       const axis = dragRef.current
-      const box = mainRef.current?.getBoundingClientRect()
+      const box = spaceRef.current?.getBoundingClientRect()
       if (!axis || !box) return
+
       const view = document.documentElement
       if (axis === 'chat') {
-        setSideWidth(Math.round(spot.x * view.clientWidth - box.left - ACT_WIDTH))
+        setListWidth(Math.round(spot.x * view.clientWidth - box.left))
         return
       }
       if (axis === 'record') {
-        setRightWidth(Math.round(box.right - spot.x * view.clientWidth))
+        setDockWidth(Math.round(box.right - spot.x * view.clientWidth))
         return
       }
-      setBottomHeight(Math.round(box.bottom - spot.y * view.clientHeight))
+      setTermHeight(Math.round(box.bottom - spot.y * view.clientHeight))
     })
   }, [])
 
@@ -342,15 +383,18 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     if (!drag) return
+
     const stop = (): void => {
       if (!dragRef.current) return
       dragRef.current = null
       setDrag(null)
       window.aft.endDrag()
     }
+
     window.addEventListener('pointerup', stop)
     window.addEventListener('pointercancel', stop)
     window.addEventListener('blur', stop)
+
     return () => {
       window.removeEventListener('pointerup', stop)
       window.removeEventListener('pointercancel', stop)
@@ -360,110 +404,45 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     if (drag) return
-    writeJson(SIDE_KEY, sideSize)
-    writeJson(RIGHT_KEY, rightSize)
-    writeJson(BOTTOM_KEY, bottomSize)
-  }, [drag, sideSize, rightSize, bottomSize])
-
-  const loadSide = useCallback(async (): Promise<void> => {
-    try {
-      const [list, recent, health, pending] = await Promise.all([
-        window.aftPlayback.list(),
-        window.aftData.runs({ limit: 60, offset: 0 }),
-        window.aftData.health(),
-        window.aftIdentity.approvals()
-      ])
-      if (list.ok && list.data) setScenarios(list.data.entries)
-      if (recent.ok && recent.data) setRuns(recent.data.rows)
-      if (health.ok && health.data) setFragile(health.data.fragile)
-      if (pending.ok && pending.data) setApprovals(pending.data)
-    } catch (error) {
-      pushLine('err', 'Köprü hatası: ' + (error as Error).message)
-    }
-  }, [pushLine])
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => void loadSide(), 0)
-    return () => window.clearTimeout(timer)
-  }, [library, loadSide, playing, recording])
-
-  const openTab = useCallback((tab: Tab): void => {
-    setTabs((prev) => (prev.some((item) => item.id === tab.id) ? prev : prev.concat(tab)))
-    setActive(tab.id)
-  }, [])
-
-  const closeTab = useCallback(
-    (id: string): void => {
-      if (id === 'browser') return
-      setTabs((prev) => {
-        const index = prev.findIndex((tab) => tab.id === id)
-        if (index < 0) return prev
-        const next = prev.filter((tab) => tab.id !== id)
-        if (active === id) setActive(next[Math.max(0, index - 1)]?.id ?? 'browser')
-        return next
-      })
-      setDirtyTabs((prev) => {
-        if (!prev[id]) return prev
-        const next = { ...prev }
-        delete next[id]
-        return next
-      })
-    },
-    [active]
-  )
-
-  const openScenario = useCallback(
-    (id: string, title: string): void => {
-      openTab(scenarioTab(id, title))
-      setActivity('files')
-    },
-    [openTab]
-  )
-
-  const openRun = useCallback(
-    (id: string): void => {
-      setRunFocus(id)
-      openTab(FIXED_TABS.results)
-    },
-    [openTab]
-  )
-
-  const openIdentity = useCallback(
-    (tab: string): void => {
-      setIdentityTab(tab)
-      openTab(FIXED_TABS.identity)
-    },
-    [openTab]
-  )
-
-  const pickActivity = useCallback(
-    (next: Activity): void => {
-      if (next === activity && sideOpen && next === 'files') {
-        setSideOpen(false)
-        return
-      }
-      setActivity(next)
-      setSideOpen(true)
-      if (next === 'browser') setActive('browser')
-      if (next === 'runs') openTab(FIXED_TABS.results)
-      if (next === 'identity') openTab(FIXED_TABS.identity)
-      if (next === 'coverage') openTab(FIXED_TABS.coverage)
-      if (next === 'data') openTab(FIXED_TABS.data)
-    },
-    [activity, openTab, sideOpen]
-  )
+    storeSize(LIST_KEY, listSize)
+    storeSize(TERM_KEY, termSize)
+    storeSize(DOCK_KEY, dockSize)
+  }, [drag, listSize, termSize, dockSize])
 
   const nav = useCallback((kind: NavKind): void => window.aft.nav(kind), [])
   const winAction = useCallback((action: WindowAction): void => window.aft.window(action), [])
-  const toggleSettings = useCallback(
-    (): void => window.aft.setSettings(!settingsOpen),
-    [settingsOpen]
+
+  const goBack = useCallback(() => nav('back'), [nav])
+  const goForward = useCallback(() => nav('forward'), [nav])
+  const goHome = useCallback(() => nav('home'), [nav])
+  const refreshPage = useCallback(
+    () => nav(state.loading ? 'stop' : 'reload'),
+    [nav, state.loading]
   )
-  const toggleBottom = useCallback(
-    (): void => window.aft.setTerminal(!terminalOpen),
-    [terminalOpen]
-  )
-  const closeBottom = useCallback((): void => window.aft.setTerminal(false), [])
+
+  const minimizeWindow = useCallback(() => winAction('minimize'), [winAction])
+  const maximizeWindow = useCallback(() => winAction('maximize'), [winAction])
+  const closeWindow = useCallback(() => winAction('close'), [winAction])
+
+  const toggleList = useCallback((): void => {
+    setPage('browser')
+    setListOpen((prev) => {
+      const next = !prev
+      window.aft.setChat(next)
+      return next
+    })
+  }, [])
+
+  const toggleTerminal = useCallback((): void => {
+    setPage('browser')
+    window.aft.setTerminal(!terminalOpen)
+  }, [terminalOpen])
+
+  const closeTerminal = useCallback((): void => window.aft.setTerminal(false), [])
+
+  const toggleSettings = useCallback((): void => {
+    window.aft.setSettings(!settingsOpen)
+  }, [settingsOpen])
 
   const beginDrag = useCallback(
     (axis: DragAxis, event: React.PointerEvent<HTMLDivElement>): void => {
@@ -476,47 +455,66 @@ export default function App(): React.JSX.Element {
     []
   )
 
+  const beginListDrag = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('chat', event),
+    [beginDrag]
+  )
+  const beginTermDrag = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('terminal', event),
+    [beginDrag]
+  )
+  const beginDockDrag = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('record', event),
+    [beginDrag]
+  )
+
   const onPlayBusy = useCallback((running: boolean): void => {
     setPlaying(running)
+
     if (running) {
       if (!autoTermRef.current || termOpenRef.current) return
       autoOpenedRef.current = true
       window.aft.setTerminal(true)
       return
     }
+
     if (!autoOpenedRef.current) return
     autoOpenedRef.current = false
     if (autoBackRef.current) window.aft.setTerminal(false)
   }, [])
 
-  const showRight = useCallback((tab: RightTab): void => {
-    setRightTab(tab)
-    setRightOpen(true)
+  const openDock = useCallback((tab: DockTab): void => {
+    setDock(tab)
   }, [])
+
+  const pick = useCallback(
+    (item: NavItem): void => {
+      if (!item.suite) {
+        setPage(item.id)
+        return
+      }
+      if (page === 'browser' && dock) {
+        setDock(null)
+        return
+      }
+      setPage('browser')
+      setDock(dock ?? lastTabRef.current)
+    },
+    [dock, page]
+  )
 
   const onSaved = useCallback((): void => {
     setLibrary((prev) => prev + 1)
-    showRight('playback')
-  }, [showRight])
+    setDock('playback')
+  }, [])
 
   const onLibraryChanged = useCallback((): void => setLibrary((prev) => prev + 1), [])
 
-  const requestRun = useCallback(
-    (scenarioId: string): void => {
-      setRunRequest(scenarioId)
-      setActive('browser')
-      showRight('playback')
-    },
-    [showRight]
-  )
-
-  const startRecord = useCallback((): void => {
-    setActive('browser')
-    showRight('record')
-    void window.aftRecord.start({}).then((result) => {
-      if (!result.ok) pushLine('err', 'Kayıt başlatılamadı: ' + result.message)
-    })
-  }, [pushLine, showRight])
+  const requestRun = useCallback((scenarioId: string): void => {
+    setRunRequest(scenarioId)
+    setPage('browser')
+    setDock('playback')
+  }, [])
 
   const runAction = useCallback(
     (action: AgentAction): void => {
@@ -543,617 +541,227 @@ export default function App(): React.JSX.Element {
     }
   }, [absorbResult, pushLine, state.vision])
 
-  const scanPage = useCallback(
-    async (level = 1): Promise<void> => {
-      try {
-        const result = await window.aft.scan(level)
-        absorbResult(result)
-        pushLine(result.ok ? 'ok' : 'err', result.result)
-        setLibrary((prev) => prev + 1)
-      } catch (error) {
-        pushLine('err', 'Köprü hatası: ' + (error as Error).message)
+  const onUrlFocus = useCallback((): void => {
+    setUrlFocused(true)
+    setUrlDraft(isHomeUrl(state.url) ? '' : state.url)
+    requestAnimationFrame(() => urlRef.current?.select())
+  }, [state.url])
+
+  const onUrlBlur = useCallback((): void => {
+    setUrlFocused(false)
+    setUrlDraft('')
+  }, [])
+
+  const onUrlKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        urlRef.current?.blur()
+        return
       }
+
+      if (event.key !== 'Enter') return
+      event.preventDefault()
+
+      const url = toUrl(urlDraft)
+      if (!url) return
+
+      urlRef.current?.blur()
+      runAction({ action: 'go_to_url', url })
     },
-    [absorbResult, pushLine]
-  )
-
-  const onOutline = useCallback((items: OutlineItem[], selected: string): void => {
-    setOutline(items)
-    setOutlineSel(selected)
-  }, [])
-
-  const onDirty = useCallback((id: string, dirty: boolean): void => {
-    setDirtyTabs((prev) => (prev[id] === dirty ? prev : { ...prev, [id]: dirty }))
-  }, [])
-
-  const onScenarioOpened = useCallback((previousId: string, id: string, title: string): void => {
-    const next = scenarioTab(id, title)
-    setTabs((prev) => prev.map((tab) => (tab.id === previousId ? next : tab)))
-    setActive((prev) => (prev === previousId ? next.id : prev))
-  }, [])
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (!event.ctrlKey || event.altKey || event.metaKey) return
-      const key = event.key.toLowerCase()
-      if (key === 'p') {
-        event.preventDefault()
-        setPalette((prev) => !prev)
-        return
-      }
-      if (key === 'n') {
-        event.preventDefault()
-        openScenario('', '')
-        return
-      }
-      if (key === 'b') {
-        event.preventDefault()
-        setSideOpen((prev) => !prev)
-        return
-      }
-      if (key === 'j') {
-        event.preventDefault()
-        setRightOpen((prev) => !prev)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [openScenario])
-
-  const problems = useMemo(
-    () => term.lines.filter((line) => line.kind === 'err').slice(-60),
-    [term.lines]
+    [runAction, urlDraft]
   )
 
   const status = useMemo(() => {
     if (recording) return { label: 'kayıtta', tone: 'rec' }
     if (playing) return { label: 'koşumda', tone: 'run' }
-    if (state.loading) return { label: 'yükleniyor', tone: 'idle' }
+    if (state.loading) return { label: 'yükleniyor', tone: 'busy' }
     return { label: 'hazır', tone: 'idle' }
   }, [playing, recording, state.loading])
 
-  const menus = useMemo<MenuDef[]>(
-    () => [
-      {
-        label: 'Dosya',
-        items: [
-          { label: 'Yeni senaryo', kbd: 'Ctrl N', onPick: () => openScenario('', '') },
-          { label: 'Genel bakış', onPick: () => openTab(FIXED_TABS.overview) },
-          'sep',
-          { label: 'Ayarlar', onPick: () => window.aft.setSettings(true) },
-          'sep',
-          { label: 'Çıkış', onPick: () => winAction('close') }
-        ]
-      },
-      {
-        label: 'Görünüm',
-        items: [
-          { label: 'Yan panel', kbd: 'Ctrl B', onPick: () => setSideOpen((prev) => !prev) },
-          { label: 'Alt panel', kbd: 'Ctrl K', onPick: toggleBottom },
-          { label: 'Denetçi', kbd: 'Ctrl J', onPick: () => setRightOpen((prev) => !prev) },
-          'sep',
-          { label: 'Tarayıcı', onPick: () => pickActivity('browser') },
-          { label: 'Koşumlar', onPick: () => pickActivity('runs') },
-          { label: 'Kimlik', onPick: () => pickActivity('identity') },
-          { label: 'Kapsam', onPick: () => pickActivity('coverage') },
-          { label: 'Veri', onPick: () => pickActivity('data') },
-          'sep',
-          ...THEMES.map((item) => ({
-            label: (item.id === theme ? '● ' : '○ ') + item.label,
-            onPick: () => setTheme(item.id)
-          })),
-          'sep',
-          { label: 'Tam ekran', kbd: 'F11', onPick: () => winAction('fullscreen') }
-        ]
-      },
-      {
-        label: 'Çalıştır',
-        items: [
-          { label: 'Senaryo çalıştır', onPick: () => requestRun(''), disabled: recording },
-          { label: 'Sayfayı tara (seviye 1)', onPick: () => void scanPage(1) },
-          { label: 'Sayfayı tara (seviye 2)', onPick: () => void scanPage(2) },
-          { label: 'Görüşü aç / kapat', onPick: () => void toggleVision() },
-          'sep',
-          { label: 'Adres çubuğu', kbd: 'Ctrl L', onPick: () => setUrlSeed((prev) => prev + 1) }
-        ]
-      },
-      {
-        label: 'Kayıt',
-        items: [
-          { label: 'Kaydı başlat', onPick: startRecord, disabled: recording || playing },
-          {
-            label: 'Kaydı durdur',
-            onPick: () => void window.aftRecord.stop(),
-            disabled: !recording
-          },
-          'sep',
-          { label: 'Kayıt panelini aç', onPick: () => showRight('record') }
-        ]
-      },
-      {
-        label: 'Yardım',
-        items: [
-          { label: 'Komut paleti', kbd: 'Ctrl P', onPick: () => setPalette(true) },
-          { label: 'Konsol komutları', onPick: () => void term.submit('a') }
-        ]
-      }
-    ],
-    [
-      openScenario,
-      openTab,
-      pickActivity,
-      playing,
-      recording,
-      requestRun,
-      scanPage,
-      showRight,
-      startRecord,
-      term,
-      theme,
-      toggleBottom,
-      toggleVision,
-      winAction
-    ]
-  )
-
-  const paletteItems = useMemo<PaletteItem[]>(() => {
-    const items: PaletteItem[] = [
-      {
-        id: 'c:record',
-        group: 'Komutlar',
-        label: recording ? 'Kaydı durdur' : 'Kaydı başlat',
-        glyph: 'record',
-        run: recording ? () => void window.aftRecord.stop() : startRecord
-      },
-      {
-        id: 'c:play',
-        group: 'Komutlar',
-        label: 'Senaryo çalıştır',
-        detail: 'oynatma panelini açar',
-        glyph: 'play',
-        run: () => requestRun('')
-      },
-      {
-        id: 'c:scan1',
-        group: 'Komutlar',
-        label: 'Sayfayı tara',
-        detail: 'seviye 1',
-        glyph: 'radar',
-        run: () => void scanPage(1)
-      },
-      {
-        id: 'c:scan2',
-        group: 'Komutlar',
-        label: 'Sayfayı tara',
-        detail: 'seviye 2',
-        glyph: 'radar',
-        run: () => void scanPage(2)
-      },
-      {
-        id: 'c:vision',
-        group: 'Komutlar',
-        label: state.vision ? 'Görüşü kapat' : 'Görüşü aç',
-        glyph: 'eye',
-        run: () => void toggleVision()
-      },
-      {
-        id: 'c:new',
-        group: 'Komutlar',
-        label: 'Yeni senaryo',
-        glyph: 'plus',
-        kbd: ['Ctrl', 'N'],
-        run: () => openScenario('', '')
-      },
-      {
-        id: 'c:term',
-        group: 'Komutlar',
-        label: terminalOpen ? 'Konsolu kapat' : 'Konsolu aç',
-        glyph: 'terminal',
-        kbd: ['Ctrl', 'K'],
-        run: toggleBottom
-      },
-      {
-        id: 'c:settings',
-        group: 'Komutlar',
-        label: 'Ayarlar',
-        glyph: 'settings',
-        run: () => window.aft.setSettings(true)
-      },
-      {
-        id: 'v:browser',
-        group: 'Görünümler',
-        label: 'Tarayıcı',
-        glyph: 'globe',
-        run: () => pickActivity('browser')
-      },
-      {
-        id: 'v:overview',
-        group: 'Görünümler',
-        label: 'Genel bakış',
-        glyph: 'dash',
-        run: () => openTab(FIXED_TABS.overview)
-      },
-      {
-        id: 'v:results',
-        group: 'Görünümler',
-        label: 'Koşumlar',
-        glyph: 'run',
-        run: () => pickActivity('runs')
-      },
-      {
-        id: 'v:identity',
-        group: 'Görünümler',
-        label: 'Kimlik',
-        glyph: 'pulse',
-        run: () => pickActivity('identity')
-      },
-      {
-        id: 'v:coverage',
-        group: 'Görünümler',
-        label: 'Kapsam',
-        glyph: 'radar',
-        run: () => pickActivity('coverage')
-      },
-      {
-        id: 'v:data',
-        group: 'Görünümler',
-        label: 'Veri',
-        glyph: 'database',
-        run: () => pickActivity('data')
-      }
-    ]
-    for (const item of THEMES) {
-      items.push({
-        id: 't:' + item.id,
-        group: 'Tema',
-        label: item.label,
-        detail: item.note,
-        glyph: 'sliders',
-        run: () => setTheme(item.id)
-      })
-    }
-    for (const entry of scenarios) {
-      items.push({
-        id: 's:' + entry.id,
-        group: 'Senaryolar',
-        label: entry.title,
-        detail: entry.steps + ' adım · aç',
-        glyph: 'file',
-        run: () => openScenario(entry.id, entry.title)
-      })
-      items.push({
-        id: 'r:' + entry.id,
-        group: 'Senaryolar',
-        label: 'Çalıştır: ' + entry.title,
-        detail: entry.steps + ' adım',
-        glyph: 'play',
-        run: () => requestRun(entry.id)
-      })
-    }
-    for (const row of runs.slice(0, 12)) {
-      items.push({
-        id: 'run:' + row.id,
-        group: 'Son koşumlar',
-        label: row.scenarioTitle,
-        detail: (row.ok ? 'başarılı' : 'başarısız') + ' · ' + formatMs(row.totalMs),
-        glyph: 'history',
-        run: () => openRun(row.id)
-      })
-    }
-    return items
-  }, [
-    openRun,
-    openScenario,
-    openTab,
-    pickActivity,
-    recording,
-    requestRun,
-    runs,
-    scanPage,
-    scenarios,
-    startRecord,
-    state.vision,
-    terminalOpen,
-    toggleBottom,
-    toggleVision
-  ])
-
-  const crumbs = useMemo(() => {
-    if (activeTab.kind === 'browser') return ['Tarayıcı', shortUrl(state.url) || 'ana sayfa']
-    if (activeTab.kind === 'scenario') return ['Senaryolar', activeTab.label]
-    return [activeTab.label]
-  }, [activeTab, state.url])
-
-  const centerTitle =
-    activeTab.kind === 'browser' ? state.title || shortUrl(state.url) || 'AFT' : activeTab.label
-
-  const columns =
-    (sideOpen ? sideSize + 'px ' : '0px ') + '1fr ' + (rightOpen ? rightSize + 'px' : '0px')
-
   return (
-    <div className={'wb' + (drag ? ' drag-' + drag : '')}>
-      <TitleBar
-        menus={menus}
-        title={centerTitle}
-        maximized={state.maximized}
-        sideOpen={sideOpen}
-        bottomOpen={terminalOpen}
-        rightOpen={rightOpen}
-        onPalette={() => setPalette(true)}
-        onSide={() => setSideOpen((prev) => !prev)}
-        onBottom={toggleBottom}
-        onRight={() => setRightOpen((prev) => !prev)}
-        onWindow={winAction}
-        onMenuState={setMenuOpen}
-      />
+    <div className={'shell' + (drag ? ' drag-' + drag : '')}>
+      <header className="shell-bar">
+        <div className="bar-left">
+          <Brand />
 
-      <div
-        className="main"
-        ref={mainRef}
-        style={{ gridTemplateColumns: ACT_WIDTH + 'px ' + columns }}
-      >
-        <ActivityBar
-          activity={activity}
-          recording={recording}
-          playing={playing}
-          approvals={approvals.length}
-          settingsOpen={settingsOpen}
-          onPick={pickActivity}
-          onSettings={toggleSettings}
-        />
-
-        <aside className="side" style={sideOpen ? undefined : { display: 'none' }}>
-          <SidePanel
-            activity={activity}
-            scenarios={scenarios}
-            activeScenarioId={activeTab.kind === 'scenario' ? activeTab.scenarioId : ''}
-            outline={activeTab.kind === 'scenario' ? outline : []}
-            outlineSel={activeTab.kind === 'scenario' ? outlineSel : ''}
-            runs={runs}
-            activeRunId={activeTab.kind === 'results' ? runFocus : ''}
-            approvals={approvals}
-            fragile={fragile}
-            onOpenScenario={openScenario}
-            onNewScenario={() => openScenario('', '')}
-            onRunScenario={requestRun}
-            onOutline={(id) => setOutlineSeed((prev) => ({ id, n: prev.n + 1 }))}
-            onOpenRun={openRun}
-            onOpenIdentity={openIdentity}
-            onRefresh={() => void loadSide()}
-          />
-          <div
-            className="grip-x right"
-            onPointerDown={(event) => beginDrag('chat', event)}
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Yan panel genişliği"
-          />
-        </aside>
-
-        <section
-          className="editor"
-          style={{
-            gridTemplateRows:
-              'var(--tabs) var(--crumbs) 1fr ' + (terminalOpen ? bottomSize + 'px' : '0px')
-          }}
-        >
-          <div className="tabs">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                className={'tab' + (tab.id === active ? ' on' : '')}
-                onClick={() => setActive(tab.id)}
-                onAuxClick={(event) => {
-                  if (event.button === 1) closeTab(tab.id)
-                }}
-                type="button"
-              >
-                <Glyph name={TAB_GLYPH[tab.kind]} size={13} />
-                {tab.label}
-                {tab.kind === 'browser' && recording ? <span className="chip bad">REC</span> : null}
-                {tab.kind === 'browser' && !recording && playing ? (
-                  <span className="chip info">RUN</span>
-                ) : null}
-                {dirtyTabs[tab.id] ? (
-                  <span className="mod" />
-                ) : tab.kind === 'browser' ? null : (
-                  <span
-                    className="x"
-                    role="button"
-                    aria-label="Sekmeyi kapat"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      closeTab(tab.id)
-                    }}
-                  >
-                    <Glyph name="close" size={11} />
-                  </span>
-                )}
-              </button>
-            ))}
-            <span className="push" />
-            <div className="ta">
-              <button
-                className="ib"
-                title="Senaryo çalıştır"
-                onClick={() => requestRun('')}
-                type="button"
-              >
-                <Glyph name="run" size={13} />
-              </button>
-              <button
-                className="ib"
-                title="Kayıt"
-                onClick={() => showRight('record')}
-                type="button"
-              >
-                <Glyph name="record" size={13} />
-              </button>
-            </div>
-          </div>
-
-          <div className="crumbs">
-            {crumbs.map((item, index) => (
-              <React.Fragment key={index}>
-                {index ? <span className="sep">›</span> : null}
-                <span className={index === crumbs.length - 1 ? 'cur' : ''}>{item}</span>
-              </React.Fragment>
-            ))}
-          </div>
-
-          <div className="content">
-            {activeTab.kind === 'browser' ? (
-              <BrowserPage
-                state={state}
-                elementCount={term.elements.length}
-                focusSeed={urlSeed}
-                stageRef={setStageEl}
-                onNav={nav}
-                onAction={runAction}
-                onVision={() => void toggleVision()}
-                onScan={() => void scanPage(1)}
+          {hasStage ? (
+            <>
+              <IconButton name="back" title="Geri" onClick={goBack} disabled={!state.canGoBack} />
+              <IconButton
+                name="forward"
+                title="İleri"
+                onClick={goForward}
+                disabled={!state.canGoForward}
               />
-            ) : null}
-            {activeTab.kind === 'overview' ? (
-              <OverviewPage
-                revision={library}
-                onReport={report}
-                onOpenRun={openRun}
-                onOpenIdentity={openIdentity}
-                onOpenScenario={openScenario}
-                onRecord={startRecord}
+              <IconButton
+                name={state.loading ? 'stop' : 'reload'}
+                title={state.loading ? 'Durdur' : 'Yenile'}
+                onClick={refreshPage}
               />
-            ) : null}
-            {activeTab.kind === 'scenario' ? (
-              <ScenarioPage
-                key={activeTab.id}
-                tabId={activeTab.id}
-                scenarioId={activeTab.scenarioId}
-                revision={library}
-                busy={playing || recording}
-                baseUrl={state.url}
-                outlineSeed={outlineSeed}
-                onReport={report}
-                onRun={requestRun}
-                onChanged={onLibraryChanged}
-                onOutline={onOutline}
-                onDirty={onDirty}
-                onOpened={onScenarioOpened}
-                onClose={closeTab}
+              <IconButton name="home" title="Ana sayfa" onClick={goHome} />
+              <IconButton
+                name={state.vision ? 'eye' : 'eyeOff'}
+                title="Görüş"
+                onClick={() => void toggleVision()}
+                active={state.vision}
+                badge={state.vision ? term.elements.length : 0}
               />
-            ) : null}
-            {activeTab.kind === 'results' ? (
-              <ResultPage
-                revision={library}
-                focusRun={runFocus}
-                onReport={report}
-                onRun={requestRun}
-                onFocus={setRunFocus}
-              />
-            ) : null}
-            {activeTab.kind === 'identity' ? (
-              <IdentityPage revision={library} initialTab={identityTab} onReport={report} />
-            ) : null}
-            {activeTab.kind === 'coverage' ? (
-              <CoveragePage revision={library} onReport={report} />
-            ) : null}
-            {activeTab.kind === 'data' ? <DataPage revision={library} onReport={report} /> : null}
-          </div>
+            </>
+          ) : null}
+        </div>
 
-          <div className="bottom" style={terminalOpen ? undefined : { display: 'none' }}>
-            <div
-              className="grip-y"
-              onPointerDown={(event) => beginDrag('terminal', event)}
-              role="separator"
-              aria-orientation="horizontal"
-              aria-label="Alt panel yüksekliği"
+        <div className="bar-drag" onDoubleClick={maximizeWindow} />
+
+        {hasStage ? (
+          <div className={'omnibox' + (urlFocused ? ' focused' : '')}>
+            <input
+              ref={urlRef}
+              className="omni-input"
+              value={urlFocused ? urlDraft : shortUrl(state.url)}
+              onChange={(event) => setUrlDraft(event.target.value)}
+              onFocus={onUrlFocus}
+              onBlur={onUrlBlur}
+              onKeyDown={onUrlKeyDown}
+              placeholder="Adres"
+              spellCheck={false}
+              aria-label="Adres çubuğu"
             />
-            <BottomPanel
-              tab={bottomTab}
-              api={term}
-              focusSeed={focusSeed}
-              problems={problems}
-              onTab={setBottomTab}
-              onClose={closeBottom}
-            />
+            {state.loading ? <span className="omni-load" /> : null}
           </div>
-        </section>
+        ) : null}
 
-        <aside className="right" style={rightOpen ? undefined : { display: 'none' }}>
-          <div
-            className="grip-x left"
-            onPointerDown={(event) => beginDrag('record', event)}
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Denetçi genişliği"
+        <div className="bar-drag" onDoubleClick={maximizeWindow} />
+
+        <div className="bar-right">
+          <IconButton name="minimize" title="Küçült" onClick={minimizeWindow} small />
+          <IconButton
+            name={state.maximized ? 'restore' : 'maximize'}
+            title={state.maximized ? 'Önceki boyut' : 'Ekranı kapla'}
+            onClick={maximizeWindow}
+            small
           />
-          <Inspector
-            tab={rightTab}
-            recording={recording}
-            playing={playing}
+          <IconButton name="close" title="Kapat" onClick={closeWindow} small danger />
+        </div>
+      </header>
+
+      <aside className="shell-side">
+        <div className="rail-group">
+          {NAV.map((item) => {
+            const on = item.suite ? Boolean(dock) : item.id === page
+            return (
+              <button
+                key={item.label}
+                className={'nav-btn' + (on ? ' sel' : '')}
+                title={item.label}
+                aria-label={item.label}
+                aria-pressed={on}
+                onClick={() => pick(item)}
+                type="button"
+              >
+                <Glyph name={item.glyph} size={19} />
+                {item.suite && recording ? <span className="nav-dot rec" /> : null}
+                {item.suite && !recording && playing ? <span className="nav-dot run" /> : null}
+              </button>
+            )
+          })}
+        </div>
+
+        <span className="rail-gap" />
+
+        <div className="rail-group">
+          <button
+            className={'nav-btn' + (listOpen && page === 'browser' ? ' sel' : '')}
+            title="Öğeler"
+            aria-label="Öğeler"
+            aria-pressed={listOpen && page === 'browser'}
+            onClick={toggleList}
+            type="button"
+          >
+            <Glyph name="grid" size={19} />
+          </button>
+          <button
+            className={'nav-btn' + (terminalOpen && page === 'browser' ? ' sel' : '')}
+            title="Terminal Ctrl+K"
+            aria-label="Terminal"
+            aria-pressed={terminalOpen && page === 'browser'}
+            onClick={toggleTerminal}
+            type="button"
+          >
+            <Glyph name="terminal" size={19} />
+          </button>
+          <button
+            className={'nav-btn' + (settingsOpen ? ' sel' : '')}
+            title="Ayarlar"
+            aria-label="Ayarlar"
+            aria-pressed={settingsOpen}
+            onClick={toggleSettings}
+            type="button"
+          >
+            <Glyph name="settings" size={19} />
+          </button>
+        </div>
+      </aside>
+
+      <div className="workspace" ref={spaceRef}>
+        {page === 'browser' ? (
+          <BrowserPage
+            stageRef={setStageEl}
+            api={term}
             vision={state.vision}
-            elements={term.elements}
+            listOpen={listOpen}
+            listWidth={listSize}
+            terminalOpen={terminalOpen}
+            termHeight={termSize}
+            focusSeed={focusSeed}
+            dock={dock}
+            dockWidth={dockSize}
             revision={library}
             runRequest={runRequest}
-            onTab={setRightTab}
-            onClose={() => setRightOpen(false)}
+            recording={recording}
+            playing={playing}
+            onListGrip={beginListDrag}
+            onTermGrip={beginTermDrag}
+            onDockGrip={beginDockDrag}
+            onCloseList={toggleList}
+            onCloseTerminal={closeTerminal}
+            onDock={openDock}
             onAction={runAction}
             onReport={report}
             onSaved={onSaved}
             onBusy={onPlayBusy}
           />
-        </aside>
+        ) : null}
+
+        {page === 'scenarios' ? (
+          <ScenarioPage
+            revision={library}
+            busy={playing || recording}
+            baseUrl={state.url}
+            onReport={report}
+            onRun={requestRun}
+            onChanged={onLibraryChanged}
+          />
+        ) : null}
+
+        {page === 'results' ? <ResultPage revision={library} onReport={report} /> : null}
+        {page === 'identity' ? <IdentityPage revision={library} onReport={report} /> : null}
+        {page === 'coverage' ? <CoveragePage revision={library} onReport={report} /> : null}
+        {page === 'data' ? <DataPage revision={library} onReport={report} /> : null}
       </div>
 
-      <footer className="status">
-        <span className={'st-item ' + (status.tone === 'idle' ? 'brand' : status.tone)}>
-          {status.tone === 'idle' ? 'AFT' : status.label.toUpperCase()}
-        </span>
-        {state.loading ? <span className="st-item">yükleniyor</span> : null}
-        <button
-          className="st-item"
-          onClick={() => openIdentity('approvals')}
-          type="button"
-          title="Bekleyen onay"
-        >
-          <Glyph name="pulse" size={12} />
-          {approvals.length}
-        </button>
-        <button
-          className="st-item"
-          onClick={() => setBottomTab('problems')}
-          type="button"
-          title="Sorunlar"
-        >
-          <Glyph name="alert" size={12} />
-          {problems.length}
-        </button>
-        <span className="push" />
-        <span className="st-item dim">{state.title}</span>
-        <span className="st-item">{term.elements.length} öğe</span>
-        <span className="st-item mono">{term.lastMs ? formatMs(term.lastMs) : '—'}</span>
-        <span className="st-item">görüş {state.vision ? 'açık' : 'kapalı'}</span>
-        <button
-          className="st-item"
-          onClick={() => window.aft.setSettings(true)}
-          type="button"
-          title="Tema"
-        >
-          {themeOf(theme).label}
-        </button>
+      <footer className="shell-foot">
+        <span className={'status-live ' + status.tone} />
+        <span className="status-item">{status.label}</span>
+        <span className="status-sep" />
+        <span className="status-item">{term.elements.length} öğe</span>
+        <span className="status-sep" />
+        <span className="status-item">{term.lastMs ? formatMs(term.lastMs) : '—'}</span>
+        <span className="status-sep" />
+        <span className="status-item">görüş {state.vision ? 'açık' : 'kapalı'}</span>
+        <span className="status-push" />
+        <span className="status-item dim">{state.title}</span>
       </footer>
-
-      {palette ? (
-        <CommandPalette
-          items={paletteItems}
-          onClose={() => setPalette(false)}
-          onConsole={(command) => {
-            window.aft.setTerminal(true)
-            setBottomTab('console')
-            void term.submit(command)
-          }}
-        />
-      ) : null}
     </div>
   )
 }

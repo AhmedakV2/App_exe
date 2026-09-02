@@ -1,136 +1,149 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from 'react'
-import type { AgentAction, BrowserState, NavKind } from '../../../main/browser/types'
-import { isHomeUrl } from '../../../main/home/search'
+import React from 'react'
+import type { AgentAction } from '../../../main/browser/types'
+import type { Console as ConsoleApi } from '../useConsole'
+import ConsolePanel from '../parts/Console'
+import ElementList from '../parts/ElementList'
+import RecordPanel from '../RecordPanel'
+import RunPanel from '../parts/RunPanel'
 import { Glyph } from '../icons'
-import { shortUrl, toUrl } from '../format'
+import type { Report } from '../report'
 
-export default memo(function BrowserPage({
-  state,
-  elementCount,
-  focusSeed,
+export type DockTab = 'record' | 'playback' | null
+
+export default function BrowserPage({
   stageRef,
-  onNav,
+  api,
+  vision,
+  listOpen,
+  listWidth,
+  terminalOpen,
+  termHeight,
+  focusSeed,
+  dock,
+  dockWidth,
+  revision,
+  runRequest,
+  recording,
+  playing,
+  onListGrip,
+  onTermGrip,
+  onDockGrip,
+  onCloseList,
+  onCloseTerminal,
+  onDock,
   onAction,
-  onVision,
-  onScan
+  onReport,
+  onSaved,
+  onBusy
 }: {
-  state: BrowserState
-  elementCount: number
-  focusSeed: number
   stageRef: (node: HTMLDivElement | null) => void
-  onNav: (kind: NavKind) => void
+  api: ConsoleApi
+  vision: boolean
+  listOpen: boolean
+  listWidth: number
+  terminalOpen: boolean
+  termHeight: number
+  focusSeed: number
+  dock: DockTab
+  dockWidth: number
+  revision: number
+  runRequest: string
+  recording: boolean
+  playing: boolean
+  onListGrip: (event: React.PointerEvent<HTMLDivElement>) => void
+  onTermGrip: (event: React.PointerEvent<HTMLDivElement>) => void
+  onDockGrip: (event: React.PointerEvent<HTMLDivElement>) => void
+  onCloseList: () => void
+  onCloseTerminal: () => void
+  onDock: (tab: DockTab) => void
   onAction: (action: AgentAction) => void
-  onVision: () => void
-  onScan: () => void
+  onReport: (report: Report) => void
+  onSaved: () => void
+  onBusy: (running: boolean) => void
 }): React.JSX.Element {
-  const [focused, setFocused] = useState(false)
-  const [draft, setDraft] = useState('')
-  const urlRef = useRef<HTMLInputElement | null>(null)
-
-  useEffect(() => {
-    if (focusSeed) urlRef.current?.focus()
-  }, [focusSeed])
-
-  const onFocus = useCallback((): void => {
-    setFocused(true)
-    setDraft(isHomeUrl(state.url) ? '' : state.url)
-    requestAnimationFrame(() => urlRef.current?.select())
-  }, [state.url])
-
-  const onBlur = useCallback((): void => {
-    setFocused(false)
-    setDraft('')
-  }, [])
-
-  const onKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        urlRef.current?.blur()
-        return
-      }
-      if (event.key !== 'Enter') return
-      event.preventDefault()
-      const url = toUrl(draft)
-      if (!url) return
-      urlRef.current?.blur()
-      onAction({ action: 'go_to_url', url })
-    },
-    [draft, onAction]
-  )
-
   return (
-    <>
-      <div className="tb">
-        <button
-          className="ib"
-          title="Geri"
-          onClick={() => onNav('back')}
-          disabled={!state.canGoBack}
-          type="button"
-        >
-          <Glyph name="back" size={15} />
-        </button>
-        <button
-          className="ib"
-          title="İleri"
-          onClick={() => onNav('forward')}
-          disabled={!state.canGoForward}
-          type="button"
-        >
-          <Glyph name="forward" size={15} />
-        </button>
-        <button
-          className="ib"
-          title={state.loading ? 'Durdur' : 'Yenile'}
-          onClick={() => onNav(state.loading ? 'stop' : 'reload')}
-          type="button"
-        >
-          <Glyph name={state.loading ? 'stop' : 'reload'} size={14} />
-        </button>
-        <button className="ib" title="Ana sayfa" onClick={() => onNav('home')} type="button">
-          <Glyph name="home" size={14} />
-        </button>
-        <div className={'omni' + (focused ? ' focused' : '')}>
-          <Glyph name="link" size={12} />
-          <input
-            ref={urlRef}
-            value={focused ? draft : shortUrl(state.url)}
-            onChange={(event) => setDraft(event.target.value)}
-            onFocus={onFocus}
-            onBlur={onBlur}
-            onKeyDown={onKeyDown}
-            placeholder="Adres veya arama"
-            spellCheck={false}
-            aria-label="Adres çubuğu"
-          />
-          {state.loading ? <span className="omni-load" /> : null}
-        </div>
-        <span className="sp" />
-        <button
-          className={'ib' + (state.vision ? ' on' : '')}
-          title="Görüş"
-          onClick={onVision}
-          type="button"
-        >
-          <Glyph name={state.vision ? 'eye' : 'eyeOff'} size={15} />
-          {state.vision && elementCount ? <span className="badge">{elementCount}</span> : null}
-        </button>
-        <button className="ib" title="Sayfayı tara" onClick={onScan} type="button">
-          <Glyph name="radar" size={15} />
-        </button>
-        <button
-          className="ib"
-          title="Yeniden tara"
-          onClick={() => onAction({ action: 'snapshot' })}
-          type="button"
-        >
-          <Glyph name="camera" size={15} />
-        </button>
-      </div>
-      <div className="stage-wrap">
+    <div className="split">
+      {listOpen ? (
+        <ElementList
+          elements={api.elements}
+          vision={vision}
+          width={listWidth}
+          onAction={onAction}
+          onClose={onCloseList}
+          onGrip={onListGrip}
+        />
+      ) : null}
+
+      <div className="main">
         <div className="stage" ref={stageRef} />
+        {terminalOpen ? (
+          <ConsolePanel
+            api={api}
+            height={termHeight}
+            focusSeed={focusSeed}
+            onGrip={onTermGrip}
+            onClose={onCloseTerminal}
+          />
+        ) : null}
       </div>
-    </>
+
+      {dock ? (
+        <section className="side" style={{ width: dockWidth }}>
+          <div
+            className="side-grip"
+            onPointerDown={onDockGrip}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Panel genişliği"
+          />
+
+          <header className="dock-head">
+            <button
+              className={'dock-tab' + (dock === 'record' ? ' sel' : '')}
+              onClick={() => onDock('record')}
+              type="button"
+            >
+              <Glyph name="record" size={13} />
+              KAYIT
+              {recording ? <span className="dock-dot rec" /> : null}
+            </button>
+            <button
+              className={'dock-tab' + (dock === 'playback' ? ' sel' : '')}
+              onClick={() => onDock('playback')}
+              type="button"
+            >
+              <Glyph name="play" size={13} />
+              OYNATMA
+              {playing ? <span className="dock-dot run" /> : null}
+            </button>
+            <span className="dock-push" />
+            <button
+              className="ghost-btn"
+              title="Paneli kapat"
+              aria-label="Paneli kapat"
+              onClick={() => onDock(null)}
+              type="button"
+            >
+              <Glyph name="collapse" size={15} />
+            </button>
+          </header>
+
+          <div className="dock-body" hidden={dock !== 'record'}>
+            <RecordPanel blocked={playing} onReport={onReport} onSaved={onSaved} />
+          </div>
+
+          <div className="dock-body" hidden={dock !== 'playback'}>
+            <RunPanel
+              active={dock === 'playback'}
+              revision={revision}
+              request={runRequest}
+              blocked={recording}
+              onReport={onReport}
+              onBusy={onBusy}
+            />
+          </div>
+        </section>
+      ) : null}
+    </div>
   )
-})
+}
