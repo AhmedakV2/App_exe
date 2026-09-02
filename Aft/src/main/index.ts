@@ -39,7 +39,9 @@ const SETTINGS_HEIGHT = 620
 const SETTINGS_MIN_WIDTH = 320
 const SETTINGS_MIN_HEIGHT = 280
 const DEVTOOLS_RATIO = 0.45
-const DEVTOOLS_MIN = 320
+const DEVTOOLS_MIN = 260
+const DEVTOOLS_MIN_RATIO = 0.15
+const DEVTOOLS_MAX_RATIO = 0.8
 const iconPath = app.isPackaged
   ? join(process.resourcesPath, 'build', 'icon.png')
   : join(__dirname, '../../build/icon.png')
@@ -65,6 +67,7 @@ let settingsSpot: { x: number; y: number } | null = null
 let settingsSize = { width: SETTINGS_WIDTH, height: SETTINGS_HEIGHT }
 let chromeColor = FRAME_COLOR
 let devtoolsOpen = false
+let devtoolsRatio = DEVTOOLS_RATIO
 let prefs: AppPrefs | null = null
 
 registerHomeScheme()
@@ -129,7 +132,7 @@ function layout(): void {
   }
 
   const panel = Math.min(
-    Math.max(DEVTOOLS_MIN, Math.round(stage.width * DEVTOOLS_RATIO)),
+    Math.max(DEVTOOLS_MIN, Math.round(stage.width * devtoolsRatio)),
     Math.max(0, stage.width - DEVTOOLS_MIN)
   )
   const pageWidth = Math.max(0, stage.width - panel)
@@ -228,6 +231,17 @@ function openDevtools(): void {
   targetView.webContents.setDevToolsWebContents(panel.webContents)
   targetView.webContents.openDevTools({ mode: 'detach' })
   layout()
+}
+
+function setDevtoolsSplit(value: unknown): void {
+  const ratio = Number(value)
+  if (!Number.isFinite(ratio)) return
+
+  const next = Math.min(DEVTOOLS_MAX_RATIO, Math.max(DEVTOOLS_MIN_RATIO, ratio))
+  if (next === devtoolsRatio) return
+
+  devtoolsRatio = next
+  if (devtoolsOpen) layout()
 }
 
 function setDevtools(open: boolean): void {
@@ -818,7 +832,8 @@ app.whenReady().then(() => {
   ipcMain.on('aft:terminal', (_e, open: boolean) => setTerminal(Boolean(open), Boolean(open)))
 
   ipcMain.on('aft:drag', (_e, axis: unknown) => {
-    if (axis === 'chat' || axis === 'terminal' || axis === 'record') startDrag(axis)
+    if (axis === 'chat' || axis === 'terminal' || axis === 'record' || axis === 'devtools')
+      startDrag(axis)
     else stopDrag()
   })
 
@@ -831,6 +846,8 @@ app.whenReady().then(() => {
   ipcMain.on('aft:settings', (_e, open: boolean) => setSettings(Boolean(open)))
 
   ipcMain.on('aft:devtools', (_e, open: boolean) => setDevtools(Boolean(open)))
+
+  ipcMain.on('aft:devtools-split', (_e, ratio: unknown) => setDevtoolsSplit(ratio))
 
   ipcMain.on('aft:prefs', (_e, value: unknown) => publishPrefs(value))
 

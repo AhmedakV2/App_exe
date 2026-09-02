@@ -126,9 +126,10 @@ export class DataChannel {
     )
 
     ipcMain.handle('aft:data:scenarios', () =>
-      this.guard('Senaryo indeksi hazir', (): ScenarioIndexPayload => ({
-        rows: this.store.indexer.scenarios()
-      }))
+      this.guard('Senaryo indeksi hazir', (): ScenarioIndexPayload => {
+        this.syncScenarios()
+        return { rows: this.store.indexer.scenarios() }
+      })
     )
 
     ipcMain.handle('aft:data:health', () =>

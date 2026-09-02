@@ -197,14 +197,6 @@ function shiftStep(steps: ScenarioStep[], id: string, offset: number): ScenarioS
   )
 }
 
-function replaceStep(steps: ScenarioStep[], id: string, next: ScenarioStep): ScenarioStep[] {
-  return steps.map((step) => {
-    if (step.id === id) return next
-    if (!step.steps.length) return step
-    return { ...step, steps: replaceStep(step.steps, id, next) }
-  })
-}
-
 function valueLabel(kind: StepKind): string {
   if (kind === 'type' || kind === 'clear-type') return 'Metin'
   if (kind === 'press-key') return 'Tuş'
@@ -428,10 +420,8 @@ export default function ScenarioPage({
   const [working, setWorking] = useState(false)
   const [addKind, setAddKind] = useState<StepKind>('click')
   const [view, setView] = useState<'steps' | 'json'>('steps')
-  const [stepView, setStepView] = useState<'form' | 'json'>('form')
 
   const jsonRef = useRef<HTMLTextAreaElement | null>(null)
-  const stepJsonRef = useRef<HTMLTextAreaElement | null>(null)
 
   const rows = useMemo(() => {
     const text = filter.trim().toLowerCase()
@@ -560,21 +550,6 @@ export default function ScenarioPage({
       onReport({ level: 'err', text: 'JSON okunamadı: ' + (error as Error).message })
     }
   }, [onReport])
-
-  const applyStepJson = useCallback((): void => {
-    if (!step) return
-    try {
-      const parsed = JSON.parse(stepJsonRef.current?.value ?? '') as ScenarioStep
-      setDraft((prev) =>
-        prev ? { ...prev, steps: replaceStep(prev.steps, step.id, parsed) } : prev
-      )
-      setStepId(parsed.id || step.id)
-      setDirty(true)
-      onReport({ level: 'ok', text: 'Adım JSON ile güncellendi' })
-    } catch (error) {
-      onReport({ level: 'err', text: 'Adım JSON okunamadı: ' + (error as Error).message })
-    }
-  }, [onReport, step])
 
   const validate = useCallback(async (): Promise<void> => {
     if (!draft) return
@@ -848,304 +823,265 @@ export default function ScenarioPage({
           )}
         </Card>
 
-        <Card
-          label="Adım ayarı"
-          scroll
-          actions={
-            draft && step ? (
-              <Segmented
-                items={[
-                  { id: 'form', label: 'Form' },
-                  { id: 'json', label: 'JSON' }
-                ]}
-                value={stepView}
-                onPick={(id) => setStepView(id as 'form' | 'json')}
-              />
-            ) : null
-          }
-        >
+        <Card label="Adım ayarı" scroll>
           {draft && step ? (
-            stepView === 'json' ? (
-              <>
-                <textarea
-                  key={'st:' + step.id + ':' + step.kind + ':' + step.title}
-                  ref={stepJsonRef}
-                  className="code-area"
-                  defaultValue={JSON.stringify(step, null, 2)}
-                  spellCheck={false}
-                  aria-label="Adım JSON"
+            <>
+              <div className="step-actions">
+                <IconButton
+                  name="up"
+                  title="Yukarı"
+                  onClick={() => moveStep(step.id, -1)}
+                  disabled={locked}
+                  small
                 />
-                <div className="step-actions">
-                  <TextButton
-                    glyph="check"
-                    label="Adımı güncelle"
-                    onClick={applyStepJson}
-                    disabled={locked}
-                    tone="primary"
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="step-actions">
-                  <IconButton
-                    name="up"
-                    title="Yukarı"
-                    onClick={() => moveStep(step.id, -1)}
-                    disabled={locked}
-                    small
-                  />
-                  <IconButton
-                    name="down"
-                    title="Aşağı"
-                    onClick={() => moveStep(step.id, 1)}
-                    disabled={locked}
-                    small
-                  />
-                  <IconButton
-                    name="trash"
-                    title="Sil"
-                    onClick={() => removeStep(step.id)}
-                    disabled={locked}
-                    small
-                    danger
-                  />
-                </div>
+                <IconButton
+                  name="down"
+                  title="Aşağı"
+                  onClick={() => moveStep(step.id, 1)}
+                  disabled={locked}
+                  small
+                />
+                <IconButton
+                  name="trash"
+                  title="Sil"
+                  onClick={() => removeStep(step.id)}
+                  disabled={locked}
+                  small
+                  danger
+                />
+              </div>
 
-                <div className="grid-2">
+              <div className="grid-2">
+                <Field label="Tür">
+                  <select
+                    value={step.kind}
+                    disabled={locked}
+                    onChange={(event) => {
+                      const next = event.target.value as StepKind
+                      patchStep(step.id, {
+                        kind: next,
+                        target: ELEMENT_KINDS.has(next)
+                          ? (step.target ?? blankTarget('query'))
+                          : step.target,
+                        assertion:
+                          next === 'assert'
+                            ? (step.assertion ?? {
+                                kind: 'url-matches',
+                                target: null,
+                                expected: '',
+                                attribute: '',
+                                count: 0,
+                                soft: false,
+                                message: ''
+                              })
+                            : step.assertion
+                      })
+                    }}
+                  >
+                    {ADD_KINDS.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {kind}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Başlık">
+                  <input
+                    value={step.title}
+                    onChange={(event) => patchStep(step.id, { title: event.target.value })}
+                    spellCheck={false}
+                  />
+                </Field>
+              </div>
+
+              {valueLabel(step.kind) ? (
+                <Field label={valueLabel(step.kind)}>
+                  <input
+                    value={valueOf(step)}
+                    onChange={(event) =>
+                      patchStep(step.id, patchValue(step.kind, event.target.value))
+                    }
+                    spellCheck={false}
+                  />
+                </Field>
+              ) : null}
+
+              {step.target?.descriptor ? (
+                <div className="kv">
+                  <span className="kv-key">kalite</span>
+                  <span className="kv-val">{percent(step.target.descriptor.quality.score)}</span>
+                  <span className="kv-key">strateji</span>
+                  <span className="kv-val">
+                    {step.target.descriptor.strategies.map((entry) => entry.kind).join(', ')}
+                  </span>
+                </div>
+              ) : null}
+
+              {step.kind === 'assert' ? null : (
+                <TargetEditor
+                  label="Hedef"
+                  target={step.target}
+                  disabled={locked}
+                  onChange={(next) => patchStep(step.id, { target: next })}
+                />
+              )}
+
+              {step.assertion ? (
+                <>
+                  <div className="card-split">Doğrulama</div>
                   <Field label="Tür">
                     <select
-                      value={step.kind}
-                      disabled={locked}
-                      onChange={(event) => {
-                        const next = event.target.value as StepKind
-                        patchStep(step.id, {
-                          kind: next,
-                          target: ELEMENT_KINDS.has(next)
-                            ? (step.target ?? blankTarget('query'))
-                            : step.target,
-                          assertion:
-                            next === 'assert'
-                              ? (step.assertion ?? {
-                                  kind: 'url-matches',
-                                  target: null,
-                                  expected: '',
-                                  attribute: '',
-                                  count: 0,
-                                  soft: false,
-                                  message: ''
-                                })
-                              : step.assertion
-                        })
-                      }}
+                      value={step.assertion.kind}
+                      onChange={(event) =>
+                        patchAssertion(step.id, { kind: event.target.value as AssertionKind })
+                      }
                     >
-                      {ADD_KINDS.map((kind) => (
+                      {ASSERTION_KINDS.map((kind) => (
                         <option key={kind} value={kind}>
                           {kind}
                         </option>
                       ))}
                     </select>
                   </Field>
-                  <Field label="Başlık">
+                  <Field label="Beklenen">
                     <input
-                      value={step.title}
-                      onChange={(event) => patchStep(step.id, { title: event.target.value })}
-                      spellCheck={false}
-                    />
-                  </Field>
-                </div>
-
-                {valueLabel(step.kind) ? (
-                  <Field label={valueLabel(step.kind)}>
-                    <input
-                      value={valueOf(step)}
+                      value={step.assertion.expected}
                       onChange={(event) =>
-                        patchStep(step.id, patchValue(step.kind, event.target.value))
+                        patchAssertion(step.id, { expected: event.target.value })
                       }
                       spellCheck={false}
                     />
                   </Field>
-                ) : null}
-
-                {step.target?.descriptor ? (
-                  <div className="kv">
-                    <span className="kv-key">kalite</span>
-                    <span className="kv-val">{percent(step.target.descriptor.quality.score)}</span>
-                    <span className="kv-key">strateji</span>
-                    <span className="kv-val">
-                      {step.target.descriptor.strategies.map((entry) => entry.kind).join(', ')}
-                    </span>
-                  </div>
-                ) : null}
-
-                {step.kind === 'assert' ? null : (
-                  <TargetEditor
-                    label="Hedef"
-                    target={step.target}
-                    disabled={locked}
-                    onChange={(next) => patchStep(step.id, { target: next })}
-                  />
-                )}
-
-                {step.assertion ? (
-                  <>
-                    <div className="card-split">Doğrulama</div>
-                    <Field label="Tür">
-                      <select
-                        value={step.assertion.kind}
-                        onChange={(event) =>
-                          patchAssertion(step.id, { kind: event.target.value as AssertionKind })
-                        }
-                      >
-                        {ASSERTION_KINDS.map((kind) => (
-                          <option key={kind} value={kind}>
-                            {kind}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Beklenen">
+                  {step.assertion.kind === 'attribute-equals' ? (
+                    <Field label="Nitelik">
                       <input
-                        value={step.assertion.expected}
+                        value={step.assertion.attribute}
                         onChange={(event) =>
-                          patchAssertion(step.id, { expected: event.target.value })
+                          patchAssertion(step.id, { attribute: event.target.value })
                         }
                         spellCheck={false}
                       />
                     </Field>
-                    {step.assertion.kind === 'attribute-equals' ? (
-                      <Field label="Nitelik">
-                        <input
-                          value={step.assertion.attribute}
-                          onChange={(event) =>
-                            patchAssertion(step.id, { attribute: event.target.value })
-                          }
-                          spellCheck={false}
-                        />
-                      </Field>
-                    ) : null}
-                    {step.assertion.kind === 'element-count' ? (
-                      <Field label="Adet">
-                        <input
-                          type="number"
-                          value={step.assertion.count}
-                          onChange={(event) =>
-                            patchAssertion(step.id, { count: Number(event.target.value) || 0 })
-                          }
-                        />
-                      </Field>
-                    ) : null}
-                    <Toggle
-                      label="Yumuşak doğrulama"
-                      checked={step.assertion.soft}
-                      onChange={(next) => patchAssertion(step.id, { soft: next })}
-                    />
-                    {ELEMENT_ASSERTIONS.has(step.assertion.kind) ? (
-                      <TargetEditor
-                        label="Doğrulama hedefi"
-                        target={step.assertion.target}
-                        disabled={locked}
-                        onChange={(next) => patchAssertion(step.id, { target: next })}
+                  ) : null}
+                  {step.assertion.kind === 'element-count' ? (
+                    <Field label="Adet">
+                      <input
+                        type="number"
+                        value={step.assertion.count}
+                        onChange={(event) =>
+                          patchAssertion(step.id, { count: Number(event.target.value) || 0 })
+                        }
                       />
-                    ) : null}
-                  </>
-                ) : null}
-
-                <div className="card-split">Adım ayarları</div>
-
-                <div className="grid-2">
-                  <Field label="Zaman aşımı">
-                    <input
-                      type="number"
-                      value={step.timeoutMs}
-                      onChange={(event) =>
-                        patchStep(step.id, { timeoutMs: Number(event.target.value) || 0 })
-                      }
+                    </Field>
+                  ) : null}
+                  <Toggle
+                    label="Yumuşak doğrulama"
+                    checked={step.assertion.soft}
+                    onChange={(next) => patchAssertion(step.id, { soft: next })}
+                  />
+                  {ELEMENT_ASSERTIONS.has(step.assertion.kind) ? (
+                    <TargetEditor
+                      label="Doğrulama hedefi"
+                      target={step.assertion.target}
+                      disabled={locked}
+                      onChange={(next) => patchAssertion(step.id, { target: next })}
                     />
-                  </Field>
-                  <Field label="Deneme">
-                    <input
-                      type="number"
-                      value={step.retries}
-                      onChange={(event) =>
-                        patchStep(step.id, { retries: Number(event.target.value) || 0 })
-                      }
-                    />
-                  </Field>
-                </div>
+                  ) : null}
+                </>
+              ) : null}
 
-                <Toggle
-                  label="Hatada devam et"
-                  checked={step.continueOnFailure}
-                  onChange={(next) => patchStep(step.id, { continueOnFailure: next })}
-                />
-                <Toggle
-                  label="Düşük güvene izin ver"
-                  checked={step.allowLowConfidence}
-                  onChange={(next) => patchStep(step.id, { allowLowConfidence: next })}
-                />
+              <div className="card-split">Adım ayarları</div>
 
-                <div className="card-split">Senaryo varsayılanları</div>
+              <div className="grid-2">
+                <Field label="Zaman aşımı">
+                  <input
+                    type="number"
+                    value={step.timeoutMs}
+                    onChange={(event) =>
+                      patchStep(step.id, { timeoutMs: Number(event.target.value) || 0 })
+                    }
+                  />
+                </Field>
+                <Field label="Deneme">
+                  <input
+                    type="number"
+                    value={step.retries}
+                    onChange={(event) =>
+                      patchStep(step.id, { retries: Number(event.target.value) || 0 })
+                    }
+                  />
+                </Field>
+              </div>
 
-                <div className="grid-2">
-                  <Field label="Tarama seviyesi">
-                    <select
-                      value={draft.defaults.scanLevel}
-                      onChange={(event) =>
-                        patch({
-                          defaults: {
-                            ...draft.defaults,
-                            scanLevel: Number(event.target.value) as 0 | 1 | 2 | 3
-                          }
-                        })
-                      }
-                    >
-                      {LEVELS.map((level) => (
-                        <option key={level} value={level}>
-                          {level}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Adım zaman aşımı">
-                    <input
-                      type="number"
-                      value={draft.defaults.stepTimeoutMs}
-                      onChange={(event) =>
-                        patch({
-                          defaults: {
-                            ...draft.defaults,
-                            stepTimeoutMs: Number(event.target.value) || 0
-                          }
-                        })
-                      }
-                    />
-                  </Field>
-                </div>
+              <Toggle
+                label="Hatada devam et"
+                checked={step.continueOnFailure}
+                onChange={(next) => patchStep(step.id, { continueOnFailure: next })}
+              />
+              <Toggle
+                label="Düşük güvene izin ver"
+                checked={step.allowLowConfidence}
+                onChange={(next) => patchStep(step.id, { allowLowConfidence: next })}
+              />
 
-                <Toggle
-                  label="İlk hatada dur"
-                  checked={draft.defaults.stopOnFailure}
-                  onChange={(next) =>
-                    patch({ defaults: { ...draft.defaults, stopOnFailure: next } })
-                  }
-                />
-                <Toggle
-                  label="Sayfa durumunu doğrula"
-                  checked={draft.defaults.verifyState}
-                  onChange={(next) => patch({ defaults: { ...draft.defaults, verifyState: next } })}
-                />
+              <div className="card-split">Senaryo varsayılanları</div>
 
-                <div className="kv">
-                  <span className="kv-key">şema</span>
-                  <span className="kv-val mono">{draft.version}</span>
-                  <span className="kv-key">kimlik</span>
-                  <span className="kv-val mono">{draft.id}</span>
-                  <span className="kv-key">adres</span>
-                  <span className="kv-val mono">{shortUrl(draft.baseUrl)}</span>
-                </div>
-              </>
-            )
+              <div className="grid-2">
+                <Field label="Tarama seviyesi">
+                  <select
+                    value={draft.defaults.scanLevel}
+                    onChange={(event) =>
+                      patch({
+                        defaults: {
+                          ...draft.defaults,
+                          scanLevel: Number(event.target.value) as 0 | 1 | 2 | 3
+                        }
+                      })
+                    }
+                  >
+                    {LEVELS.map((level) => (
+                      <option key={level} value={level}>
+                        {level}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Adım zaman aşımı">
+                  <input
+                    type="number"
+                    value={draft.defaults.stepTimeoutMs}
+                    onChange={(event) =>
+                      patch({
+                        defaults: {
+                          ...draft.defaults,
+                          stepTimeoutMs: Number(event.target.value) || 0
+                        }
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+
+              <Toggle
+                label="İlk hatada dur"
+                checked={draft.defaults.stopOnFailure}
+                onChange={(next) => patch({ defaults: { ...draft.defaults, stopOnFailure: next } })}
+              />
+              <Toggle
+                label="Sayfa durumunu doğrula"
+                checked={draft.defaults.verifyState}
+                onChange={(next) => patch({ defaults: { ...draft.defaults, verifyState: next } })}
+              />
+
+              <div className="kv">
+                <span className="kv-key">şema</span>
+                <span className="kv-val mono">{draft.version}</span>
+                <span className="kv-key">kimlik</span>
+                <span className="kv-val mono">{draft.id}</span>
+                <span className="kv-key">adres</span>
+                <span className="kv-val mono">{shortUrl(draft.baseUrl)}</span>
+              </div>
+            </>
           ) : (
             <Empty glyph="sliders" text="Adım seçilmedi" />
           )}
