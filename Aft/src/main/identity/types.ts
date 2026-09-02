@@ -95,6 +95,7 @@ export interface ResolvedCandidate {
   voteScore: number
   contextScore: number
   geometryScore: number
+  anchorScore: number
   votes: StrategyKind[]
 }
 

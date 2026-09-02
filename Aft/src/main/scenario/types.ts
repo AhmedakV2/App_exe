@@ -1,5 +1,12 @@
 import type { ActionKind, ActionOutcome, ActionRequest, InputMode } from '../action'
-import type { BlindSpot, CoverageSummary, ElementGraph, Rect, ScanLevel } from '../discovery'
+import type {
+  BlindSpot,
+  CoverageSummary,
+  ElementGraph,
+  Rect,
+  ScanLevel,
+  ScanProfileName
+} from '../discovery'
 import type {
   Descriptor,
   MatchState,
@@ -85,6 +92,7 @@ export const STEP_KINDS: readonly StepKind[] = [
   'upload',
   'navigate',
   'wait',
+  'refresh',
   'assert',
   'group'
 ]
@@ -259,6 +267,13 @@ export interface StateCheck {
   reasons: string[]
 }
 
+export interface StepPhases {
+  scanMs: number
+  resolveMs: number
+  verifyMs: number
+  actionMs: number
+}
+
 export interface StepResult {
   stepId: string
   index: number
@@ -275,6 +290,7 @@ export interface StepResult {
   assertions: AssertionRecord[]
   outcome: ActionOutcome | null
   stateCheck: StateCheck | null
+  phases: StepPhases
   contextId: string
   children: StepResult[]
 }
@@ -295,6 +311,11 @@ export interface RunMetrics {
   meanConfidence: number
   scans: number
   retries: number
+  scanMs: number
+  resolveMs: number
+  verifyMs: number
+  actionMs: number
+  protocolCalls: number
   totalMs: number
 }
 
@@ -395,8 +416,9 @@ export interface StoredContext {
 
 export interface PlaybackHost {
   prepare?(): Promise<void>
+  protocolCalls?(): number
   execute(request: ActionRequest): Promise<ActionOutcome>
-  scan(level: ScanLevel, force: boolean): Promise<ElementGraph>
+  scan(level: ScanLevel, force: boolean, profile?: ScanProfileName): Promise<ElementGraph>
   currentGraph(): ElementGraph | null
   screenshot(): Promise<string>
 }

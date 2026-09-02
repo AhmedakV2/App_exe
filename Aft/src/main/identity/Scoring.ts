@@ -24,14 +24,43 @@ const STRONG_KINDS: ReadonlySet<StrategyKind> = new Set([
   'form-field'
 ])
 
+const ANCHOR_STRENGTH: Partial<Record<StrategyKind, number>> = {
+  'test-attribute': 1,
+  'element-id': 0.94,
+  'form-field': 0.86
+}
+
+const ANCHOR_LIFT = 0.5
+
 const STRONG_TIER = 0.72
 
 const FAIR_TIER = 0.48
 
-export function combine(voteScore: number, contextScore: number, geometryScore: number): number {
-  return round(
+export function combine(
+  voteScore: number,
+  contextScore: number,
+  geometryScore: number,
+  anchorScore = 0
+): number {
+  const base =
     voteScore * VOTE_SHARE + contextScore * CONTEXT_SHARE + geometryScore * GEOMETRY_SHARE
-  )
+
+  return round(base + (1 - base) * clamp01(anchorScore) * ANCHOR_LIFT)
+}
+
+export function anchorScore(
+  votes: readonly StrategyKind[],
+  uniqueKinds: ReadonlySet<StrategyKind>
+): number {
+  let best = 0
+
+  for (const kind of votes) {
+    if (!uniqueKinds.has(kind)) continue
+    const strength = ANCHOR_STRENGTH[kind]
+    if (strength === undefined) continue
+    if (strength > best) best = strength
+  }
+  return round(best)
 }
 
 export function contextScore(
@@ -128,6 +157,10 @@ function distance(a: Rect, b: Rect): number {
 
 function diagonal(viewport: { width: number; height: number }): number {
   return Math.sqrt(viewport.width * viewport.width + viewport.height * viewport.height)
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value))
 }
 
 function round(value: number): number {

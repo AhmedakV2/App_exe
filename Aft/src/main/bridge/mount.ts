@@ -11,7 +11,9 @@ export async function mountIdentity(controller: BrowserController): Promise<Iden
 
   const created = new IdentityChannel({
     userDataDir: app.getPath('userData'),
-    getGraph: () => controller.currentGraph()
+    getGraph: () => controller.currentGraph(),
+    ensureGraph: () => controller.scanGraph(controller.getLevel(), true, 'agent'),
+    validate: !app.isPackaged
   })
 
   await created.start()

@@ -134,7 +134,7 @@ const StepRow = memo(function StepRow({
 
           {step.alternatives.length ? (
             <div className="rec-block">
-              <span className="rec-block-label">Önerilen hedefler</span>
+              <span className="rec-block-label">Hedefler</span>
               <div className="rec-options">
                 {step.alternatives.map((option: AlternativeView) => (
                   <button
@@ -181,7 +181,7 @@ const StepRow = memo(function StepRow({
           ) : null}
 
           <div className="rec-block">
-            <span className="rec-block-label">Bekleme ekle</span>
+            <span className="rec-block-label">Bekleme</span>
             <div className="rec-options">
               {WAIT_PRESETS.map((preset) => (
                 <button
@@ -200,7 +200,7 @@ const StepRow = memo(function StepRow({
 
           {step.assertions.length ? (
             <div className="rec-block">
-              <span className="rec-block-label">Doğrulama ekle</span>
+              <span className="rec-block-label">Doğrulama</span>
               <div className="rec-options">
                 {step.assertions.map((option) => (
                   <button
@@ -226,7 +226,7 @@ const StepRow = memo(function StepRow({
               onChange={(event) => onTolerate(step.id, event.target.checked)}
               disabled={busy}
             />
-            <span>Hata olsa da akış devam etsin</span>
+            <span>Hatada devam</span>
           </label>
 
           <div className="rec-step-actions">
@@ -346,7 +346,7 @@ export default function RecordPanel({
 
   const start = useCallback(async (): Promise<void> => {
     const ok = await call('Kayıt başlatılamadı', () => window.aftRecord.start({}))
-    if (ok) say('note', 'Kayıt başladı, sayfada gezinin')
+    if (ok) say('note', 'Kayıt başladı')
   }, [call, say])
 
   const stop = useCallback(async (): Promise<void> => {
@@ -375,6 +375,11 @@ export default function RecordPanel({
   const toggleScroll = useCallback((): void => {
     const current = Boolean(view?.options.captureScroll)
     void call('Ayar güncellenemedi', () => window.aftRecord.options({ captureScroll: !current }))
+  }, [call, view])
+
+  const toggleHover = useCallback((): void => {
+    const current = Boolean(view?.options.captureHover)
+    void call('Ayar güncellenemedi', () => window.aftRecord.options({ captureHover: !current }))
   }, [call, view])
 
   const edit = useCallback(async (request: RecordEditRequest, label: string): Promise<void> => {
@@ -539,6 +544,14 @@ export default function RecordPanel({
           small
         />
         <IconButton
+          name="target"
+          title="İmleç adımı kısayolu Ctrl+Shift+M"
+          onClick={toggleHover}
+          disabled={busy || !live}
+          active={Boolean(view?.options.captureHover)}
+          small
+        />
+        <IconButton
           name="trash"
           title="Kaydı at"
           onClick={() => void discard()}
@@ -546,19 +559,21 @@ export default function RecordPanel({
           small
           danger
         />
+        <span className="rec-bar-push" />
+        <span className={'rec-state ' + status}>{STATUS_LABELS[status]}</span>
       </div>
 
-      {blocked ? <div className="play-note">Koşum sürerken kayıt başlatılamaz.</div> : null}
-
-      <div className="rec-meta">
-        <span className="rec-meta-row">
-          <span className={'rec-state ' + status}>{STATUS_LABELS[status]}</span>
-          {summary || 'kayıt bekleniyor'}
-        </span>
-        {view?.baseUrl ? (
-          <span className="rec-meta-row muted">başlangıç: {shortUrl(view.baseUrl)}</span>
-        ) : null}
-      </div>
+      {summary || view?.baseUrl || live ? (
+        <div className="rec-meta">
+          {summary ? <span className="rec-meta-row">{summary}</span> : null}
+          {view?.baseUrl ? (
+            <span className="rec-meta-row muted">{shortUrl(view.baseUrl)}</span>
+          ) : null}
+          {live && view?.options.captureHover ? (
+            <span className="rec-meta-row muted">imleç adımı için sayfada Ctrl + Shift + M</span>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="rec-list" ref={listRef} onScroll={onScroll}>
         {steps.length ? (
@@ -581,12 +596,8 @@ export default function RecordPanel({
           ))
         ) : (
           <div className="rec-empty">
-            <Glyph name="record" size={22} />
-            <span>Kaydı başlatın ve sayfada gezinin.</span>
-            <span className="muted">
-              Tıklama, yazma, seçim ve tuş adımları senaryoya dönüşür; gereksiz kaydırma ve odak
-              olayları elenir.
-            </span>
+            <Glyph name="record" size={20} />
+            <span>Adım yok</span>
           </div>
         )}
       </div>

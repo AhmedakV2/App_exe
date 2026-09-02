@@ -17,6 +17,7 @@ export {
   assertionOptions,
   build,
   descriptorTarget,
+  steadyTarget,
   stepId,
   waitStep
 } from './StepFactory'

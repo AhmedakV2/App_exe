@@ -5,9 +5,13 @@ const WORLD = 'aft_record'
 
 const BINDING = '__aftRecordSend'
 
-const POLL_MS = 120
+const POLL_MS = 500
+
+const SAFETY_EVERY = 10
 
 const PROBE_LIMIT = 16
+
+const HANDLE_GROUP = 'aft-record-handles'
 
 const SOURCE = `(function () {
   if (window.__aftRecord) return;
@@ -20,12 +24,18 @@ const SOURCE = `(function () {
   var probe = { el: null, seq: 0 };
   var lastPointerAt = 0;
   var lastKeyAt = 0;
+  var hoverEl = null;
+  var hoverAt = 0;
   var TEST = ['data-testid','data-test-id','data-test','data-qa','data-qa-id','data-cy','data-e2e','data-automation-id','data-automationid','data-tracking-id'];
   var KEYS = ['Enter','Tab','Escape','Backspace','Delete','Insert','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
   var TYPING_KEYS = ['Backspace','Delete','Insert',' '];
   var MODIFIER_KEYS = ['Shift','Control','Alt','Meta','AltGraph','CapsLock','NumLock','ScrollLock','Dead'];
   var CHANGE_QUIET_MS = 700;
+  var PROMOTE_HOPS = 4;
+  var PROMOTE_VIEW = 0.5;
   var TONES = { strong: '#3ecf8e', weak: '#f0a02a', blocked: '#ef4444' };
+  var HOVER_COMBO = 'Control+Shift+M';
+  var HOVER_TRACK_MS = 60;
 
   function attr(el, name) {
     try { return el.getAttribute(name) || ''; } catch (e) { return ''; }
@@ -141,6 +151,68 @@ const SOURCE = `(function () {
     return node && node.nodeType === 1 ? node : null;
   }
 
+  function parentOf(node) {
+    if (!node) return null;
+    return node.parentElement || (node.parentNode && node.parentNode.host) || null;
+  }
+
+  function areaOf(el) {
+    var rect = box(el);
+    return rect ? rect.w * rect.h : 0;
+  }
+
+  function viewArea() {
+    return Math.max(1, (window.innerWidth || 0) * (window.innerHeight || 0));
+  }
+
+  function alone(el, name, value) {
+    try {
+      var root = el.getRootNode ? el.getRootNode() : document;
+      if (!root || typeof root.querySelectorAll !== 'function') return false;
+      var safe = window.CSS && CSS.escape ? CSS.escape(value) : value;
+      return root.querySelectorAll('[' + name + '="' + safe + '"]').length === 1;
+    } catch (e) { return false; }
+  }
+
+  function speaks(text) {
+    if (!text || text.length < 2 || text.length > 64) return false;
+    if (/\\d{5,}/.test(text)) return false;
+    return /[a-z\\u00c0-\\u024f]/i.test(text);
+  }
+
+  function named(el) {
+    var mark = testAttribute(el);
+    if (mark.value && alone(el, mark.name, mark.value)) return true;
+    var id = attr(el, 'id');
+    if (id && alone(el, 'id', id)) return true;
+    var field = attr(el, 'name');
+    if (field && alone(el, 'name', field)) return true;
+    var label = attr(el, 'aria-label');
+    if (label && alone(el, 'aria-label', label)) return true;
+    return speaks(clip(el.innerText || el.textContent, 64));
+  }
+
+  function promote(el) {
+    if (!el || el.nodeType !== 1 || named(el)) return el;
+
+    var limit = viewArea() * PROMOTE_VIEW;
+    var cursor = el;
+
+    for (var hop = 0; hop < PROMOTE_HOPS; hop++) {
+      cursor = parentOf(cursor);
+      if (!cursor || cursor.nodeType !== 1) return el;
+      var tag = (cursor.tagName || '').toLowerCase();
+      if (tag === 'body' || tag === 'html') return el;
+      if (areaOf(cursor) > limit) return el;
+      if (named(cursor)) return cursor;
+    }
+    return el;
+  }
+
+  function pickTarget(event) {
+    return promote(pick(event));
+  }
+
   function post(item) {
     try {
       if (typeof window.__aftRecordSend !== 'function') return false;
@@ -192,7 +264,14 @@ const SOURCE = `(function () {
   }
 
   bind('mousedown', document, function (event) {
-    markProbe(pick(event));
+    markProbe(pickTarget(event));
+  });
+
+  bind('mousemove', document, function (event) {
+    var now = Date.now();
+    if (now - hoverAt < HOVER_TRACK_MS) return;
+    hoverAt = now;
+    hoverEl = pickTarget(event);
   });
 
   bind('click', document, function (event) {
@@ -200,19 +279,19 @@ const SOURCE = `(function () {
     var now = Date.now();
     var forwarded = !event.detail && (now - lastPointerAt < CHANGE_QUIET_MS || now - lastKeyAt < CHANGE_QUIET_MS);
     if (forwarded) return;
-    var el = pick(event);
+    var el = pickTarget(event);
     lastPointerAt = now;
     if (el) emit('click', el, { detail: event.detail || 1 });
   });
 
   bind('dblclick', document, function (event) {
-    var el = pick(event);
+    var el = pickTarget(event);
     lastPointerAt = Date.now();
     if (el) emit('double-click', el, { detail: 2 });
   });
 
   bind('contextmenu', document, function (event) {
-    var el = pick(event);
+    var el = pickTarget(event);
     lastPointerAt = Date.now();
     if (el) emit('right-click', el, {});
   });
@@ -251,6 +330,15 @@ const SOURCE = `(function () {
     if (event.repeat) return;
     var key = event.key;
     if (!key || MODIFIER_KEYS.indexOf(key) >= 0) return;
+
+    if (combo(event) === HOVER_COMBO) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (!hoverEl) return;
+      lastKeyAt = Date.now();
+      markProbe(hoverEl);
+      emit('hover', hoverEl, {});
+      return;
+    }
 
     var hard = event.ctrlKey || event.altKey || event.metaKey;
     var known = KEYS.indexOf(key) >= 0 || key === ' ';
@@ -320,6 +408,7 @@ const SOURCE = `(function () {
       queue = [];
       slots = {};
       probe = { el: null, seq: 0 };
+      hoverEl = null;
       window.__aftRecord.clear();
       try { delete window.__aftRecord; } catch (e) { window.__aftRecord = null; }
     }
@@ -354,6 +443,7 @@ export class InteractionWatcher {
   private relay: Promise<void> = Promise.resolve()
   private draining = false
   private active = false
+  private ticks = 0
 
   constructor(private readonly tp: Transport) {}
 
@@ -416,6 +506,7 @@ export class InteractionWatcher {
       clearInterval(this.timer)
       this.timer = null
     }
+    this.ticks = 0
 
     for (const off of this.offs.splice(0)) off()
 
@@ -539,8 +630,13 @@ export class InteractionWatcher {
 
     try {
       const batch: RawInteraction[] = []
+      const touched = new Set<string>()
+      this.ticks++
+      const sweep = this.ticks % SAFETY_EVERY === 0
 
       for (const ref of Array.from(this.worlds.values())) {
+        if (!sweep && this.bindings.has(ref.sessionId)) continue
+
         const raw = await this.evaluate(ref, DRAIN, true)
         if (raw === null) {
           this.worlds.delete(key(ref.sessionId, ref.contextId))
@@ -550,7 +646,13 @@ export class InteractionWatcher {
         const value = raw.result?.value
         if (typeof value !== 'string' || value.length < 3) continue
 
-        for (const item of parse(value)) batch.push(await this.hydrate(ref, item))
+        touched.add(ref.sessionId)
+        const hydrated = await Promise.all(parse(value).map((item) => this.hydrate(ref, item)))
+        for (const item of hydrated) batch.push(item)
+      }
+
+      for (const sessionId of touched) {
+        void this.tp.trySend('Runtime.releaseObjectGroup', { objectGroup: HANDLE_GROUP }, sessionId)
       }
 
       if (batch.length && this.sink) {
@@ -613,9 +715,21 @@ export class InteractionWatcher {
   }
 
   private async resolve(ref: WorldRef, seq: number): Promise<number> {
-    const handle = await this.evaluate(
-      ref,
-      'window.__aftRecord && window.__aftRecord.node(' + seq + ')'
+    const handle = await this.tp.trySend<EvalResult>(
+      'Runtime.evaluate',
+      {
+        expression:
+          '(function(){ var n = window.__aftRecord && window.__aftRecord.node(' +
+          seq +
+          '); if (window.__aftRecord) window.__aftRecord.release(' +
+          seq +
+          '); return n; })()',
+        contextId: ref.contextId,
+        returnByValue: false,
+        awaitPromise: false,
+        objectGroup: HANDLE_GROUP
+      },
+      ref.sessionId
     )
     const objectId = handle?.result?.objectId
     if (!objectId) return 0
@@ -625,9 +739,6 @@ export class InteractionWatcher {
       { objectId },
       ref.sessionId
     )
-
-    void this.tp.trySend('Runtime.releaseObject', { objectId }, ref.sessionId)
-    void this.evaluate(ref, 'window.__aftRecord && window.__aftRecord.release(' + seq + ')')
 
     return described?.node?.backendNodeId ?? 0
   }

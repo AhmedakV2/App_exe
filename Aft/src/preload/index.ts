@@ -18,6 +18,12 @@ const api = {
   endDrag: (): void => ipcRenderer.send('aft:drag', null),
   setStage: (box: unknown): void => ipcRenderer.send('aft:stage', box),
   setModal: (open: boolean): void => ipcRenderer.send('aft:modal', open),
+  setStageShown: (open: boolean): void => ipcRenderer.send('aft:stage-shown', open),
+  setSettings: (open: boolean): void => ipcRenderer.send('aft:settings', open),
+  setDevtools: (open: boolean): void => ipcRenderer.send('aft:devtools', open),
+  setDevtoolsSplit: (ratio: number): void => ipcRenderer.send('aft:devtools-split', ratio),
+  publishPrefs: (value: unknown): void => ipcRenderer.send('aft:prefs', value),
+  patchPrefs: (patch: unknown): void => ipcRenderer.send('aft:prefs-patch', patch),
   setChrome: (color: string): void => ipcRenderer.send('aft:chrome', color),
   requestState: (): void => ipcRenderer.send('aft:state'),
   onState: (fn: (state: unknown) => void): (() => void) => {
@@ -46,6 +52,20 @@ const api = {
     ipcRenderer.on('aft:pointer', handler)
     return (): void => {
       ipcRenderer.removeListener('aft:pointer', handler)
+    }
+  },
+  onPrefs: (fn: (value: unknown) => void): (() => void) => {
+    const handler = (_e: IpcRendererEvent, value: unknown): void => fn(value)
+    ipcRenderer.on('aft:prefs', handler)
+    return (): void => {
+      ipcRenderer.removeListener('aft:prefs', handler)
+    }
+  },
+  onPrefsPatch: (fn: (patch: unknown) => void): (() => void) => {
+    const handler = (_e: IpcRendererEvent, patch: unknown): void => fn(patch)
+    ipcRenderer.on('aft:prefs-patch', handler)
+    return (): void => {
+      ipcRenderer.removeListener('aft:prefs-patch', handler)
     }
   },
   onDragEnd: (fn: () => void): (() => void) => {

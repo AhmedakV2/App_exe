@@ -1,4 +1,4 @@
-import { app, BaseWindow, WebContentsView, ipcMain, Menu, screen } from 'electron'
+import { app, BaseWindow, BrowserWindow, WebContentsView, ipcMain, Menu, screen } from 'electron'
 import type { Rectangle, WebContents } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
@@ -16,21 +16,33 @@ import {
 import { BrowserController } from './browser/BrowserController'
 import {
   AgentAction,
+  AppPrefs,
   BrowserState,
   DragAxis,
   ExecuteResult,
   NavKind,
+  ScanReport,
   StageBox,
   WindowAction
 } from './browser/types'
-import type { CoverageSummary, ScanLevel } from './discovery'
+import type { ScanLevel } from './discovery'
+import { HOME_URL, isHomeUrl, mountHome, registerHomeScheme, setHomeTheme } from './home'
 
 const FRAME = 40
-const STAGE_RADIUS = 0
+const STAGE_RADIUS = 8
 const FRAME_COLOR = '#1e1f22'
-const HOME_URL = 'https://www.google.com'
+const AGENT_PARTITION = 'persist:aft-agent'
 const DRAG_TICK = 16
 const DRAG_MAX_MS = 30000
+const SETTINGS_WIDTH = 392
+const SETTINGS_HEIGHT = 620
+const SETTINGS_MIN_WIDTH = 320
+const SETTINGS_MIN_HEIGHT = 280
+const DEVTOOLS_RATIO = 0.45
+const DEVTOOLS_MIN = 260
+const DEVTOOLS_GAP = 6
+const DEVTOOLS_MIN_RATIO = 0.15
+const DEVTOOLS_MAX_RATIO = 0.8
 const iconPath = app.isPackaged
   ? join(process.resourcesPath, 'build', 'icon.png')
   : join(__dirname, '../../build/icon.png')
@@ -38,6 +50,7 @@ const iconPath = app.isPackaged
 let win: BaseWindow
 let chatView: WebContentsView
 let targetView: WebContentsView
+let devtoolsView: WebContentsView | null = null
 let controller: BrowserController
 let chatOpen = false
 let terminalOpen = false
@@ -48,7 +61,17 @@ let layoutQueued = false
 let stateQueued = false
 let stageBox: StageBox | null = null
 let modalOpen = false
+let stageShown = true
 let pageHold = false
+let settingsWin: BrowserWindow | null = null
+let settingsSpot: { x: number; y: number } | null = null
+let settingsSize = { width: SETTINGS_WIDTH, height: SETTINGS_HEIGHT }
+let chromeColor = FRAME_COLOR
+let devtoolsOpen = false
+let devtoolsRatio = DEVTOOLS_RATIO
+let prefs: AppPrefs | null = null
+
+registerHomeScheme()
 
 function preloadPath(): string {
   const mjs = join(__dirname, '../preload/index.mjs')
@@ -102,7 +125,26 @@ function layout(): void {
   if (!win || win.isDestroyed()) return
   const area = visibleArea()
   chatView.setBounds(area)
-  targetView.setBounds(stageBounds(area))
+
+  const stage = stageBounds(area)
+  if (!devtoolsOpen || !devtoolsView) {
+    targetView.setBounds(stage)
+    return
+  }
+
+  const panel = Math.min(
+    Math.max(DEVTOOLS_MIN, Math.round(stage.width * devtoolsRatio)),
+    Math.max(0, stage.width - DEVTOOLS_MIN - DEVTOOLS_GAP)
+  )
+  const pageWidth = Math.max(0, stage.width - panel - DEVTOOLS_GAP)
+
+  targetView.setBounds({ x: stage.x, y: stage.y, width: pageWidth, height: stage.height })
+  devtoolsView.setBounds({
+    x: stage.x + pageWidth + DEVTOOLS_GAP,
+    y: stage.y,
+    width: panel,
+    height: stage.height
+  })
 }
 
 function readBox(value: unknown): StageBox | null {
@@ -141,18 +183,95 @@ function setStage(value: unknown): void {
   layout()
 }
 
+function applyStageVisible(): void {
+  if (!targetView || targetView.webContents.isDestroyed()) return
+  const visible = stageShown && !modalOpen
+  targetView.setVisible(visible)
+  if (devtoolsView && !devtoolsView.webContents.isDestroyed()) {
+    devtoolsView.setVisible(visible && devtoolsOpen)
+  }
+  if (visible) layout()
+}
+
+function closeDevtools(): void {
+  const panel = devtoolsView
+  devtoolsView = null
+  devtoolsOpen = false
+
+  if (targetView && !targetView.webContents.isDestroyed()) targetView.webContents.closeDevTools()
+  if (panel) {
+    if (win && !win.isDestroyed()) win.contentView.removeChildView(panel)
+    if (!panel.webContents.isDestroyed()) panel.webContents.close()
+  }
+}
+
+function openDevtools(): void {
+  if (!win || win.isDestroyed()) return
+  if (!targetView || targetView.webContents.isDestroyed()) return
+  if (devtoolsOpen && devtoolsView) return
+
+  const panel = new WebContentsView({
+    webPreferences: { sandbox: false, contextIsolation: true }
+  })
+
+  panel.setBackgroundColor(chromeColor)
+  panel.setBorderRadius(STAGE_RADIUS)
+  win.contentView.addChildView(panel)
+
+  devtoolsView = panel
+  devtoolsOpen = true
+
+  panel.webContents.on('destroyed', () => {
+    if (devtoolsView !== panel) return
+    devtoolsView = null
+    devtoolsOpen = false
+    layout()
+    pushState()
+  })
+
+  targetView.webContents.setDevToolsWebContents(panel.webContents)
+  targetView.webContents.openDevTools({ mode: 'detach' })
+  layout()
+}
+
+function setDevtoolsSplit(value: unknown): void {
+  const ratio = Number(value)
+  if (!Number.isFinite(ratio)) return
+
+  const next = Math.min(DEVTOOLS_MAX_RATIO, Math.max(DEVTOOLS_MIN_RATIO, ratio))
+  if (next === devtoolsRatio) return
+
+  devtoolsRatio = next
+  if (devtoolsOpen) layout()
+}
+
+function setDevtools(open: boolean): void {
+  if (open === devtoolsOpen) return
+  if (open) openDevtools()
+  else closeDevtools()
+  applyStageVisible()
+  layout()
+  pushState()
+}
+
 function setModal(open: boolean): void {
   if (open === modalOpen) return
   modalOpen = open
-  if (!targetView || targetView.webContents.isDestroyed()) return
-  targetView.setVisible(!open)
-  if (!open) layout()
+  applyStageVisible()
+}
+
+function setStageShown(open: boolean): void {
+  if (open === stageShown) return
+  stageShown = open
+  applyStageVisible()
 }
 
 function setChrome(color: unknown): void {
   if (typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color)) return
+  chromeColor = color
   if (win && !win.isDestroyed()) win.setBackgroundColor(color)
   if (chatView && !chatView.webContents.isDestroyed()) chatView.setBackgroundColor(color)
+  if (settingsAlive()) (settingsWin as BrowserWindow).setBackgroundColor(color)
 }
 
 function scheduleLayout(): void {
@@ -173,7 +292,9 @@ function snapshotState(): BrowserState {
     loading: controller.isLoading(),
     chatOpen,
     terminalOpen,
+    settingsOpen: settingsAlive(),
     vision: controller.isVisionOn(),
+    devtoolsOpen,
     maximized: !win || win.isDestroyed() ? false : win.isMaximized(),
     fullscreen: !win || win.isDestroyed() ? false : win.isFullScreen()
   }
@@ -202,6 +323,123 @@ function setChat(open: boolean): void {
   chatOpen = open
   layout()
   pushState()
+}
+
+function settingsAlive(): boolean {
+  return Boolean(settingsWin && !settingsWin.isDestroyed())
+}
+
+function settingsSpotFor(): { x: number; y: number } | null {
+  if (settingsSpot) return settingsSpot
+  if (!win || win.isDestroyed()) return null
+  const bounds = win.getBounds()
+  return {
+    x: Math.round(bounds.x + (bounds.width - settingsSize.width) / 2),
+    y: Math.round(bounds.y + (bounds.height - settingsSize.height) / 2)
+  }
+}
+
+function openSettings(): void {
+  if (settingsAlive()) {
+    const open = settingsWin as BrowserWindow
+    if (open.isMinimized()) open.restore()
+    open.show()
+    open.focus()
+    return
+  }
+
+  const spot = settingsSpotFor()
+  const next = new BrowserWindow({
+    width: settingsSize.width,
+    height: settingsSize.height,
+    ...(spot ?? {}),
+    minWidth: SETTINGS_MIN_WIDTH,
+    minHeight: SETTINGS_MIN_HEIGHT,
+    title: 'Ayarlar',
+    icon: iconPath,
+    frame: false,
+    roundedCorners: false,
+    show: false,
+    skipTaskbar: true,
+    backgroundColor: chromeColor,
+    parent: win && !win.isDestroyed() ? win : undefined,
+    webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true }
+  })
+
+  settingsWin = next
+
+  const remember = (): void => {
+    if (next.isDestroyed()) return
+    const bounds = next.getBounds()
+    settingsSpot = { x: bounds.x, y: bounds.y }
+    settingsSize = { width: bounds.width, height: bounds.height }
+  }
+
+  next.once('ready-to-show', () => {
+    if (!next.isDestroyed()) next.show()
+  })
+  next.webContents.on('did-finish-load', () => {
+    if (prefs && !next.isDestroyed()) next.webContents.send('aft:prefs', prefs)
+  })
+  next.on('move', remember)
+  next.on('resize', remember)
+  next.on('closed', () => {
+    if (settingsWin === next) settingsWin = null
+    pushState()
+  })
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    void next
+      .loadURL(process.env['ELECTRON_RENDERER_URL'] + '?view=settings')
+      .catch(() => undefined)
+  } else {
+    void next
+      .loadFile(join(__dirname, '../renderer/index.html'), { query: { view: 'settings' } })
+      .catch(() => undefined)
+  }
+
+  pushState()
+}
+
+function closeSettings(): void {
+  if (!settingsAlive()) return
+  ;(settingsWin as BrowserWindow).close()
+}
+
+function setSettings(open: boolean): void {
+  if (open) openSettings()
+  else closeSettings()
+}
+
+function repaintHome(): void {
+  if (!targetView || targetView.webContents.isDestroyed()) return
+  if (!isHomeUrl(targetView.webContents.getURL())) return
+  if (controller) controller.reload()
+  else targetView.webContents.reload()
+}
+
+function publishPrefs(value: unknown): void {
+  if (!value || typeof value !== 'object') return
+  const raw = value as Partial<AppPrefs>
+  if (typeof raw.theme !== 'string') return
+
+  prefs = {
+    theme: raw.theme,
+    autoTerminal: Boolean(raw.autoTerminal),
+    autoTerminalRestore: Boolean(raw.autoTerminalRestore),
+    screenshotOnFailure: Boolean(raw.screenshotOnFailure),
+    stopOnFailure: Boolean(raw.stopOnFailure),
+    verifyState: Boolean(raw.verifyState)
+  }
+
+  if (settingsAlive()) (settingsWin as BrowserWindow).webContents.send('aft:prefs', prefs)
+  if (setHomeTheme(prefs.theme)) repaintHome()
+}
+
+function patchPrefs(patch: unknown): void {
+  if (!patch || typeof patch !== 'object') return
+  if (!chatView || chatView.webContents.isDestroyed()) return
+  chatView.webContents.send('aft:prefs-patch', patch)
 }
 
 function setTerminal(open: boolean, focus: boolean): void {
@@ -361,6 +599,12 @@ function bindShortcuts(wc: WebContents): void {
       return
     }
 
+    if (input.key === 'F12' && !input.alt && !input.control && !input.meta) {
+      event.preventDefault()
+      setDevtools(!devtoolsOpen)
+      return
+    }
+
     if (input.alt && !input.control && !input.meta && input.key === 'F12') {
       event.preventDefault()
       setTerminal(!terminalOpen, true)
@@ -469,7 +713,7 @@ function createWindow(): void {
   })
 
   targetView = new WebContentsView({
-    webPreferences: { sandbox: true, contextIsolation: true, partition: 'persist:aft-agent' }
+    webPreferences: { sandbox: true, contextIsolation: true, partition: AGENT_PARTITION }
   })
 
   chatView.setBackgroundColor(FRAME_COLOR)
@@ -518,6 +762,7 @@ function createWindow(): void {
 
   win.on('closed', () => {
     stopDrag()
+    closeDevtools()
     void unmountRecord()
       .catch(() => undefined)
       .then(() => unmountData())
@@ -533,6 +778,7 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.aft.agent')
+  mountHome(AGENT_PARTITION)
 
   ipcMain.handle('aft:execute', (_e, action: AgentAction): Promise<ExecuteResult> =>
     respond(() => controller.execute(action))
@@ -547,9 +793,28 @@ app.whenReady().then(() => {
     })
   )
 
-  ipcMain.handle('aft:coverage', async (): Promise<CoverageSummary | null> => {
+  ipcMain.handle('aft:coverage', async (): Promise<ScanReport | null> => {
     const graph = controller.currentGraph()
-    return graph ? graph.coverage : null
+    if (!graph) return null
+    return {
+      url: graph.url,
+      title: graph.title,
+      level: graph.coverage.level,
+      coverage: graph.coverage,
+      blindSpots: graph.blindSpots,
+      frames: graph.frames.map((frame) => ({
+        id: frame.frameId,
+        url: frame.url,
+        depth: frame.depth,
+        failed: frame.failed
+      })),
+      viewport: {
+        width: graph.viewport.width,
+        height: graph.viewport.height,
+        pageHeight: graph.viewport.pageHeight
+      },
+      capturedAt: Date.now()
+    }
   })
 
   ipcMain.handle('aft:vision', (_e, on: boolean): Promise<ExecuteResult> =>
@@ -568,13 +833,26 @@ app.whenReady().then(() => {
   ipcMain.on('aft:terminal', (_e, open: boolean) => setTerminal(Boolean(open), Boolean(open)))
 
   ipcMain.on('aft:drag', (_e, axis: unknown) => {
-    if (axis === 'chat' || axis === 'terminal' || axis === 'record') startDrag(axis)
+    if (axis === 'chat' || axis === 'terminal' || axis === 'record' || axis === 'devtools')
+      startDrag(axis)
     else stopDrag()
   })
 
   ipcMain.on('aft:stage', (_e, rect: unknown) => setStage(rect))
 
   ipcMain.on('aft:modal', (_e, open: boolean) => setModal(Boolean(open)))
+
+  ipcMain.on('aft:stage-shown', (_e, open: boolean) => setStageShown(Boolean(open)))
+
+  ipcMain.on('aft:settings', (_e, open: boolean) => setSettings(Boolean(open)))
+
+  ipcMain.on('aft:devtools', (_e, open: boolean) => setDevtools(Boolean(open)))
+
+  ipcMain.on('aft:devtools-split', (_e, ratio: unknown) => setDevtoolsSplit(ratio))
+
+  ipcMain.on('aft:prefs', (_e, value: unknown) => publishPrefs(value))
+
+  ipcMain.on('aft:prefs-patch', (_e, patch: unknown) => patchPrefs(patch))
 
   ipcMain.on('aft:chrome', (_e, color: unknown) => setChrome(color))
 

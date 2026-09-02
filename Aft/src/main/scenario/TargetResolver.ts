@@ -18,10 +18,30 @@ export class TargetResolver {
     private readonly descriptors: DescriptorStore | null = null
   ) {}
 
-  resolve(target: StepTarget, index: ModelIndex, allowLowConfidence: boolean): TargetResolution {
+  resolve(
+    target: StepTarget,
+    index: ModelIndex,
+    allowLowConfidence: boolean,
+    persist = true
+  ): TargetResolution {
     if (target.kind === 'ordinal') return this.byOrdinal(target, index)
-    if (target.kind === 'query') return this.byQuery(target, index, allowLowConfidence)
 
+    if (target.kind === 'query') {
+      const outcome = this.byQuery(target, index, allowLowConfidence)
+      if (outcome.ok || !this.descriptorOf(target)) return outcome
+      const fallback = this.byDescriptor(target, index, allowLowConfidence, persist)
+      return fallback.ok ? fallback : outcome
+    }
+
+    return this.byDescriptor(target, index, allowLowConfidence, persist)
+  }
+
+  private byDescriptor(
+    target: StepTarget,
+    index: ModelIndex,
+    allowLowConfidence: boolean,
+    persist = true
+  ): TargetResolution {
     const descriptor = this.descriptorOf(target)
     if (!descriptor) {
       return {
@@ -37,7 +57,7 @@ export class TargetResolver {
     const resolution = outcome.resolution
     const candidate = resolution.candidate
 
-    if (outcome.healed && this.descriptors)
+    if (outcome.healed && persist && this.descriptors)
       this.descriptors.replace(descriptor.id, outcome.descriptor)
 
     const record: ResolutionRecord = {
@@ -65,7 +85,9 @@ export class TargetResolver {
         record
       }
     }
-    if (resolution.state === 'low-confidence' && !allowLowConfidence) {
+    const trusted = allowLowConfidence || outcome.healed
+
+    if (resolution.state === 'low-confidence' && !trusted) {
       return {
         ok: false,
         reason: resolution.message || 'dusuk guvenli eslesme',
@@ -74,10 +96,20 @@ export class TargetResolver {
         record
       }
     }
-    if (resolution.ambiguous && !allowLowConfidence) {
+    if (resolution.ambiguous && !trusted) {
       return {
         ok: false,
         reason: 'aday belirsiz, akis durduruldu',
+        element: null,
+        descriptor: outcome.descriptor,
+        record
+      }
+    }
+
+    if (outcome.healed && !persist) {
+      return {
+        ok: false,
+        reason: 'descriptor onarimi taze tarama istiyor',
         element: null,
         descriptor: outcome.descriptor,
         record
@@ -167,6 +199,7 @@ export class TargetResolver {
         voteScore: confidence,
         contextScore: 0,
         geometryScore: 0,
+        anchorScore: 0,
         votes: [QUERY_STRATEGY[query.kind]]
       })),
       durationMs: Date.now() - started,

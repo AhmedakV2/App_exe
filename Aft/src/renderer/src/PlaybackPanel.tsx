@@ -86,10 +86,12 @@ const StepLine = memo(function StepLine({ step }: { step: StepResult }): React.J
 
 const ContextView = memo(function ContextView({
   context,
-  onClose
+  onClose,
+  onShot
 }: {
   context: FailureContext
   onClose: () => void
+  onShot: (data: string) => void
 }): React.JSX.Element {
   const resolution = context.resolution
 
@@ -171,12 +173,79 @@ const ContextView = memo(function ContextView({
       ) : null}
 
       {context.screenshot ? (
+        <button
+          className="play-shot-btn"
+          onClick={() => onShot(context.screenshot)}
+          title="Hata anı görüntüsünü büyüt"
+          aria-label="Hata anı görüntüsünü büyüt"
+          type="button"
+        >
+          <img
+            className="play-shot"
+            src={'data:image/png;base64,' + context.screenshot}
+            alt="Hata anı ekran görüntüsü"
+          />
+          <span className="play-shot-hint">
+            <Glyph name="zoom" size={13} />
+            büyüt
+          </span>
+        </button>
+      ) : null}
+    </div>
+  )
+})
+
+const ShotView = memo(function ShotView({
+  data,
+  onClose
+}: {
+  data: string
+  onClose: () => void
+}): React.JSX.Element {
+  const closeRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    closeRef.current?.focus()
+    window.aft.setModal(true)
+
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onClose()
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.aft.setModal(false)
+    }
+  }, [onClose])
+
+  return (
+    <div
+      className="shot-view"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Hata anı ekran görüntüsü"
+      onClick={onClose}
+    >
+      <div className="shot-frame" onClick={(event) => event.stopPropagation()}>
+        <button
+          ref={closeRef}
+          className="shot-close"
+          title="Kapat"
+          aria-label="Kapat"
+          onClick={onClose}
+          type="button"
+        >
+          <Glyph name="close" size={16} />
+        </button>
         <img
-          className="play-shot"
-          src={'data:image/png;base64,' + context.screenshot}
+          className="shot-img"
+          src={'data:image/png;base64,' + data}
           alt="Hata anı ekran görüntüsü"
         />
-      ) : null}
+      </div>
     </div>
   )
 })
@@ -206,6 +275,7 @@ export default function PlaybackPanel({
     screenshotOnFailure: true,
     stopOnFailure: true
   })
+  const [shot, setShot] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [running, setRunning] = useState(false)
 
@@ -377,6 +447,8 @@ export default function PlaybackPanel({
       reportRef.current({ level: 'err', text: 'Köprü hatası: ' + (error as Error).message })
     }
   }, [])
+
+  const closeShot = useCallback((): void => setShot(null), [])
 
   const toggle = useCallback((key: keyof PlaybackOptions): void => {
     setOptions((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -555,7 +627,11 @@ export default function PlaybackPanel({
         </div>
       ) : null}
 
-      {context ? <ContextView context={context} onClose={() => setContext(null)} /> : null}
+      {context ? (
+        <ContextView context={context} onClose={() => setContext(null)} onShot={setShot} />
+      ) : null}
+
+      {active && shot ? <ShotView data={shot} onClose={closeShot} /> : null}
     </section>
   )
 }

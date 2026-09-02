@@ -1,0 +1,208 @@
+import React, { memo } from 'react'
+import { Glyph } from './icons'
+
+export type Tone = 'ok' | 'warn' | 'bad' | 'flat' | 'accent'
+
+export const PageHead = memo(function PageHead({
+  title,
+  meta,
+  actions
+}: {
+  title: string
+  meta?: React.ReactNode
+  actions?: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <header className="page-head">
+      <h1 className="page-title">{title}</h1>
+      {meta ? <div className="page-meta">{meta}</div> : null}
+      <span className="page-push" />
+      {actions ? <div className="page-actions">{actions}</div> : null}
+    </header>
+  )
+})
+
+export const Pill = memo(function Pill({
+  tone = 'flat',
+  children
+}: {
+  tone?: Tone
+  children: React.ReactNode
+}): React.JSX.Element {
+  return <span className={'pill ' + tone}>{children}</span>
+})
+
+export const Metric = memo(function Metric({
+  label,
+  value,
+  tone = 'flat',
+  hint
+}: {
+  label: string
+  value: React.ReactNode
+  tone?: Tone
+  hint?: string
+}): React.JSX.Element {
+  return (
+    <div className={'metric ' + tone}>
+      <span className="metric-value">{value}</span>
+      <span className="metric-label">{label}</span>
+      {hint ? <span className="metric-hint">{hint}</span> : null}
+    </div>
+  )
+})
+
+export const Card = memo(function Card({
+  label,
+  actions,
+  scroll,
+  grow,
+  children
+}: {
+  label: string
+  actions?: React.ReactNode
+  scroll?: boolean
+  grow?: boolean
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <section className={'card' + (grow ? ' grow' : '')}>
+      <header className="card-head">
+        <span className="card-label">{label}</span>
+        <span className="card-push" />
+        {actions}
+      </header>
+      <div className={'card-body' + (scroll ? ' scroll' : '')}>{children}</div>
+    </section>
+  )
+})
+
+export const Empty = memo(function Empty({
+  glyph,
+  text
+}: {
+  glyph: string
+  text: string
+}): React.JSX.Element {
+  return (
+    <div className="empty">
+      <Glyph name={glyph} size={20} />
+      <span>{text}</span>
+    </div>
+  )
+})
+
+export const Bar = memo(function Bar({
+  value,
+  tone = 'accent'
+}: {
+  value: number
+  tone?: Tone
+}): React.JSX.Element {
+  return (
+    <span className="bar">
+      <span
+        className={'bar-fill ' + tone}
+        style={{ width: Math.round(Math.min(1, Math.max(0, value)) * 100) + '%' }}
+      />
+    </span>
+  )
+})
+
+export const Field = memo(function Field({
+  label,
+  children
+}: {
+  label: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      {children}
+    </label>
+  )
+})
+
+export const Toggle = memo(function Toggle({
+  label,
+  checked,
+  disabled,
+  onChange
+}: {
+  label: string
+  checked: boolean
+  disabled?: boolean
+  onChange: (next: boolean) => void
+}): React.JSX.Element {
+  return (
+    <label className={'toggle' + (disabled ? ' off' : '')}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span className="toggle-box">
+        <Glyph name="check" size={11} />
+      </span>
+      <span className="toggle-label">{label}</span>
+    </label>
+  )
+})
+
+export const TextButton = memo(function TextButton({
+  glyph,
+  label,
+  onClick,
+  disabled,
+  tone
+}: {
+  glyph?: string
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  tone?: 'primary' | 'danger'
+}): React.JSX.Element {
+  return (
+    <button
+      className={'txt-btn' + (tone ? ' ' + tone : '')}
+      onClick={onClick}
+      disabled={disabled}
+      type="button"
+    >
+      {glyph ? <Glyph name={glyph} size={13} /> : null}
+      {label}
+    </button>
+  )
+})
+
+export const Segmented = memo(function Segmented({
+  items,
+  value,
+  disabled,
+  onPick
+}: {
+  items: { id: string; label: string }[]
+  value: string
+  disabled?: boolean
+  onPick: (id: string) => void
+}): React.JSX.Element {
+  return (
+    <div className="segmented" role="tablist">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          className={'segment' + (item.id === value ? ' sel' : '')}
+          role="tab"
+          aria-selected={item.id === value}
+          disabled={disabled}
+          onClick={() => onPick(item.id)}
+          type="button"
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  )
+})
