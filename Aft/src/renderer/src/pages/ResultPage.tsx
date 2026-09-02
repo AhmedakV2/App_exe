@@ -95,6 +95,7 @@ export default function ResultPage({
     async (id: string): Promise<void> => {
       setSelected(id)
       setText('')
+      setContext(null)
       setBusy(true)
       try {
         const result = await window.aftData.run(id)
@@ -135,6 +136,7 @@ export default function ResultPage({
         return
       }
       setContext(result.data.context)
+      setTab('contexts')
     },
     [onReport]
   )
@@ -337,21 +339,32 @@ export default function ResultPage({
 
               {tab === 'contexts' ? (
                 detail.contexts.length ? (
-                  <div className="list">
-                    {detail.contexts.map((entry) => (
-                      <button
-                        key={entry.id}
-                        className="list-row"
-                        onClick={() => void openContext(entry.id)}
-                        type="button"
-                      >
-                        <Glyph name="alert" size={13} />
-                        <span className="list-title mono">{entry.id}</span>
-                        <span className="list-meta">{formatBytes(entry.bytes)}</span>
-                        <span className="list-meta">{formatShortDate(entry.capturedAt)}</span>
-                      </button>
-                    ))}
-                  </div>
+                  <>
+                    <div className="list">
+                      {detail.contexts.map((entry) => (
+                        <button
+                          key={entry.id}
+                          className={'list-row' + (entry.id === context?.id ? ' sel' : '')}
+                          onClick={() => void openContext(entry.id)}
+                          type="button"
+                        >
+                          <Glyph name="alert" size={13} />
+                          <span className="list-title mono">{entry.id}</span>
+                          <span className="list-meta">{formatBytes(entry.bytes)}</span>
+                          <span className="list-meta">{formatShortDate(entry.capturedAt)}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {context ? (
+                      <ContextView
+                        context={context}
+                        inline
+                        onClose={() => setContext(null)}
+                        onShot={setShot}
+                      />
+                    ) : null}
+                  </>
                 ) : (
                   <Empty glyph="layers" text="Bağlam paketi yok" />
                 )
@@ -377,9 +390,6 @@ export default function ResultPage({
         </Card>
       </div>
 
-      {context ? (
-        <ContextView context={context} onClose={() => setContext(null)} onShot={setShot} />
-      ) : null}
       {shot ? <ShotView data={shot} onClose={() => setShot(null)} /> : null}
     </div>
   )

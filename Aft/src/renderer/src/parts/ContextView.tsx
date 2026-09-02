@@ -17,10 +17,12 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default memo(function ContextView({
   context,
+  inline,
   onClose,
   onShot
 }: {
   context: FailureContext
+  inline?: boolean
   onClose: () => void
   onShot: (data: string) => void
 }): React.JSX.Element {
@@ -29,6 +31,8 @@ export default memo(function ContextView({
   const frameRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
+    if (inline) return
+
     frameRef.current?.focus()
     window.aft.setModal(true)
 
@@ -43,7 +47,7 @@ export default memo(function ContextView({
       window.removeEventListener('keydown', onKey)
       window.aft.setModal(false)
     }
-  }, [onClose])
+  }, [inline, onClose])
 
   const resolution = context.resolution
 
@@ -67,16 +71,10 @@ export default memo(function ContextView({
     [context.screenshot]
   )
 
-  return (
-    <div
-      className="sheet"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Hata bağlamı"
-      onClick={onClose}
-    >
+  const body = (
+    <>
       <div
-        className="sheet-frame"
+        className={inline ? 'sheet-frame inline' : 'sheet-frame'}
         ref={frameRef}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
@@ -249,6 +247,20 @@ export default memo(function ContextView({
           ) : null}
         </div>
       </div>
+    </>
+  )
+
+  if (inline) return <div className="sheet-inline">{body}</div>
+
+  return (
+    <div
+      className="sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Hata bağlamı"
+      onClick={onClose}
+    >
+      {body}
     </div>
   )
 })
