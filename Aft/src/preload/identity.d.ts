@@ -7,6 +7,7 @@ import type {
   ChannelResult,
   ProjectionPayload,
   ResolvePayload,
+  ScanPayload,
   StatsPayload
 } from '../main/bridge'
 
@@ -15,6 +16,7 @@ declare global {
     aftIdentity: {
       capture: (ordinal: number) => Promise<ChannelResult<CapturePayload>>
       resolve: (descriptorId: string) => Promise<ChannelResult<ResolvePayload>>
+      scan: () => Promise<ChannelResult<ScanPayload>>
       project: (kind: ConsumerKind) => Promise<ChannelResult<ProjectionPayload>>
       validate: () => Promise<ChannelResult<ValidationReport>>
       list: () => Promise<ChannelResult<DescriptorSummary[]>>

@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 const identity = {
   capture: (ordinal: number) => ipcRenderer.invoke('aft:identity:capture', ordinal),
   resolve: (descriptorId: string) => ipcRenderer.invoke('aft:identity:resolve', descriptorId),
+  scan: () => ipcRenderer.invoke('aft:identity:scan'),
   project: (kind: string) => ipcRenderer.invoke('aft:identity:project', kind),
   validate: () => ipcRenderer.invoke('aft:identity:validate'),
   list: () => ipcRenderer.invoke('aft:identity:list'),

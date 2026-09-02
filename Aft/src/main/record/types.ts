@@ -9,6 +9,7 @@ export type RawKind =
   | 'click'
   | 'double-click'
   | 'right-click'
+  | 'hover'
   | 'input'
   | 'toggle'
   | 'select'
@@ -138,6 +139,7 @@ export interface RecordOptions {
   highlight: boolean
   captureScroll: boolean
   captureKeys: boolean
+  captureHover: boolean
   mergeTypingMs: number
   focusClickMs: number
   doubleClickMs: number
@@ -157,6 +159,7 @@ export const DEFAULT_RECORD: RecordOptions = {
   highlight: true,
   captureScroll: true,
   captureKeys: true,
+  captureHover: true,
   mergeTypingMs: 1600,
   focusClickMs: 2500,
   doubleClickMs: 700,

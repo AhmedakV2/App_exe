@@ -377,6 +377,11 @@ export default function RecordPanel({
     void call('Ayar güncellenemedi', () => window.aftRecord.options({ captureScroll: !current }))
   }, [call, view])
 
+  const toggleHover = useCallback((): void => {
+    const current = Boolean(view?.options.captureHover)
+    void call('Ayar güncellenemedi', () => window.aftRecord.options({ captureHover: !current }))
+  }, [call, view])
+
   const edit = useCallback(async (request: RecordEditRequest, label: string): Promise<void> => {
     setBusy(true)
     try {
@@ -539,6 +544,14 @@ export default function RecordPanel({
           small
         />
         <IconButton
+          name="target"
+          title="İmleç adımı kısayolu Ctrl+Shift+M"
+          onClick={toggleHover}
+          disabled={busy || !live}
+          active={Boolean(view?.options.captureHover)}
+          small
+        />
+        <IconButton
           name="trash"
           title="Kaydı at"
           onClick={() => void discard()}
@@ -550,11 +563,14 @@ export default function RecordPanel({
         <span className={'rec-state ' + status}>{STATUS_LABELS[status]}</span>
       </div>
 
-      {summary || view?.baseUrl ? (
+      {summary || view?.baseUrl || live ? (
         <div className="rec-meta">
           {summary ? <span className="rec-meta-row">{summary}</span> : null}
           {view?.baseUrl ? (
             <span className="rec-meta-row muted">{shortUrl(view.baseUrl)}</span>
+          ) : null}
+          {live && view?.options.captureHover ? (
+            <span className="rec-meta-row muted">imleç adımı için sayfada Ctrl + Shift + M</span>
           ) : null}
         </div>
       ) : null}

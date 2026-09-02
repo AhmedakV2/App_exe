@@ -53,9 +53,11 @@ export interface FlushPayload {
 }
 export interface ReconcilePayload {
   report: ReconcileReport
+  scenarios: number
 }
 export interface SweepPayload {
   report: RetentionReport
+  summary: OutboxSummary
 }
 export interface DataStatsPayload {
   stats: DataStats

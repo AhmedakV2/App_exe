@@ -48,6 +48,14 @@ export function suppress(
     return NONE
   }
 
+  if (intent.kind === 'hover') {
+    const previous = trailing(steps, (step) => step.sourceKey === key, 1)[0]
+    if (previous && previous.kind === 'hover' && key) {
+      return { ...NONE, drop: true, reason: 'ayni eleman uzerinde tekrar eden imlec adimi elendi' }
+    }
+    return NONE
+  }
+
   if (intent.kind === 'double-click') {
     const remove = trailing(steps, (step) => step.kind === 'click' && step.sourceKey === key, 2)
       .filter((step) => intent.at - step.at <= options.doubleClickMs)

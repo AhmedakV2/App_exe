@@ -7,6 +7,7 @@ import type { Descriptor, HealingProposal, Resolution, StrategyStat } from '../i
 export type IdentityChannelName =
   | 'aft:identity:capture'
   | 'aft:identity:resolve'
+  | 'aft:identity:scan'
   | 'aft:identity:project'
   | 'aft:identity:validate'
   | 'aft:identity:list'
@@ -39,6 +40,13 @@ export interface ResolvePayload {
 export interface ProjectionPayload {
   projection: ConsumerProjection
   validation: ValidationReport
+}
+
+export interface ScanPayload {
+  url: string
+  title: string
+  elements: number
+  capturedAt: number
 }
 
 export interface StatsPayload {
