@@ -232,21 +232,6 @@ export default function RunPanel({
         <IconButton name="reload" title="Yenile" onClick={refresh} disabled={running} small />
       </div>
 
-      <div className="side-opts">
-        <span className={'run-flag' + (options.screenshotOnFailure ? ' on' : '')}>
-          hata görüntüsü
-        </span>
-        <span className={'run-flag' + (options.stopOnFailure ? ' on' : '')}>ilk hatada dur</span>
-        <span className={'run-flag' + (options.verifyState ? ' on' : '')}>durum doğrula</span>
-        <span className="rec-bar-push" />
-        <IconButton
-          name="settings"
-          title="Oynatma ayarları"
-          onClick={() => window.aft.setSettings(true)}
-          small
-        />
-      </div>
-
       {running ? (
         <div className="progress">
           <Bar value={percentDone} />
