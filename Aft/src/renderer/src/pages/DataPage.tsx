@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import type { DataStats, OutboxSummary, ScenarioIndexRow } from '../../../main/data'
-import { Glyph, IconButton } from '../icons'
-import { Card, Empty, Metric, PageHead, Pill, TextButton } from '../ui'
+import { Glyph } from '../icons'
+import { Empty, Metric, Pill, Sym, TextButton } from '../ui'
 import { formatBytes, formatShortDate } from '../format'
 import type { Report } from '../report'
 
@@ -108,115 +108,129 @@ export default function DataPage({
   }, [load, onReport])
 
   return (
-    <div className="page">
-      <PageHead
-        title="Veri"
-        meta={
-          <>
-            {stats ? <Pill>{formatBytes(stats.bytes)}</Pill> : null}
-            {stats ? <Pill>{stats.journalMode}</Pill> : null}
-            {outbox && outbox.pending ? <Pill tone="warn">{outbox.pending} bekleyen</Pill> : null}
-            {outbox && outbox.failed ? <Pill tone="bad">{outbox.failed} hatalı</Pill> : null}
-            {faults.length ? <Pill tone="bad">{faults.length} sorun</Pill> : null}
-          </>
-        }
-        actions={
-          <>
-            <TextButton
-              glyph="cloud"
-              label="Kuyruğu gönder"
-              onClick={() => void flush()}
-              disabled={busy}
-            />
-            <TextButton
-              glyph="link"
-              label="Eşitle"
-              onClick={() => void reconcile()}
-              disabled={busy}
-            />
-            <TextButton
-              glyph="broom"
-              label="Temizle"
-              onClick={() => void sweep()}
-              disabled={busy}
-              tone="danger"
-            />
-            <IconButton
-              name="reload"
-              title="Yenile"
-              onClick={() => void load()}
-              disabled={busy}
-              small
-            />
-          </>
-        }
-      />
+    <>
+      <header className="hdr">
+        <span className="t">Veri</span>
+        {stats ? <span className="mono faint">{stats.filePath}</span> : null}
+        {outbox && outbox.failed ? <Pill tone="bad">{outbox.failed} hatalı</Pill> : null}
+        {faults.length ? <Pill tone="bad">{faults.length} sorun</Pill> : null}
+        <span className="push" />
+        <TextButton
+          glyph="cloud"
+          label="Kuyruğu gönder"
+          onClick={() => void flush()}
+          disabled={busy}
+        />
+        <TextButton glyph="link" label="Eşitle" onClick={() => void reconcile()} disabled={busy} />
+        <TextButton
+          glyph="broom"
+          label="Temizle"
+          onClick={() => void sweep()}
+          disabled={busy}
+          tone="danger"
+        />
+        <button
+          className="ib"
+          title="Yenile"
+          onClick={() => void load()}
+          disabled={busy}
+          type="button"
+        >
+          <Glyph name="reload" size={13} />
+        </button>
+      </header>
 
-      <div className="metric-row wide">
-        <Metric label="senaryo" value={stats?.scenarios ?? 0} />
-        <Metric label="koşum" value={stats?.runs ?? 0} />
-        <Metric label="adım" value={stats?.steps ?? 0} />
-        <Metric label="bağlam" value={stats?.contexts ?? 0} />
-        <Metric label="kuyruk" value={stats?.outbox ?? 0} tone={stats?.outbox ? 'warn' : 'flat'} />
+      <div className="metrics">
+        <Metric label="Senaryo" value={stats?.scenarios ?? 0} />
+        <Metric label="Koşum" value={stats?.runs ?? 0} />
+        <Metric label="Adım" value={stats?.steps ?? 0} />
+        <Metric label="Bağlam" value={stats?.contexts ?? 0} />
+        <Metric label="Kuyruk" value={stats?.outbox ?? 0} tone={stats?.outbox ? 'warn' : 'flat'} />
         <Metric
-          label="bekleyen"
+          label="Bekleyen"
           value={outbox?.pending ?? 0}
           tone={outbox?.pending ? 'warn' : 'flat'}
         />
-        <Metric label="gönderilen" value={outbox?.sent ?? 0} tone="ok" />
-        <Metric label="hatalı" value={outbox?.failed ?? 0} tone={outbox?.failed ? 'bad' : 'flat'} />
+        <Metric label="Gönderilen" value={outbox?.sent ?? 0} tone="ok" />
+        <Metric label="Hatalı" value={outbox?.failed ?? 0} tone={outbox?.failed ? 'bad' : 'flat'} />
       </div>
 
-      <div className="page-body cols-2">
-        <Card label="Senaryo indeksi" scroll grow>
-          {scenarios.length ? (
-            <div className="table">
-              <div className="tr th">
-                <span className="td grow">senaryo</span>
-                <span className="td">adım</span>
-                <span className="td">şema</span>
-                <span className="td">güncelleme</span>
-              </div>
-              {scenarios.map((entry) => (
-                <div key={entry.id} className="tr">
-                  <span className="td grow">{entry.title}</span>
-                  <span className="td">{entry.steps}</span>
-                  <span className="td dim mono">{entry.schemaVersion}</span>
-                  <span className="td dim">{formatShortDate(entry.updatedAt)}</span>
+      <div className="split" style={{ gridTemplateColumns: '1fr 360px' }}>
+        <div className="col">
+          <div className="ph">
+            Senaryo indeksi
+            <span className="push" />
+            <span className="plain">{scenarios.length}</span>
+          </div>
+          <div className="gridwrap">
+            {scenarios.length ? (
+              <table className="grid">
+                <thead>
+                  <tr>
+                    <th>Senaryo</th>
+                    <th style={{ width: 60 }}>Adım</th>
+                    <th style={{ width: 130 }}>Şema</th>
+                    <th style={{ width: 160 }}>Dosya</th>
+                    <th style={{ width: 100 }}>Güncelleme</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scenarios.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>{entry.title}</td>
+                      <td className="num">{entry.steps}</td>
+                      <td className="mono muted">{entry.schemaVersion}</td>
+                      <td className="mono muted">{entry.fileName}</td>
+                      <td className="muted">{formatShortDate(entry.updatedAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <Empty glyph="library" text="Senaryo yok" />
+            )}
+          </div>
+        </div>
+
+        <div className="col scroll">
+          <div className="ph">Depo</div>
+          <div className="pad">
+            <dl className="kv">
+              <dt className="kv-key">Dosya</dt>
+              <dd className="kv-val mono" title={stats?.filePath}>
+                {stats?.filePath ?? '—'}
+              </dd>
+              <dt className="kv-key">Boyut</dt>
+              <dd className="kv-val mono">{formatBytes(stats?.bytes ?? 0)}</dd>
+              <dt className="kv-key">Şema sürümü</dt>
+              <dd className="kv-val mono">{stats?.userVersion ?? '—'}</dd>
+              <dt className="kv-key">Günlük kipi</dt>
+              <dd className="kv-val mono">{stats?.journalMode ?? '—'}</dd>
+              <dt className="kv-key">En eski bekleyen</dt>
+              <dd className="kv-val mono">{formatShortDate(outbox?.oldestPendingAt ?? 0)}</dd>
+              <dt className="kv-key">Gönderiliyor</dt>
+              <dd className="kv-val mono">{outbox?.sending ?? 0}</dd>
+            </dl>
+          </div>
+          <div className="ph">
+            Sorunlar
+            <span className="push" />
+            {faults.length ? <Pill tone="bad">{faults.length}</Pill> : null}
+          </div>
+          {faults.length ? (
+            <div className="issues">
+              {faults.map((fault, index) => (
+                <div key={index} className="issue">
+                  <Sym tone="bad" />
+                  <span className="msg">{fault}</span>
                 </div>
               ))}
             </div>
           ) : (
-            <Empty glyph="library" text="Senaryo yok" />
+            <div className="side-empty">Depo sağlıklı</div>
           )}
-        </Card>
-
-        <Card label="Depo" scroll>
-          <div className="kv">
-            <span className="kv-key">dosya</span>
-            <span className="kv-val mono">{stats?.filePath ?? '—'}</span>
-            <span className="kv-key">boyut</span>
-            <span className="kv-val">{formatBytes(stats?.bytes ?? 0)}</span>
-            <span className="kv-key">şema sürümü</span>
-            <span className="kv-val mono">{stats?.userVersion ?? '—'}</span>
-            <span className="kv-key">günlük kipi</span>
-            <span className="kv-val mono">{stats?.journalMode ?? '—'}</span>
-            <span className="kv-key">en eski bekleyen</span>
-            <span className="kv-val">{formatShortDate(outbox?.oldestPendingAt ?? 0)}</span>
-          </div>
-
-          {faults.length ? (
-            <div className="issues">
-              {faults.map((fault, index) => (
-                <div key={index} className="issue bad">
-                  <Glyph name="alert" size={12} />
-                  {fault}
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </Card>
+        </div>
       </div>
-    </div>
+    </>
   )
 }

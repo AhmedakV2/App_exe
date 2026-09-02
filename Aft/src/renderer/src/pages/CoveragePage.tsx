@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import type { ScanReport } from '../../../main/browser/types'
-import { IconButton } from '../icons'
-import { Card, Empty, Metric, PageHead, Pill, Segmented } from '../ui'
+import { Glyph } from '../icons'
+import { Empty, Metric, Pill, Segmented, TextButton } from '../ui'
 import { formatMs, shortUrl } from '../format'
 import type { Report } from '../report'
 
@@ -62,131 +62,144 @@ export default function CoveragePage({
   const coverage = report?.coverage ?? null
 
   return (
-    <div className="page">
-      <PageHead
-        title="Kapsam"
-        meta={
-          report ? (
-            <>
-              <Pill>{shortUrl(report.url)}</Pill>
-              {coverage?.reused ? <Pill tone="accent">yeniden kullanıldı</Pill> : null}
-              {coverage?.quietTimedOut ? <Pill tone="warn">kararlılık aşıldı</Pill> : null}
-              {coverage?.framesFailed ? (
-                <Pill tone="bad">{coverage.framesFailed} çerçeve</Pill>
-              ) : null}
-            </>
-          ) : null
-        }
-        actions={
-          <>
-            <Segmented items={LEVELS} value={level} onPick={setLevel} disabled={busy} />
-            <IconButton
-              name="radar"
-              title="Tara"
-              onClick={() => void scan()}
-              disabled={busy}
-              small
-              active
-            />
-            <IconButton
-              name="reload"
-              title="Yenile"
-              onClick={() => void load()}
-              disabled={busy}
-              small
-            />
-          </>
-        }
-      />
+    <>
+      <header className="hdr">
+        <span className="t">Kapsam</span>
+        {report ? <span className="mono faint">{shortUrl(report.url) || 'ana sayfa'}</span> : null}
+        {coverage?.reused ? <Pill tone="accent">yeniden kullanıldı</Pill> : null}
+        {coverage?.quietTimedOut ? <Pill tone="warn">kararlılık aşıldı</Pill> : null}
+        {coverage?.framesFailed ? <Pill tone="bad">{coverage.framesFailed} çerçeve</Pill> : null}
+        <span className="push" />
+        <Segmented items={LEVELS} value={level} onPick={setLevel} disabled={busy} />
+        <TextButton
+          glyph="radar"
+          label="Tara"
+          onClick={() => void scan()}
+          disabled={busy}
+          tone="primary"
+        />
+        <button
+          className="ib"
+          title="Yenile"
+          onClick={() => void load()}
+          disabled={busy}
+          type="button"
+        >
+          <Glyph name="reload" size={13} />
+        </button>
+      </header>
 
       {coverage ? (
-        <div className="metric-row wide">
-          <Metric label="düğüm" value={coverage.nodes} />
-          <Metric label="eleman" value={coverage.elements} />
-          <Metric label="etkileşilebilir" value={coverage.interactive} tone="accent" />
-          <Metric label="görünen alan" value={coverage.inViewport} />
-          <Metric label="shadow kök" value={coverage.shadowRoots} />
-          <Metric label="çerçeve" value={coverage.frames} />
+        <div className="metrics">
+          <Metric label="Düğüm" value={coverage.nodes} />
+          <Metric label="Eleman" value={coverage.elements} />
+          <Metric label="Etkileşilebilir" value={coverage.interactive} tone="accent" />
+          <Metric label="Görünen alan" value={coverage.inViewport} />
+          <Metric label="Shadow kök" value={coverage.shadowRoots} />
+          <Metric label="Çerçeve" value={coverage.frames} />
           <Metric
-            label="kör nokta"
+            label="Kör nokta"
             value={coverage.blindSpots}
             tone={coverage.blindSpots ? 'warn' : 'flat'}
           />
-          <Metric label="geçiş" value={coverage.passes} />
-          <Metric label="süre" value={formatMs(coverage.durationMs)} />
+          <Metric label="Geçiş" value={coverage.passes} />
+          <Metric label="Süre" value={formatMs(coverage.durationMs)} />
         </div>
       ) : null}
 
-      <div className="page-body cols-2">
-        <Card label="Erişilemeyen bölgeler" scroll grow>
-          {report && report.blindSpots.length ? (
-            <div className="table">
-              <div className="tr th">
-                <span className="td">tür</span>
-                <span className="td grow">ayrıntı</span>
-                <span className="td">çerçeve</span>
-              </div>
-              {report.blindSpots.map((spot, index) => (
-                <div key={index} className="tr">
-                  <span className="td">
-                    <Pill tone="warn">{SPOT_LABELS[spot.kind] ?? spot.kind}</Pill>
-                  </span>
-                  <span className="td grow">{spot.detail}</span>
-                  <span className="td dim mono">{spot.frameId.slice(0, 10)}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty glyph="layers" text="Kör nokta yok" />
-          )}
-        </Card>
+      <div className="split" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className="col">
+          <div className="ph">
+            Erişilemeyen bölgeler
+            <span className="push" />
+            {report ? <span className="plain">{report.blindSpots.length}</span> : null}
+          </div>
+          <div className="gridwrap">
+            {report && report.blindSpots.length ? (
+              <table className="grid">
+                <thead>
+                  <tr>
+                    <th style={{ width: 130 }}>Tür</th>
+                    <th>Ayrıntı</th>
+                    <th style={{ width: 110 }}>Çerçeve</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.blindSpots.map((spot, index) => (
+                    <tr key={index}>
+                      <td>
+                        <Pill tone="warn">{SPOT_LABELS[spot.kind] ?? spot.kind}</Pill>
+                      </td>
+                      <td>{spot.detail}</td>
+                      <td className="mono muted">{spot.frameId.slice(0, 10)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <Empty glyph="layers" text={report ? 'Kör nokta yok' : 'Tarama yok'} />
+            )}
+          </div>
+        </div>
 
-        <Card label="Çerçeveler" scroll>
-          {report && report.frames.length ? (
-            <div className="table">
-              <div className="tr th">
-                <span className="td">derinlik</span>
-                <span className="td grow">adres</span>
-                <span className="td">durum</span>
-              </div>
-              {report.frames.map((frame) => (
-                <div key={frame.id} className="tr">
-                  <span className="td">{frame.depth}</span>
-                  <span className="td grow mono">{shortUrl(frame.url) || '—'}</span>
-                  <span className="td">
-                    <Pill tone={frame.failed ? 'bad' : 'ok'}>
-                      {frame.failed ? 'bağlanamadı' : 'bağlı'}
-                    </Pill>
-                  </span>
-                </div>
-              ))}
+        <div className="col">
+          <div className="ph">
+            Çerçeveler
+            <span className="push" />
+            {report ? <span className="plain">{report.frames.length}</span> : null}
+          </div>
+          <div className="gridwrap">
+            {report && report.frames.length ? (
+              <table className="grid">
+                <thead>
+                  <tr>
+                    <th style={{ width: 70 }}>Derinlik</th>
+                    <th>Adres</th>
+                    <th style={{ width: 100 }}>Durum</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.frames.map((frame) => (
+                    <tr key={frame.id}>
+                      <td className="num">{frame.depth}</td>
+                      <td className="mono">{shortUrl(frame.url) || '—'}</td>
+                      <td>
+                        <Pill tone={frame.failed ? 'bad' : 'ok'}>
+                          {frame.failed ? 'bağlanamadı' : 'bağlı'}
+                        </Pill>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <Empty glyph="globe" text="Çerçeve yok" />
+            )}
+          </div>
+          {report ? (
+            <div className="pad" style={{ borderTop: '1px solid var(--line)' }}>
+              <dl className="kv">
+                <dt className="kv-key">Şema</dt>
+                <dd className="kv-val mono">{coverage?.version}</dd>
+                <dt className="kv-key">Görünüm</dt>
+                <dd className="kv-val mono">
+                  {report.viewport.width} × {report.viewport.height} · {report.viewport.pageHeight}
+                </dd>
+                <dt className="kv-key">Engel kontrolü</dt>
+                <dd className="kv-val mono">
+                  {coverage?.occlusionChecked} /{' '}
+                  {(coverage?.occlusionChecked ?? 0) + (coverage?.occlusionSkipped ?? 0)}
+                </dd>
+                <dt className="kv-key">Dinleyici</dt>
+                <dd className="kv-val mono">
+                  {coverage?.listenersProbed} /{' '}
+                  {(coverage?.listenersProbed ?? 0) + (coverage?.listenersSkipped ?? 0)}
+                </dd>
+              </dl>
             </div>
-          ) : (
-            <Empty glyph="globe" text="Çerçeve yok" />
-          )}
-        </Card>
+          ) : null}
+        </div>
       </div>
-
-      {report ? (
-        <div className="kv wide">
-          <span className="kv-key">şema</span>
-          <span className="kv-val mono">{coverage?.version}</span>
-          <span className="kv-key">görünüm</span>
-          <span className="kv-val mono">
-            {report.viewport.width} × {report.viewport.height} · {report.viewport.pageHeight}
-          </span>
-          <span className="kv-key">engel kontrolü</span>
-          <span className="kv-val">
-            {coverage?.occlusionChecked} /{' '}
-            {(coverage?.occlusionChecked ?? 0) + (coverage?.occlusionSkipped ?? 0)}
-          </span>
-          <span className="kv-key">dinleyici</span>
-          <span className="kv-val">
-            {coverage?.listenersProbed} /{' '}
-            {(coverage?.listenersProbed ?? 0) + (coverage?.listenersSkipped ?? 0)}
-          </span>
-        </div>
-      ) : null}
-    </div>
+    </>
   )
 }
