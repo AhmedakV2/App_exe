@@ -22,6 +22,8 @@ export default function BrowserPage({
   focusSeed,
   dock,
   dockWidth,
+  devtoolsOpen,
+  devtoolsWidth,
   revision,
   runRequest,
   recording,
@@ -30,6 +32,7 @@ export default function BrowserPage({
   onListGrip,
   onTermGrip,
   onDockGrip,
+  onDevGrip,
   onCloseList,
   onCloseTerminal,
   onDock,
@@ -48,6 +51,8 @@ export default function BrowserPage({
   focusSeed: number
   dock: DockTab
   dockWidth: number
+  devtoolsOpen: boolean
+  devtoolsWidth: number
   revision: number
   runRequest: string
   recording: boolean
@@ -56,6 +61,7 @@ export default function BrowserPage({
   onListGrip: (event: React.PointerEvent<HTMLDivElement>) => void
   onTermGrip: (event: React.PointerEvent<HTMLDivElement>) => void
   onDockGrip: (event: React.PointerEvent<HTMLDivElement>) => void
+  onDevGrip: (event: React.PointerEvent<HTMLDivElement>) => void
   onCloseList: () => void
   onCloseTerminal: () => void
   onDock: (tab: DockTab) => void
@@ -78,7 +84,18 @@ export default function BrowserPage({
       ) : null}
 
       <div className="main">
-        <div className="stage" ref={stageRef} />
+        <div className="stage" ref={stageRef}>
+          {devtoolsOpen ? (
+            <div
+              className="dev-grip"
+              style={{ right: devtoolsWidth }}
+              onPointerDown={onDevGrip}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="İnceleme paneli genişliği"
+            />
+          ) : null}
+        </div>
         {terminalOpen ? (
           <ConsolePanel
             api={api}

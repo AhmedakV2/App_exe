@@ -53,6 +53,7 @@ function isPageId(value: unknown): value is PageId {
 const LIST_KEY = 'aft:list-width'
 const TERM_KEY = 'aft:term-height'
 const DOCK_KEY = 'aft:dock-width'
+const DEV_KEY = 'aft:devtools-width'
 const DOCK_TAB_KEY = 'aft:dock-tab'
 const PAGE_KEY = 'aft:page'
 const AUTO_TERM_KEY = 'aft:auto-terminal'
@@ -64,12 +65,15 @@ const STATE_KEY = 'aft:play-verify'
 const LIST_SIZE = 300
 const TERM_SIZE = 268
 const DOCK_SIZE = 380
+const DEV_SIZE = 520
 const LIST_MIN = 220
 const TERM_MIN = 120
 const DOCK_MIN = 300
+const DEV_MIN = 260
 const LIST_MAX_RATIO = 0.5
 const TERM_MAX_RATIO = 0.72
 const DOCK_MAX_RATIO = 0.62
+const DEV_MAX_RATIO = 0.8
 
 function sameBox(a: StageBox | null, b: StageBox): boolean {
   if (!a) return false
@@ -221,9 +225,11 @@ export default function App(): React.JSX.Element {
   const [listWidth, setListWidth] = useState(() => readSize(LIST_KEY, LIST_SIZE))
   const [termHeight, setTermHeight] = useState(() => readSize(TERM_KEY, TERM_SIZE))
   const [dockWidth, setDockWidth] = useState(() => readSize(DOCK_KEY, DOCK_SIZE))
+  const [devWidth, setDevWidth] = useState(() => readSize(DEV_KEY, DEV_SIZE))
   const [dock, setDock] = useState<DockTab>(() => readDock())
   const [space, setSpace] = useState({ width: 0, height: 0 })
   const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null)
+  const [stageWidth, setStageWidth] = useState(0)
 
   const term = useConsole()
   const { push: pushLine, absorb: absorbResult } = term
@@ -231,6 +237,7 @@ export default function App(): React.JSX.Element {
   const urlRef = useRef<HTMLInputElement | null>(null)
   const spaceRef = useRef<HTMLDivElement | null>(null)
   const stageBoxRef = useRef<StageBox | null>(null)
+  const stageElRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<DragAxis | null>(null)
   const autoTermRef = useRef(autoTerm)
   const autoBackRef = useRef(autoBack)
@@ -252,6 +259,9 @@ export default function App(): React.JSX.Element {
   const dockSize = space.width
     ? clamp(dockWidth, DOCK_MIN, Math.floor(space.width * DOCK_MAX_RATIO))
     : dockWidth
+  const devSize = stageWidth
+    ? clamp(devWidth, DEV_MIN, Math.floor(stageWidth * DEV_MAX_RATIO))
+    : devWidth
 
   const report = useCallback(
     (entry: Report): void => {
@@ -305,13 +315,20 @@ export default function App(): React.JSX.Element {
   }, [dock, page])
 
   useEffect(() => {
+    stageElRef.current = stageEl
+  }, [stageEl])
+
+  useEffect(() => {
     window.aft.setStageShown(hasStage)
   }, [hasStage])
 
   useEffect(() => {
     if (!stageEl) return
 
-    const observer = new ResizeObserver(() => reportStage())
+    const observer = new ResizeObserver(() => {
+      setStageWidth(Math.round(stageEl.getBoundingClientRect().width))
+      reportStage()
+    })
     observer.observe(stageEl)
     observer.observe(document.documentElement)
     window.addEventListener('resize', reportStage)
@@ -449,6 +466,12 @@ export default function App(): React.JSX.Element {
         setDockWidth(Math.round(box.right - spot.x * view.clientWidth))
         return
       }
+      if (axis === 'devtools') {
+        const stage = stageElRef.current?.getBoundingClientRect()
+        if (!stage) return
+        setDevWidth(Math.round(stage.right - spot.x * view.clientWidth))
+        return
+      }
       setTermHeight(Math.round(box.bottom - spot.y * view.clientHeight))
     })
   }, [])
@@ -487,7 +510,13 @@ export default function App(): React.JSX.Element {
     storeSize(LIST_KEY, listSize)
     storeSize(TERM_KEY, termSize)
     storeSize(DOCK_KEY, dockSize)
-  }, [drag, listSize, termSize, dockSize])
+    storeSize(DEV_KEY, devSize)
+  }, [drag, listSize, termSize, dockSize, devSize])
+
+  useEffect(() => {
+    if (!devtoolsOpen || !stageWidth) return
+    window.aft.setDevtoolsSplit(devSize / stageWidth)
+  }, [devSize, devtoolsOpen, stageWidth])
 
   const nav = useCallback((kind: NavKind): void => window.aft.nav(kind), [])
   const winAction = useCallback((action: WindowAction): void => window.aft.window(action), [])
@@ -550,6 +579,10 @@ export default function App(): React.JSX.Element {
   )
   const beginDockDrag = useCallback(
     (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('record', event),
+    [beginDrag]
+  )
+  const beginDevDrag = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): void => beginDrag('devtools', event),
     [beginDrag]
   )
 
@@ -807,6 +840,8 @@ export default function App(): React.JSX.Element {
             focusSeed={focusSeed}
             dock={dock}
             dockWidth={dockSize}
+            devtoolsOpen={devtoolsOpen}
+            devtoolsWidth={devSize}
             revision={library}
             runRequest={runRequest}
             recording={recording}
@@ -815,6 +850,7 @@ export default function App(): React.JSX.Element {
             onListGrip={beginListDrag}
             onTermGrip={beginTermDrag}
             onDockGrip={beginDockDrag}
+            onDevGrip={beginDevDrag}
             onCloseList={toggleList}
             onCloseTerminal={closeTerminal}
             onDock={openDock}

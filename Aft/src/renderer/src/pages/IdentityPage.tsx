@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FragileStep, HealthSummary } from '../../../main/data'
 import type { DescriptorSummary, HealingProposal, StrategyStat } from '../../../main/identity'
 import type { ValidationReport } from '../../../main/model'
-import type { ResolvePayload, ScanPayload } from '../../../main/bridge'
+import type { ProjectionPayload, ResolvePayload, ScanPayload } from '../../../main/bridge'
 import { Glyph, IconButton } from '../icons'
 import { Bar, Card, Empty, Metric, PageHead, Pill, Segmented, TextButton } from '../ui'
 import { formatDate, formatMs, formatShortDate, percent, ratio, shortUrl } from '../format'
 import type { Report } from '../report'
 
-type Tab = 'catalog' | 'fragile' | 'approvals' | 'strategies' | 'model'
+type Tab = 'catalog' | 'fragile' | 'approvals' | 'strategies' | 'projection' | 'model'
 
 const TIER_TONE: Record<string, 'ok' | 'warn' | 'bad'> = {
   strong: 'ok',
@@ -45,6 +45,7 @@ export default function IdentityPage({
   const [validation, setValidation] = useState<ValidationReport | null>(null)
   const [scan, setScan] = useState<ScanPayload | null>(null)
   const [resolved, setResolved] = useState<ResolvePayload | null>(null)
+  const [projection, setProjection] = useState<ProjectionPayload | null>(null)
   const [selected, setSelected] = useState('')
   const [tab, setTab] = useState<Tab>('catalog')
   const [filter, setFilter] = useState('')
@@ -255,7 +256,9 @@ export default function IdentityPage({
         say('err', 'Projeksiyon alınamadı: ' + result.message)
         return
       }
+      setProjection(result.data)
       setValidation(result.data.validation)
+      setTab('projection')
       say('ok', 'Projeksiyon: ' + result.data.projection.elements.length + ' eleman', [
         'jeton ~' + result.data.projection.estimatedTokens,
         'kör nokta ' + result.data.projection.blindSpots.length,
@@ -383,6 +386,7 @@ export default function IdentityPage({
                 { id: 'fragile', label: 'Kırılgan' },
                 { id: 'approvals', label: 'Onay' },
                 { id: 'strategies', label: 'Strateji' },
+                { id: 'projection', label: 'Projeksiyon' },
                 { id: 'model', label: 'Model' }
               ]}
               value={tab}
@@ -570,6 +574,53 @@ export default function IdentityPage({
               </div>
             ) : (
               <Empty glyph="spark" text="Strateji istatistiği yok" />
+            )
+          ) : null}
+
+          {tab === 'projection' ? (
+            projection ? (
+              <>
+                <div className="metric-row">
+                  <Metric label="eleman" value={projection.projection.elements.length} />
+                  <Metric label="jeton" value={projection.projection.estimatedTokens} />
+                  <Metric
+                    label="kör nokta"
+                    value={projection.projection.blindSpots.length}
+                    tone={projection.projection.blindSpots.length ? 'warn' : 'flat'}
+                  />
+                  <Metric label="gizli" value={projection.projection.outside.hidden} />
+                  <Metric
+                    label="kırpıldı"
+                    value={projection.projection.truncated ? 'evet' : 'hayır'}
+                    tone={projection.projection.truncated ? 'warn' : 'flat'}
+                  />
+                </div>
+
+                {projection.projection.elements.length ? (
+                  <div className="table">
+                    <div className="tr th">
+                      <span className="td no">#</span>
+                      <span className="td">etiket</span>
+                      <span className="td">rol</span>
+                      <span className="td grow">ad</span>
+                      <span className="td grow mono">ref</span>
+                    </div>
+                    {projection.projection.elements.slice(0, 300).map((entry) => (
+                      <div key={entry.ref} className="tr">
+                        <span className="td no">{entry.ordinal}</span>
+                        <span className="td dim">{entry.tag}</span>
+                        <span className="td dim">{entry.role || '—'}</span>
+                        <span className="td grow">{entry.name || '—'}</span>
+                        <span className="td grow mono">{entry.ref}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty glyph="layers" text="Projeksiyonda eleman yok" />
+                )}
+              </>
+            ) : (
+              <Empty glyph="layers" text="Projeksiyon alınmadı" />
             )
           ) : null}
 
