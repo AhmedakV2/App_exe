@@ -40,6 +40,7 @@ const SETTINGS_MIN_WIDTH = 320
 const SETTINGS_MIN_HEIGHT = 280
 const DEVTOOLS_RATIO = 0.45
 const DEVTOOLS_MIN = 260
+const DEVTOOLS_GAP = 6
 const DEVTOOLS_MIN_RATIO = 0.15
 const DEVTOOLS_MAX_RATIO = 0.8
 const iconPath = app.isPackaged
@@ -133,15 +134,15 @@ function layout(): void {
 
   const panel = Math.min(
     Math.max(DEVTOOLS_MIN, Math.round(stage.width * devtoolsRatio)),
-    Math.max(0, stage.width - DEVTOOLS_MIN)
+    Math.max(0, stage.width - DEVTOOLS_MIN - DEVTOOLS_GAP)
   )
-  const pageWidth = Math.max(0, stage.width - panel)
+  const pageWidth = Math.max(0, stage.width - panel - DEVTOOLS_GAP)
 
   targetView.setBounds({ x: stage.x, y: stage.y, width: pageWidth, height: stage.height })
   devtoolsView.setBounds({
-    x: stage.x + pageWidth,
+    x: stage.x + pageWidth + DEVTOOLS_GAP,
     y: stage.y,
-    width: Math.max(0, stage.width - pageWidth),
+    width: panel,
     height: stage.height
   })
 }
