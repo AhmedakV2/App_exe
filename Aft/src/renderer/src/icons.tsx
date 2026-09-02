@@ -1,6 +1,104 @@
 import React, { memo } from 'react'
 
 const GLYPHS: Record<string, React.JSX.Element> = {
+  files: (
+    <>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5M9 13h6M9 17h6" />
+    </>
+  ),
+  folder: <path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
+  chevronRight: <path d="M9 6l6 6-6 6" />,
+  chevronDown: <path d="M6 9l6 6 6-6" />,
+  layoutLeft: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+    </>
+  ),
+  layoutBottom: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 14h18" />
+    </>
+  ),
+  layoutRight: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M15 4v16" />
+    </>
+  ),
+  run: <path d="M7 4l13 8-13 8z" fill="currentColor" stroke="none" />,
+  runAll: (
+    <>
+      <path d="M4 4l9 8-9 8z" fill="currentColor" stroke="none" />
+      <path d="M14 4l8 8-8 8z" fill="currentColor" stroke="none" />
+    </>
+  ),
+  bug: (
+    <>
+      <path d="M8 4l2 2M16 4l-2 2M9 8h6a3 3 0 0 1 3 3v3a6 6 0 0 1-12 0v-3a3 3 0 0 1 3-3z" />
+      <path d="M6 12H3M21 12h-3M12 8v12M5 18l2-2M19 18l-2-2" />
+    </>
+  ),
+  dash: (
+    <>
+      <rect x="3" y="3" width="8" height="10" rx="1.5" />
+      <rect x="13" y="3" width="8" height="5" rx="1.5" />
+      <rect x="13" y="10" width="8" height="11" rx="1.5" />
+      <rect x="3" y="15" width="8" height="6" rx="1.5" />
+    </>
+  ),
+  tag: (
+    <>
+      <path d="M3 12V4h8l10 10-8 8z" />
+      <circle cx="7.5" cy="8.5" r="1.2" fill="currentColor" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </>
+  ),
+  branch: (
+    <>
+      <circle cx="6" cy="5" r="2" />
+      <circle cx="6" cy="19" r="2" />
+      <circle cx="18" cy="9" r="2" />
+      <path d="M6 7v10M18 11a6 6 0 0 1-6 6H6" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3z" />
+      <path d="M10 20a2 2 0 0 0 4 0" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.5" fill="currentColor" />
+    </>
+  ),
+  diff: <path d="M9 4v16M4 9h10M14 15h6M17 12v6" />,
+  pin: <path d="M9 3h6l-1 6 3 3v1H7v-1l3-3zM12 13v8" />,
+  cursor: <path d="M4 3l16 7-7 2-2 7z" />,
+  bolt: <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,
+  heal: (
+    <>
+      <path d="M12 8v8M8 12h8" />
+      <circle cx="12" cy="12" r="9" />
+    </>
+  ),
+  arrowRight: <path d="M5 12h14M13 6l6 6-6 6" />,
+  split: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M12 4v16" />
+    </>
+  ),
   chat: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,
   back: <path d="M15 18l-6-6 6-6" />,
   forward: <path d="M9 18l6-6-6-6" />,

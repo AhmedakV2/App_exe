@@ -1,19 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FragileStep, HealthSummary } from '../../../main/data'
-import type { DescriptorSummary, HealingProposal, StrategyStat } from '../../../main/identity'
+import type {
+  Descriptor,
+  DescriptorSummary,
+  HealingProposal,
+  StrategyStat
+} from '../../../main/identity'
 import type { ValidationReport } from '../../../main/model'
-import { Glyph, IconButton } from '../icons'
-import { Bar, Card, Empty, Metric, PageHead, Pill, Segmented, TextButton } from '../ui'
+import { Glyph } from '../icons'
+import { Bar, Empty, Metric, Pill, Segmented, Sym, TextButton } from '../ui'
 import { formatShortDate, percent, ratio } from '../format'
 import type { Report } from '../report'
 
-type Tab = 'fragile' | 'catalog' | 'approvals' | 'strategies'
+type Tab = 'approvals' | 'fragile' | 'catalog' | 'strategies'
 
-const TIER_TONE: Record<string, 'ok' | 'warn' | 'bad'> = {
-  strong: 'ok',
-  fair: 'warn',
-  weak: 'bad'
-}
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'approvals', label: 'Onay' },
+  { id: 'fragile', label: 'Kırılgan' },
+  { id: 'catalog', label: 'Katalog' },
+  { id: 'strategies', label: 'Strateji' }
+]
+
+const TIER_TONE: Record<string, 'ok' | 'warn' | 'bad'> = { strong: 'ok', fair: 'warn', weak: 'bad' }
 
 const DECISION_TONE: Record<string, 'ok' | 'warn' | 'bad'> = {
   auto: 'ok',
@@ -21,11 +29,32 @@ const DECISION_TONE: Record<string, 'ok' | 'warn' | 'bad'> = {
   blocked: 'bad'
 }
 
+function isTab(value: string): value is Tab {
+  return TABS.some((item) => item.id === value)
+}
+
+function strategyLines(
+  descriptor: Descriptor,
+  other: Descriptor
+): { kind: string; value: string; weight: number; state: string }[] {
+  return descriptor.strategies.map((entry) => {
+    const twin = other.strategies.find((item) => item.kind === entry.kind)
+    const state = !twin
+      ? 'only'
+      : twin.value !== entry.value || twin.weight !== entry.weight
+        ? 'chg'
+        : ''
+    return { kind: entry.kind, value: entry.value, weight: entry.weight, state }
+  })
+}
+
 export default function IdentityPage({
   revision,
+  initialTab,
   onReport
 }: {
   revision: number
+  initialTab: string
   onReport: (report: Report) => void
 }): React.JSX.Element {
   const [summary, setSummary] = useState<HealthSummary | null>(null)
@@ -35,9 +64,16 @@ export default function IdentityPage({
   const [strategies, setStrategies] = useState<Record<string, StrategyStat>>({})
   const [scope, setScope] = useState('')
   const [validation, setValidation] = useState<ValidationReport | null>(null)
-  const [tab, setTab] = useState<Tab>('fragile')
+  const [tab, setTab] = useState<Tab>(isTab(initialTab) ? initialTab : 'approvals')
+  const [picked, setPicked] = useState('')
   const [filter, setFilter] = useState('')
   const [busy, setBusy] = useState(false)
+
+  const [seenTab, setSeenTab] = useState(initialTab)
+  if (initialTab !== seenTab) {
+    setSeenTab(initialTab)
+    if (isTab(initialTab)) setTab(initialTab)
+  }
 
   const load = useCallback(async (): Promise<void> => {
     setBusy(true)
@@ -47,13 +83,11 @@ export default function IdentityPage({
         window.aftIdentity.list(),
         window.aftIdentity.approvals()
       ])
-
       if (health.ok && health.data) {
         setSummary(health.data.summary)
         setFragile(health.data.fragile)
       }
       if (pending.ok && pending.data) setApprovals(pending.data)
-
       if (list.ok && list.data) {
         setCatalog(list.data)
         const first = list.data[0]
@@ -161,277 +195,431 @@ export default function IdentityPage({
     [strategies]
   )
 
-  const weak = catalog.filter((entry) => entry.tier === 'weak').length
+  const tiers = useMemo(() => {
+    const count = { strong: 0, fair: 0, weak: 0 }
+    for (const entry of catalog) count[entry.tier] += 1
+    return count
+  }, [catalog])
+
+  const proposal = useMemo(
+    () => approvals.find((entry) => entry.descriptorId === picked) ?? approvals[0] ?? null,
+    [approvals, picked]
+  )
+
+  const before = proposal ? strategyLines(proposal.previous, proposal.next) : []
+  const after = proposal ? strategyLines(proposal.next, proposal.previous) : []
+  const total = catalog.length || 1
 
   return (
-    <div className="page">
-      <PageHead
-        title="Kimlik Sağlığı"
-        meta={
-          <>
-            <Pill>{catalog.length} descriptor</Pill>
-            {summary && summary.missing ? (
-              <Pill tone="bad">{summary.missing} bulunamayan</Pill>
-            ) : null}
-            {weak ? <Pill tone="warn">{weak} zayıf</Pill> : null}
-            {approvals.length ? <Pill tone="accent">{approvals.length} onay</Pill> : null}
-            {scope ? <Pill>{scope}</Pill> : null}
-            {validation ? (
-              <Pill tone={validation.ok ? 'ok' : 'bad'}>model {validation.checked}</Pill>
-            ) : null}
-          </>
-        }
-        actions={
-          <>
-            <TextButton
-              glyph="shield"
-              label="Modeli doğrula"
-              onClick={() => void validate()}
-              disabled={busy}
-            />
-            <IconButton
-              name="reload"
-              title="Yenile"
-              onClick={() => void load()}
-              disabled={busy}
-              small
-            />
-          </>
-        }
-      />
+    <>
+      <header className="hdr">
+        <Glyph name="pulse" size={14} />
+        <Segmented
+          items={TABS.map((item) => ({
+            id: item.id,
+            label:
+              item.label +
+              (item.id === 'approvals' && approvals.length ? ' ' + approvals.length : '') +
+              (item.id === 'fragile' && fragile.length ? ' ' + fragile.length : '') +
+              (item.id === 'catalog' ? ' ' + catalog.length : '')
+          }))}
+          value={tab}
+          onPick={(id) => setTab(id as Tab)}
+        />
+        <span className="push" />
+        <span className="faint">Katalog sağlığı</span>
+        <span
+          style={{ display: 'flex', width: 160, height: 5, borderRadius: 2, overflow: 'hidden' }}
+        >
+          <i style={{ width: (tiers.strong / total) * 100 + '%', background: 'var(--ok)' }} />
+          <i style={{ width: (tiers.fair / total) * 100 + '%', background: 'var(--warn)' }} />
+          <i style={{ width: (tiers.weak / total) * 100 + '%', background: 'var(--bad)' }} />
+        </span>
+        <span className="mono faint">
+          {percent(tiers.strong / total)} · {percent(tiers.fair / total)} ·{' '}
+          {percent(tiers.weak / total)}
+        </span>
+        {validation ? (
+          <Pill tone={validation.ok ? 'ok' : 'bad'}>model {validation.checked}</Pill>
+        ) : null}
+        <TextButton
+          glyph="shield"
+          label="Modeli doğrula"
+          onClick={() => void validate()}
+          disabled={busy}
+        />
+        <button
+          className="ib"
+          title="Yenile"
+          onClick={() => void load()}
+          disabled={busy}
+          type="button"
+        >
+          <Glyph name="reload" size={13} />
+        </button>
+      </header>
 
-      <div className="metric-row wide">
-        <Metric label="koşum" value={summary?.runs ?? 0} />
-        <Metric label="adım" value={summary?.steps ?? 0} />
-        <Metric label="kesin eşleşme" value={summary?.resolved ?? 0} tone="ok" />
+      <div className="metrics">
+        <Metric label="Koşum" value={summary?.runs ?? 0} />
+        <Metric label="Adım" value={summary?.steps ?? 0} />
+        <Metric label="Kesin" value={summary?.resolved ?? 0} tone="ok" />
         <Metric
-          label="düşük güven"
+          label="Düşük güven"
           value={summary?.low ?? 0}
           tone={summary?.low ? 'warn' : 'flat'}
         />
         <Metric
-          label="bulunamayan"
+          label="Bulunamayan"
           value={summary?.missing ?? 0}
           tone={summary?.missing ? 'bad' : 'flat'}
         />
         <Metric
-          label="onarılan"
+          label="Onarılan"
           value={summary?.healed ?? 0}
           tone={summary?.healed ? 'accent' : 'flat'}
         />
-        <Metric label="ortalama güven" value={percent(summary?.meanConfidence ?? 0)} />
-        <Metric label="son koşum" value={formatShortDate(summary?.lastRunAt ?? 0)} />
+        <Metric label="Ort. güven" value={percent(summary?.meanConfidence ?? 0)} />
+        <Metric label="Son koşum" value={formatShortDate(summary?.lastRunAt ?? 0)} />
       </div>
 
-      <div className="page-body">
-        <Card
-          label="Kimlik kayıtları"
-          grow
-          scroll
-          actions={
-            <Segmented
-              items={[
-                { id: 'fragile', label: 'Kırılgan' },
-                { id: 'catalog', label: 'Katalog' },
-                { id: 'approvals', label: 'Onay' },
-                { id: 'strategies', label: 'Strateji' }
-              ]}
-              value={tab}
-              onPick={(id) => setTab(id as Tab)}
-            />
-          }
-        >
-          {tab === 'fragile' ? (
-            fragile.length ? (
-              <div className="table">
-                <div className="tr th">
-                  <span className="td grow">adım</span>
-                  <span className="td">deneme</span>
-                  <span className="td">kesin</span>
-                  <span className="td">düşük</span>
-                  <span className="td">bulunamayan</span>
-                  <span className="td">onarılan</span>
-                  <span className="td">güven</span>
-                  <span className="td">son</span>
-                </div>
-                {fragile.map((entry) => (
-                  <div key={entry.descriptorId} className="tr">
-                    <span className="td grow">{entry.title}</span>
-                    <span className="td">{entry.attempts}</span>
-                    <span className="td ok">{entry.exact}</span>
-                    <span className="td warn">{entry.low}</span>
-                    <span className="td bad">{entry.missing}</span>
-                    <span className="td">{entry.healed}</span>
-                    <span className="td wide">
-                      <Bar
-                        value={entry.meanConfidence}
-                        tone={entry.meanConfidence > 0.82 ? 'ok' : 'warn'}
-                      />
-                      {percent(entry.meanConfidence)}
-                    </span>
-                    <span className="td dim">{formatShortDate(entry.lastSeenAt)}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <Empty glyph="pulse" text="Kırılgan adım yok" />
-            )
-          ) : null}
-
-          {tab === 'catalog' ? (
-            <>
-              <div className="search">
-                <Glyph name="search" size={13} />
-                <input
-                  value={filter}
-                  onChange={(event) => setFilter(event.target.value)}
-                  placeholder="Filtre"
-                  spellCheck={false}
-                  aria-label="Descriptor filtresi"
-                />
-              </div>
-              {rows.length ? (
-                <div className="table">
-                  <div className="tr th">
-                    <span className="td grow">ad</span>
-                    <span className="td">etiket</span>
-                    <span className="td">rol</span>
-                    <span className="td grow">adres</span>
-                    <span className="td">kalite</span>
-                    <span className="td">tarih</span>
-                    <span className="td act" />
-                  </div>
-                  {rows.map((entry) => (
-                    <div key={entry.id} className="tr">
-                      <span className="td grow">{entry.name || entry.id.slice(0, 12)}</span>
-                      <span className="td dim">{entry.tag}</span>
-                      <span className="td dim">{entry.role}</span>
-                      <span className="td grow mono">{entry.urlPattern}</span>
-                      <span className="td">
-                        <Pill tone={TIER_TONE[entry.tier] ?? 'flat'}>{percent(entry.score)}</Pill>
-                      </span>
-                      <span className="td dim">{formatShortDate(entry.capturedAt)}</span>
-                      <span className="td act">
-                        <IconButton
-                          name="spark"
-                          title="İstatistik"
-                          onClick={() => void inspect(entry.id)}
-                          small
-                        />
-                        <IconButton
-                          name="trash"
-                          title="Sil"
-                          onClick={() => void drop(entry.id)}
-                          small
-                          danger
-                        />
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Empty glyph="target" text="Descriptor yok" />
-              )}
-            </>
-          ) : null}
-
-          {tab === 'approvals' ? (
-            approvals.length ? (
-              <div className="list">
+      {tab === 'approvals' ? (
+        <div className="split" style={{ gridTemplateColumns: '300px 1fr' }}>
+          <div className="col scroll">
+            <div className="ph">
+              Bekleyen öneriler
+              <span className="push" />
+              {approvals.length ? <Pill tone="warn">{approvals.length}</Pill> : null}
+            </div>
+            {approvals.length ? (
+              <div className="list-rows">
                 {approvals.map((entry) => (
-                  <div key={entry.descriptorId} className="approval">
-                    <div className="approval-head">
-                      <Pill tone={DECISION_TONE[entry.decision] ?? 'flat'}>{entry.decision}</Pill>
-                      <span className="approval-title">
-                        {entry.next.target.name || entry.next.target.tag}
-                      </span>
-                      <span className="approval-conf">{percent(entry.confidence)}</span>
-                      <span className="approval-push" />
-                      <TextButton
-                        glyph="check"
-                        label="Onayla"
-                        onClick={() => void approve(entry.descriptorId)}
-                        tone="primary"
-                      />
-                      <TextButton
-                        glyph="close"
-                        label="Reddet"
-                        onClick={() => void reject(entry.descriptorId)}
-                        tone="danger"
-                      />
-                    </div>
-                    <div className="chip-row">
-                      {entry.gained.map((kind) => (
-                        <span key={'g' + kind} className="chip ok">
-                          +{kind}
-                        </span>
-                      ))}
-                      {entry.lost.map((kind) => (
-                        <span key={'l' + kind} className="chip bad">
-                          −{kind}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="approval-reason">{entry.reason}</div>
-                  </div>
+                  <button
+                    key={entry.descriptorId}
+                    className={
+                      'list-row' + (proposal?.descriptorId === entry.descriptorId ? ' sel' : '')
+                    }
+                    onClick={() => setPicked(entry.descriptorId)}
+                    type="button"
+                  >
+                    <Sym tone={DECISION_TONE[entry.decision] ?? 'flat'} />
+                    <span className="list-title">
+                      {entry.next.target.name || entry.next.target.tag}
+                    </span>
+                    <span className="list-meta">{percent(entry.confidence)}</span>
+                  </button>
                 ))}
               </div>
             ) : (
               <Empty glyph="shield" text="Bekleyen onay yok" />
-            )
-          ) : null}
+            )}
+          </div>
 
-          {tab === 'strategies' ? (
-            strategyRows.length ? (
-              <div className="table">
-                <div className="tr th">
-                  <span className="td grow">strateji</span>
-                  <span className="td">deneme</span>
-                  <span className="td">tutan</span>
-                  <span className="td wide">başarı</span>
-                  <span className="td">son</span>
-                </div>
-                {strategyRows.map(({ kind, stat }) => (
-                  <div key={kind} className="tr">
-                    <span className="td grow">{kind}</span>
-                    <span className="td">{stat.attempts}</span>
-                    <span className="td">{stat.hits}</span>
-                    <span className="td wide">
-                      <Bar
-                        value={ratio(stat.hits, stat.attempts)}
-                        tone={ratio(stat.hits, stat.attempts) > 0.7 ? 'ok' : 'warn'}
-                      />
-                      {percent(ratio(stat.hits, stat.attempts))}
-                    </span>
-                    <span className="td dim">{formatShortDate(stat.lastSeenAt)}</span>
+          <div className="col">
+            {proposal ? (
+              <>
+                <header className="hdr">
+                  <Sym tone={DECISION_TONE[proposal.decision] ?? 'flat'} />
+                  <span className="t">{proposal.next.target.name || proposal.next.target.tag}</span>
+                  <Pill tone={DECISION_TONE[proposal.decision] ?? 'flat'}>{proposal.decision}</Pill>
+                  <span className="chip">{proposal.descriptorId}</span>
+                  <span className="mono faint">{formatShortDate(proposal.createdAt)}</span>
+                  <span className="push" />
+                  <TextButton
+                    glyph="close"
+                    label="Reddet"
+                    onClick={() => void reject(proposal.descriptorId)}
+                    tone="danger"
+                  />
+                  <TextButton
+                    glyph="check"
+                    label="Onayla"
+                    onClick={() => void approve(proposal.descriptorId)}
+                    tone="primary"
+                  />
+                </header>
+                <div className="diff">
+                  <div className="dcol">
+                    <div className="dh">
+                      MEVCUT
+                      <span className="mono">{proposal.previous.quality.tier}</span>
+                      <span className="faint">{percent(proposal.previous.quality.score)}</span>
+                      <span className="push" />
+                      <span className="faint">
+                        {formatShortDate(proposal.previous.capture.capturedAt)}
+                      </span>
+                    </div>
+                    <div className="code">
+                      {before.map((line, index) => (
+                        <div
+                          key={line.kind}
+                          className={
+                            'ln' +
+                            (line.state === 'only' ? ' del' : line.state === 'chg' ? ' chg' : '')
+                          }
+                        >
+                          <span className="g">{index + 1}</span>
+                          <span className="c">
+                            <span className="k">{line.kind.padEnd(16, ' ')}</span>
+                            <span className="s">{line.value}</span>{' '}
+                            <span className="n">{line.weight.toFixed(2)}</span>
+                          </span>
+                        </div>
+                      ))}
+                      <div className="ln">
+                        <span className="g" />
+                        <span className="c faint">
+                          {proposal.previous.quality.reasons.join(' · ') || '—'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </div>
+                  <div className="dcol">
+                    <div className="dh">
+                      ÖNERİ
+                      <span className="mono">{proposal.next.quality.tier}</span>
+                      <span className="faint">{percent(proposal.next.quality.score)}</span>
+                      <span className="push" />
+                      {proposal.gained.length ? (
+                        <Pill tone="ok">+{proposal.gained.length}</Pill>
+                      ) : null}
+                      {proposal.lost.length ? (
+                        <Pill tone="bad">−{proposal.lost.length}</Pill>
+                      ) : null}
+                    </div>
+                    <div className="code">
+                      {after.map((line, index) => (
+                        <div
+                          key={line.kind}
+                          className={
+                            'ln' +
+                            (line.state === 'only' ? ' add' : line.state === 'chg' ? ' chg' : '')
+                          }
+                        >
+                          <span className="g">{index + 1}</span>
+                          <span className="c">
+                            <span className="k">{line.kind.padEnd(16, ' ')}</span>
+                            <span className="s">{line.value}</span>{' '}
+                            <span className="n">{line.weight.toFixed(2)}</span>
+                          </span>
+                        </div>
+                      ))}
+                      <div className="ln">
+                        <span className="g" />
+                        <span className="c faint">
+                          {proposal.next.quality.reasons.join(' · ') || '—'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="pad" style={{ borderTop: '1px solid var(--line)' }}>
+                  <dl className="kv">
+                    <dt className="kv-key">Neden</dt>
+                    <dd className="kv-val">{proposal.reason}</dd>
+                    <dt className="kv-key">Güven</dt>
+                    <dd className="kv-val mono">
+                      {percent(proposal.previous.quality.score)} → {percent(proposal.confidence)}
+                    </dd>
+                    <dt className="kv-key">Bağlam</dt>
+                    <dd className="kv-val mono">
+                      {proposal.next.context.urlPattern} · frame {proposal.next.context.frameDepth}{' '}
+                      · shadow {proposal.next.context.shadowDepth}
+                    </dd>
+                    <dt className="kv-key">Öğe</dt>
+                    <dd className="kv-val mono">
+                      {proposal.next.target.tag} · {proposal.next.target.role} ·{' '}
+                      {proposal.next.target.type}
+                    </dd>
+                  </dl>
+                </div>
+              </>
             ) : (
-              <Empty glyph="spark" text="Strateji istatistiği yok" />
-            )
-          ) : null}
-        </Card>
+              <Empty glyph="shield" text="Öneri seçilmedi" />
+            )}
+          </div>
+        </div>
+      ) : null}
 
-        {validation && !validation.ok ? (
-          <Card label="Model uyarıları" scroll>
-            <div className="issues">
-              {validation.errors.slice(0, 8).map((issue, index) => (
-                <div key={'e' + index} className="issue bad">
-                  <Glyph name="alert" size={12} />
-                  {issue.code}: {issue.detail}
-                </div>
-              ))}
-              {validation.warnings.slice(0, 8).map((issue, index) => (
-                <div key={'w' + index} className="issue warn">
-                  <Glyph name="info" size={12} />
-                  {issue.code}: {issue.detail}
-                </div>
-              ))}
+      {tab === 'fragile' ? (
+        <div className="gridwrap">
+          {fragile.length ? (
+            <table className="grid">
+              <thead>
+                <tr>
+                  <th>Adım</th>
+                  <th style={{ width: 70 }}>Deneme</th>
+                  <th style={{ width: 60 }}>Kesin</th>
+                  <th style={{ width: 60 }}>Düşük</th>
+                  <th style={{ width: 90 }}>Bulunamayan</th>
+                  <th style={{ width: 70 }}>Onarılan</th>
+                  <th style={{ width: 160 }}>Güven</th>
+                  <th style={{ width: 90 }}>Son</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fragile.map((entry) => (
+                  <tr key={entry.descriptorId}>
+                    <td>{entry.title}</td>
+                    <td className="num">{entry.attempts}</td>
+                    <td className="num ok">{entry.exact}</td>
+                    <td className="num warn">{entry.low}</td>
+                    <td className="num bad">{entry.missing}</td>
+                    <td className="num">{entry.healed}</td>
+                    <td>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Bar
+                          value={entry.meanConfidence}
+                          tone={entry.meanConfidence > 0.82 ? 'ok' : 'warn'}
+                        />
+                        <span className="mono">{percent(entry.meanConfidence)}</span>
+                      </span>
+                    </td>
+                    <td className="muted">{formatShortDate(entry.lastSeenAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <Empty glyph="pulse" text="Kırılgan adım yok" />
+          )}
+        </div>
+      ) : null}
+
+      {tab === 'catalog' ? (
+        <>
+          <div className="tb">
+            <div className="search" style={{ width: 300 }}>
+              <Glyph name="search" size={13} />
+              <input
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                placeholder="Descriptor filtrele"
+                spellCheck={false}
+                aria-label="Descriptor filtresi"
+              />
             </div>
-          </Card>
-        ) : null}
-      </div>
-    </div>
+            <span className="push" />
+            <span className="faint">{rows.length} kayıt</span>
+          </div>
+          <div className="gridwrap">
+            {rows.length ? (
+              <table className="grid">
+                <thead>
+                  <tr>
+                    <th>Ad</th>
+                    <th style={{ width: 90 }}>Etiket</th>
+                    <th style={{ width: 100 }}>Rol</th>
+                    <th>Adres</th>
+                    <th style={{ width: 90 }}>Kalite</th>
+                    <th style={{ width: 90 }}>Tarih</th>
+                    <th style={{ width: 70 }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>{entry.name || entry.id.slice(0, 12)}</td>
+                      <td className="mono muted">{entry.tag}</td>
+                      <td className="mono muted">{entry.role}</td>
+                      <td className="mono">{entry.urlPattern}</td>
+                      <td>
+                        <Pill tone={TIER_TONE[entry.tier] ?? 'flat'}>{percent(entry.score)}</Pill>
+                      </td>
+                      <td className="muted">{formatShortDate(entry.capturedAt)}</td>
+                      <td className="act">
+                        <button
+                          className="ib"
+                          title="İstatistik"
+                          onClick={() => void inspect(entry.id)}
+                          type="button"
+                        >
+                          <Glyph name="spark" size={13} />
+                        </button>
+                        <button
+                          className="ib danger"
+                          title="Sil"
+                          onClick={() => void drop(entry.id)}
+                          type="button"
+                        >
+                          <Glyph name="trash" size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <Empty glyph="target" text="Descriptor yok" />
+            )}
+          </div>
+        </>
+      ) : null}
+
+      {tab === 'strategies' ? (
+        <div className="gridwrap">
+          {strategyRows.length ? (
+            <table className="grid">
+              <thead>
+                <tr>
+                  <th>Strateji</th>
+                  <th style={{ width: 90 }}>Deneme</th>
+                  <th style={{ width: 90 }}>Tutan</th>
+                  <th style={{ width: 220 }}>Başarı</th>
+                  <th style={{ width: 100 }}>Ağırlıklı</th>
+                  <th style={{ width: 90 }}>Son</th>
+                </tr>
+              </thead>
+              <tbody>
+                {strategyRows.map(({ kind, stat }) => (
+                  <tr key={kind}>
+                    <td className="mono">{kind}</td>
+                    <td className="num">{stat.attempts}</td>
+                    <td className="num">{stat.hits}</td>
+                    <td>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Bar
+                          value={ratio(stat.hits, stat.attempts)}
+                          tone={ratio(stat.hits, stat.attempts) > 0.7 ? 'ok' : 'warn'}
+                        />
+                        <span className="mono">{percent(ratio(stat.hits, stat.attempts))}</span>
+                      </span>
+                    </td>
+                    <td className="num">{stat.weightedSuccess.toFixed(2)}</td>
+                    <td className="muted">{formatShortDate(stat.lastSeenAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <Empty
+              glyph="spark"
+              text={scope ? 'Strateji istatistiği yok' : 'Katalogdan bir kayıt seçin'}
+            />
+          )}
+        </div>
+      ) : null}
+
+      {validation && !validation.ok ? (
+        <div
+          className="issues"
+          style={{ borderTop: '1px solid var(--line)', maxHeight: 140, overflow: 'auto' }}
+        >
+          {validation.errors.slice(0, 8).map((issue, index) => (
+            <div key={'e' + index} className="issue">
+              <Sym tone="bad" />
+              <span className="msg">{issue.detail}</span>
+              <span className="loc">{issue.code}</span>
+            </div>
+          ))}
+          {validation.warnings.slice(0, 8).map((issue, index) => (
+            <div key={'w' + index} className="issue">
+              <Sym tone="warn" />
+              <span className="msg">{issue.detail}</span>
+              <span className="loc">{issue.code}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </>
   )
 }
