@@ -1120,7 +1120,7 @@ textarea {
   width: 28px;
   height: 15px;
   border-radius: 99px;
-  background: var(--bg4);
+  background: var(--edge-line);
   position: relative;
   display: inline-block;
   flex: 0 0 auto;
@@ -1150,7 +1150,7 @@ textarea {
   display: none;
 }
 
-.toggle-label {
+.log {
   flex: 1;
   min-height: 0;
   overflow: auto;
