@@ -1826,6 +1826,26 @@ textarea {
   justify-content: flex-end;
 }
 
+.td.num {
+  width: 58px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+.td.date {
+  width: 88px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+.td.tight {
+  width: 74px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .td.dim {
   color: var(--faint);
 }
@@ -2957,10 +2977,9 @@ textarea {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 260px;
+  min-height: 0;
+  margin: calc(var(--sp-3) * -1);
   background: var(--panel);
-  border: var(--hair) solid var(--line);
-  border-radius: var(--r);
   overflow: hidden;
 }
 
@@ -2989,15 +3008,15 @@ textarea {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 8px;
-  margin-right: -4px;
+  width: 6px;
   z-index: 4;
   cursor: col-resize;
-  background: transparent;
+  background: var(--line);
 }
 
-.dev-grip:hover {
-  background: var(--accent-soft);
+.dev-grip:hover,
+.shell.drag-devtools .dev-grip {
+  background: var(--accent);
 }
 
 .tr.sel {

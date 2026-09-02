@@ -254,7 +254,7 @@ export default function ResultPage({
           grow
           scroll
           actions={
-            detail ? (
+            detail && !context ? (
               <Segmented
                 items={[
                   { id: 'steps', label: 'Adımlar' },
@@ -267,7 +267,16 @@ export default function ResultPage({
             ) : null
           }
         >
-          {detail && run ? (
+          {detail && run && context ? (
+            <ContextView
+              context={context}
+              inline
+              onClose={() => setContext(null)}
+              onShot={setShot}
+            />
+          ) : null}
+
+          {detail && run && !context ? (
             <>
               <div className="metric-row">
                 <Metric label="adım" value={run.steps} />
@@ -339,32 +348,21 @@ export default function ResultPage({
 
               {tab === 'contexts' ? (
                 detail.contexts.length ? (
-                  <>
-                    <div className="list">
-                      {detail.contexts.map((entry) => (
-                        <button
-                          key={entry.id}
-                          className={'list-row' + (entry.id === context?.id ? ' sel' : '')}
-                          onClick={() => void openContext(entry.id)}
-                          type="button"
-                        >
-                          <Glyph name="alert" size={13} />
-                          <span className="list-title mono">{entry.id}</span>
-                          <span className="list-meta">{formatBytes(entry.bytes)}</span>
-                          <span className="list-meta">{formatShortDate(entry.capturedAt)}</span>
-                        </button>
-                      ))}
-                    </div>
-
-                    {context ? (
-                      <ContextView
-                        context={context}
-                        inline
-                        onClose={() => setContext(null)}
-                        onShot={setShot}
-                      />
-                    ) : null}
-                  </>
+                  <div className="list">
+                    {detail.contexts.map((entry) => (
+                      <button
+                        key={entry.id}
+                        className="list-row"
+                        onClick={() => void openContext(entry.id)}
+                        type="button"
+                      >
+                        <Glyph name="alert" size={13} />
+                        <span className="list-title mono">{entry.id}</span>
+                        <span className="list-meta">{formatBytes(entry.bytes)}</span>
+                        <span className="list-meta">{formatShortDate(entry.capturedAt)}</span>
+                      </button>
+                    ))}
+                  </div>
                 ) : (
                   <Empty glyph="layers" text="Bağlam paketi yok" />
                 )
@@ -384,9 +382,9 @@ export default function ResultPage({
                 )
               ) : null}
             </>
-          ) : (
-            <Empty glyph="history" text="Koşum seçilmedi" />
-          )}
+          ) : null}
+
+          {!detail || !run ? <Empty glyph="history" text="Koşum seçilmedi" /> : null}
         </Card>
       </div>
 

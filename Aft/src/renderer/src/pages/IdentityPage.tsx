@@ -410,11 +410,11 @@ export default function IdentityPage({
                 <div className="table">
                   <div className="tr th">
                     <span className="td grow">ad</span>
-                    <span className="td">etiket</span>
-                    <span className="td">rol</span>
+                    <span className="td tight">etiket</span>
+                    <span className="td tight">rol</span>
                     <span className="td grow">adres</span>
-                    <span className="td">kalite</span>
-                    <span className="td">tarih</span>
+                    <span className="td num">kalite</span>
+                    <span className="td date">tarih</span>
                     <span className="td act" />
                   </div>
                   {rows.map((entry) => (
@@ -422,13 +422,13 @@ export default function IdentityPage({
                       <span className="td grow pick" onClick={() => void inspect(entry.id)}>
                         {entry.name || entry.id.slice(0, 12)}
                       </span>
-                      <span className="td dim">{entry.tag}</span>
-                      <span className="td dim">{entry.role}</span>
+                      <span className="td tight dim">{entry.tag}</span>
+                      <span className="td tight dim">{entry.role}</span>
                       <span className="td grow mono">{entry.urlPattern}</span>
-                      <span className="td">
+                      <span className="td num">
                         <Pill tone={TIER_TONE[entry.tier] ?? 'flat'}>{percent(entry.score)}</Pill>
                       </span>
-                      <span className="td dim">{formatShortDate(entry.capturedAt)}</span>
+                      <span className="td date dim">{formatShortDate(entry.capturedAt)}</span>
                       <span className="td act">
                         <IconButton
                           name="target"
@@ -466,24 +466,24 @@ export default function IdentityPage({
               <div className="table">
                 <div className="tr th">
                   <span className="td grow">adım</span>
-                  <span className="td">deneme</span>
-                  <span className="td">kesin</span>
-                  <span className="td">düşük</span>
-                  <span className="td">bulunamayan</span>
-                  <span className="td">onarılan</span>
-                  <span className="td">güven</span>
-                  <span className="td">son</span>
+                  <span className="td num">deneme</span>
+                  <span className="td num">kesin</span>
+                  <span className="td num">düşük</span>
+                  <span className="td num">yok</span>
+                  <span className="td num">onarım</span>
+                  <span className="td wide">güven</span>
+                  <span className="td date">son</span>
                 </div>
                 {fragile.map((entry) => (
                   <div key={entry.descriptorId} className="tr">
                     <span className="td grow pick" onClick={() => void inspect(entry.descriptorId)}>
                       {entry.title}
                     </span>
-                    <span className="td">{entry.attempts}</span>
-                    <span className="td ok">{entry.exact}</span>
-                    <span className="td warn">{entry.low}</span>
-                    <span className="td bad">{entry.missing}</span>
-                    <span className="td">{entry.healed}</span>
+                    <span className="td num">{entry.attempts}</span>
+                    <span className="td num ok">{entry.exact}</span>
+                    <span className="td num warn">{entry.low}</span>
+                    <span className="td num bad">{entry.missing}</span>
+                    <span className="td num">{entry.healed}</span>
                     <span className="td wide">
                       <Bar
                         value={entry.meanConfidence}
@@ -491,7 +491,7 @@ export default function IdentityPage({
                       />
                       {percent(entry.meanConfidence)}
                     </span>
-                    <span className="td dim">{formatShortDate(entry.lastSeenAt)}</span>
+                    <span className="td date dim">{formatShortDate(entry.lastSeenAt)}</span>
                   </div>
                 ))}
               </div>
@@ -551,16 +551,16 @@ export default function IdentityPage({
               <div className="table">
                 <div className="tr th">
                   <span className="td grow">strateji</span>
-                  <span className="td">deneme</span>
-                  <span className="td">tutan</span>
+                  <span className="td num">deneme</span>
+                  <span className="td num">tutan</span>
                   <span className="td wide">başarı</span>
-                  <span className="td">son</span>
+                  <span className="td date">son</span>
                 </div>
                 {strategyRows.map(({ kind, stat }) => (
                   <div key={kind} className="tr">
                     <span className="td grow">{kind}</span>
-                    <span className="td">{stat.attempts}</span>
-                    <span className="td">{stat.hits}</span>
+                    <span className="td num">{stat.attempts}</span>
+                    <span className="td num">{stat.hits}</span>
                     <span className="td wide">
                       <Bar
                         value={ratio(stat.hits, stat.attempts)}
@@ -568,7 +568,7 @@ export default function IdentityPage({
                       />
                       {percent(ratio(stat.hits, stat.attempts))}
                     </span>
-                    <span className="td dim">{formatShortDate(stat.lastSeenAt)}</span>
+                    <span className="td date dim">{formatShortDate(stat.lastSeenAt)}</span>
                   </div>
                 ))}
               </div>
@@ -600,16 +600,16 @@ export default function IdentityPage({
                   <div className="table">
                     <div className="tr th">
                       <span className="td no">#</span>
-                      <span className="td">etiket</span>
-                      <span className="td">rol</span>
+                      <span className="td tight">etiket</span>
+                      <span className="td tight">rol</span>
                       <span className="td grow">ad</span>
                       <span className="td grow mono">ref</span>
                     </div>
                     {projection.projection.elements.slice(0, 300).map((entry) => (
                       <div key={entry.ref} className="tr">
                         <span className="td no">{entry.ordinal}</span>
-                        <span className="td dim">{entry.tag}</span>
-                        <span className="td dim">{entry.role || '—'}</span>
+                        <span className="td tight dim">{entry.tag}</span>
+                        <span className="td tight dim">{entry.role || '—'}</span>
                         <span className="td grow">{entry.name || '—'}</span>
                         <span className="td grow mono">{entry.ref}</span>
                       </div>
