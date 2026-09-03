@@ -7,7 +7,13 @@ export {
   type ScenarioMigration
 } from './migrate'
 export { parseScenario, validateScenario, assertScenario, ScenarioError } from './validate'
-export { ScenarioStore, type ScenarioEntry } from './ScenarioStore'
+export {
+  ScenarioStore,
+  folderName,
+  type ScenarioEntry,
+  type ScenarioFolder,
+  type ScenarioFolderKind
+} from './ScenarioStore'
 export { TargetResolver, matchQuery, type TargetResolution } from './TargetResolver'
 export { AssertionEngine, matches, type AssertionOutcome } from './AssertionEngine'
 export {
