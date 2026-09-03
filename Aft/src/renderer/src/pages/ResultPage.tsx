@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import type { RunDetail, RunRow, ScenarioIndexRow } from '../../../main/data'
 import type { FailureContext, RunStatus } from '../../../main/scenario/types'
 import { Glyph, IconButton } from '../icons'
-import { Card, Empty, Metric, PageHead, Pill, Segmented, TextButton } from '../ui'
+import { Card, Empty, Metric, PageHead, Pill, Segmented, Skeleton, TextButton } from '../ui'
 import { formatBytes, formatMs, formatShortDate, percent } from '../format'
 import ContextView from '../parts/ContextView'
 import ShotView from '../parts/ShotView'
@@ -201,6 +201,8 @@ export default function ResultPage({
             </select>
           }
         >
+          {busy && !rows.length ? <Skeleton rows={6} /> : null}
+
           {rows.length ? (
             <>
               <div className="list">
@@ -244,8 +246,12 @@ export default function ResultPage({
                 </div>
               ) : null}
             </>
-          ) : (
-            <Empty glyph="history" text="Koşum kaydı yok" />
+          ) : busy ? null : (
+            <Empty
+              glyph="history"
+              text="Koşum kaydı yok"
+              hint="Seçili süzgeçlerle eşleşen koşum bulunamadı. Bir senaryo çalıştırdığınızda sonuçlar burada birikir."
+            />
           )}
         </Card>
 
@@ -278,7 +284,7 @@ export default function ResultPage({
 
           {detail && run && !context ? (
             <>
-              <div className="metric-row">
+              <div className="metric-row tight">
                 <Metric label="adım" value={run.steps} />
                 <Metric label="geçen" value={run.passed} tone="ok" />
                 <Metric label="kalan" value={run.failed} tone={run.failed ? 'bad' : 'flat'} />
@@ -310,39 +316,41 @@ export default function ResultPage({
               ) : null}
 
               {tab === 'steps' ? (
-                <div className="table">
-                  <div className="tr th">
-                    <span className="td no">#</span>
-                    <span className="td grow">adım</span>
-                    <span className="td">tür</span>
-                    <span className="td">güven</span>
-                    <span className="td">süre</span>
-                    <span className="td">durum</span>
-                  </div>
-                  {detail.steps.map((entry) => (
-                    <div key={entry.runId + entry.stepIndex} className="tr">
-                      <span className="td no">{entry.stepIndex + 1}</span>
-                      <span className="td grow">{entry.title}</span>
-                      <span className="td dim">{entry.kind}</span>
-                      <span className="td">
-                        {entry.confidence ? percent(entry.confidence) : '—'}
-                      </span>
-                      <span className="td">{formatMs(entry.durationMs)}</span>
-                      <span className="td">
-                        <Pill
-                          tone={
-                            entry.status === 'passed'
-                              ? 'ok'
-                              : entry.status === 'skipped'
-                                ? 'flat'
-                                : 'bad'
-                          }
-                        >
-                          {STEP_LABELS[entry.status] ?? entry.status}
-                        </Pill>
-                      </span>
+                <div className="table-scroll">
+                  <div className="table wide">
+                    <div className="tr th">
+                      <span className="td no">#</span>
+                      <span className="td grow">adım</span>
+                      <span className="td wide">tür</span>
+                      <span className="td num">güven</span>
+                      <span className="td num">süre</span>
+                      <span className="td wide">durum</span>
                     </div>
-                  ))}
+                    {detail.steps.map((entry) => (
+                      <div key={entry.runId + entry.stepIndex} className="tr">
+                        <span className="td no">{entry.stepIndex + 1}</span>
+                        <span className="td grow">{entry.title}</span>
+                        <span className="td wide dim">{entry.kind}</span>
+                        <span className="td num">
+                          {entry.confidence ? percent(entry.confidence) : '—'}
+                        </span>
+                        <span className="td num">{formatMs(entry.durationMs)}</span>
+                        <span className="td wide">
+                          <Pill
+                            tone={
+                              entry.status === 'passed'
+                                ? 'ok'
+                                : entry.status === 'skipped'
+                                  ? 'flat'
+                                  : 'bad'
+                            }
+                          >
+                            {STEP_LABELS[entry.status] ?? entry.status}
+                          </Pill>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 
@@ -364,7 +372,11 @@ export default function ResultPage({
                     ))}
                   </div>
                 ) : (
-                  <Empty glyph="layers" text="Bağlam paketi yok" />
+                  <Empty
+                    glyph="layers"
+                    text="Bağlam paketi yok"
+                    hint="Bu koşumda hata anına ait ekran görüntüsü ve DOM paketi üretilmedi."
+                  />
                 )
               ) : null}
 
@@ -382,9 +394,13 @@ export default function ResultPage({
                 )
               ) : null}
             </>
-          ) : null}
-
-          {!detail || !run ? <Empty glyph="history" text="Koşum seçilmedi" /> : null}
+          ) : (
+            <Empty
+              glyph="history"
+              text="Koşum seçilmedi"
+              hint="Soldaki listeden bir koşum açın; adımlar, bağlam paketleri ve rapor burada görünür."
+            />
+          )}
         </Card>
       </div>
 

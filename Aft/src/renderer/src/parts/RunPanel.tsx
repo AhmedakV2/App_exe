@@ -241,59 +241,22 @@ export default function RunPanel({
   const activeId = live.length ? live[live.length - 1].stepId : ''
 
   return (
-    <section className="run">
-      <div className="side-bar">
-        <div className="finder" ref={pickRef}>
-          <div className="search">
-            <Glyph name="search" size={13} />
-            <input
-              value={text}
-              onChange={(event) => {
-                setQuery(event.target.value)
-                setPicked('')
-                setListOpen(true)
-              }}
-              onFocus={() => setListOpen(true)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  setListOpen(false)
-                  return
-                }
-                if (event.key !== 'Enter' || !found.length) return
-                event.preventDefault()
-                pick(found[0])
-              }}
-              placeholder="Senaryo ara"
-              disabled={running}
-              spellCheck={false}
-              aria-label="Senaryo ara"
-            />
-            {selected ? <Glyph name="check" size={13} /> : null}
-          </div>
-
-          {listOpen && !running ? (
-            <div className="finder-list">
-              {found.length ? (
-                found.map((entry) => (
-                  <button
-                    key={entry.id}
-                    className={'finder-row' + (entry.id === selected ? ' sel' : '')}
-                    onClick={() => pick(entry)}
-                    type="button"
-                  >
-                    <Glyph name="file" size={12} />
-                    <span className="finder-title">{entry.title}</span>
-                    {entry.folder ? <span className="finder-path">{entry.folder}</span> : null}
-                    <span className="finder-meta">{entry.steps}</span>
-                  </button>
-                ))
-              ) : (
-                <span className="finder-empty">Eşleşme yok</span>
-              )}
-            </div>
-          ) : null}
-        </div>
-
+    <section className="run-panel">
+      <div className="dock-block dock-bar">
+        <select
+          className="picker"
+          value={selected}
+          onChange={(event) => setPicked(event.target.value)}
+          disabled={running}
+          aria-label="Senaryo"
+        >
+          <option value="">senaryo seç</option>
+          {entries.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.title}
+            </option>
+          ))}
+        </select>
         <IconButton
           name="play"
           title="Başlat"
@@ -306,14 +269,39 @@ export default function RunPanel({
         <IconButton name="reload" title="Yenile" onClick={refresh} disabled={running} small />
       </div>
 
-      {running ? (
-        <div className="progress">
-          <Bar value={percentDone} />
-          <span className="progress-text">
-            {progress.done} / {progress.total}
-          </span>
+      <div className="dock-block">
+        <span className="dock-label">Koşum seçenekleri</span>
+
+        <div className="side-opts">
+          <Toggle
+            label="Hata görüntüsü"
+            checked={Boolean(options.screenshotOnFailure)}
+            disabled={running}
+            onChange={() => toggle('screenshotOnFailure')}
+          />
+          <Toggle
+            label="İlk hatada dur"
+            checked={Boolean(options.stopOnFailure)}
+            disabled={running}
+            onChange={() => toggle('stopOnFailure')}
+          />
+          <Toggle
+            label="Durum doğrula"
+            checked={Boolean(options.verifyState)}
+            disabled={running}
+            onChange={() => toggle('verifyState')}
+          />
         </div>
-      ) : null}
+
+        {running ? (
+          <div className="progress">
+            <Bar value={percentDone} />
+            <span className="progress-text">
+              {progress.done} / {progress.total}
+            </span>
+          </div>
+        ) : null}
+      </div>
 
       <div className="side-list" ref={listRef}>
         {shown.length ? (
@@ -336,12 +324,18 @@ export default function RunPanel({
             </div>
           ))
         ) : (
-          <Empty glyph="play" text="Koşum yok" />
+          <Empty
+            glyph="play"
+            text="Koşum yok"
+            hint="Bir senaryo seçip başlat düğmesine bastığınızda adımlar burada canlı akar."
+          />
         )}
       </div>
 
       {run ? (
-        <div className="side-foot">
+        <div className="dock-block">
+          <span className="dock-label">Özet</span>
+
           <div className="metric-row tight">
             <Metric
               label="durum"

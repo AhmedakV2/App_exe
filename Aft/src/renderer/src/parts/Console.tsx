@@ -54,16 +54,10 @@ const LogRow = memo(function LogRow({ line }: { line: Line }): React.JSX.Element
 
 export default memo(function Console({
   api,
-  height,
-  focusSeed,
-  onGrip,
-  onClose
+  focusSeed
 }: {
   api: ConsoleApi
-  height: number
   focusSeed: number
-  onGrip: (event: React.PointerEvent<HTMLDivElement>) => void
-  onClose: () => void
 }): React.JSX.Element {
   const [cmd, setCmd] = useState('')
   const [sel, setSel] = useState(0)
@@ -74,14 +68,14 @@ export default memo(function Console({
   const pinnedRef = useRef(true)
   const cursorRef = useRef(-1)
 
-  const { lines, pending, submit, clear, getHistory } = api
+  const { lines, pending, submit, getHistory } = api
 
   useEffect(() => {
     if (!pinnedRef.current) return
     const log = logRef.current
     if (!log) return
     log.scrollTop = log.scrollHeight
-  }, [lines, height])
+  }, [lines])
 
   useEffect(() => {
     const input = inputRef.current
@@ -190,47 +184,7 @@ export default memo(function Console({
   )
 
   return (
-    <section className="terminal" style={{ height }}>
-      <div
-        className="term-grip"
-        onPointerDown={onGrip}
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="Terminal yüksekliği"
-      />
-
-      <header className="term-head">
-        <span className="term-tab">Local</span>
-
-        {pending ? (
-          <span className="term-running">
-            <span className="spinner" />
-            çalışıyor
-          </span>
-        ) : null}
-
-        <span className="term-push" />
-
-        <button
-          className="ghost-btn"
-          title="Temizle"
-          aria-label="Temizle"
-          onClick={clear}
-          type="button"
-        >
-          <Glyph name="trash" size={14} />
-        </button>
-        <button
-          className="ghost-btn"
-          title="Kapat"
-          aria-label="Kapat"
-          onClick={onClose}
-          type="button"
-        >
-          <Glyph name="minimize" size={14} />
-        </button>
-      </header>
-
+    <div className="term-shell">
       <div className="term-body">
         <div
           className="log"
@@ -295,6 +249,6 @@ export default memo(function Console({
           <Glyph name="send" size={15} />
         </button>
       </div>
-    </section>
+    </div>
   )
 })
