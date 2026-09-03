@@ -18,10 +18,14 @@ import {
   PLAYBACK_PROGRESS_EVENT,
   type ContextListPayload,
   type ContextPayload,
+  type FolderAddRequest,
+  type FolderPayload,
+  type FolderRenameRequest,
   type PlaybackChannelName,
   type RunPayload,
   type RunRequest,
   type ScenarioListPayload,
+  type ScenarioMoveRequest,
   type ScenarioPayload
 } from './playback-types'
 
@@ -35,7 +39,11 @@ const CHANNELS: PlaybackChannelName[] = [
   'aft:playback:cancel',
   'aft:playback:last',
   'aft:playback:contexts',
-  'aft:playback:context'
+  'aft:playback:context',
+  'aft:playback:move',
+  'aft:playback:folder-add',
+  'aft:playback:folder-rename',
+  'aft:playback:folder-remove'
 ]
 
 const RETENTION_MS = 14 * 24 * 60 * 60 * 1000
@@ -96,7 +104,8 @@ export class PlaybackChannel {
 
     ipcMain.handle('aft:playback:list', () =>
       this.guard('Senaryo listesi hazir', (): ScenarioListPayload => ({
-        entries: this.scenarios.entries()
+        entries: this.scenarios.entries(),
+        folders: this.scenarios.folders()
       }))
     )
 
@@ -104,10 +113,10 @@ export class PlaybackChannel {
       this.guard('Senaryo okundu', () => this.payload(this.require(String(id))))
     )
 
-    ipcMain.handle('aft:playback:save', (_event, raw: unknown) =>
+    ipcMain.handle('aft:playback:save', (_event, raw: unknown, folder: unknown) =>
       this.guard('Senaryo kaydedildi', async () => {
         const scenario = parseScenario(raw)
-        await this.scenarios.write(scenario)
+        await this.scenarios.write(scenario, typeof folder === 'string' ? folder : null)
         return this.payload(scenario)
       })
     )
@@ -139,6 +148,42 @@ export class PlaybackChannel {
       this.guard('Baglam listesi hazir', async (): Promise<ContextListPayload> => ({
         contexts: await this.engine.store().list()
       }))
+    )
+
+    ipcMain.handle('aft:playback:move', (_event, request: unknown) =>
+      this.guard('Senaryo tasindi', async () => {
+        const move = (request ?? {}) as Partial<ScenarioMoveRequest>
+        await this.scenarios.move(String(move.scenarioId ?? ''), String(move.folder ?? ''))
+        return true
+      })
+    )
+
+    ipcMain.handle('aft:playback:folder-add', (_event, request: unknown) =>
+      this.guard('Klasor olusturuldu', async (): Promise<FolderPayload> => {
+        const add = (request ?? {}) as Partial<FolderAddRequest>
+        return {
+          folder: await this.scenarios.createFolder(
+            String(add.parentId ?? ''),
+            String(add.name ?? '')
+          )
+        }
+      })
+    )
+
+    ipcMain.handle('aft:playback:folder-rename', (_event, request: unknown) =>
+      this.guard('Klasor yeniden adlandirildi', async (): Promise<FolderPayload> => {
+        const patch = (request ?? {}) as Partial<FolderRenameRequest>
+        return {
+          folder: await this.scenarios.renameFolder(
+            String(patch.id ?? ''),
+            String(patch.name ?? '')
+          )
+        }
+      })
+    )
+
+    ipcMain.handle('aft:playback:folder-remove', (_event, id: unknown) =>
+      this.guard('Klasor silindi', () => this.scenarios.removeFolder(String(id)))
     )
 
     ipcMain.handle('aft:playback:context', (_event, id: unknown) =>

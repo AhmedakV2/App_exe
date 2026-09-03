@@ -24,6 +24,8 @@ const SOURCE = `(function () {
   var probe = { el: null, seq: 0 };
   var lastPointerAt = 0;
   var lastKeyAt = 0;
+  var hoverEl = null;
+  var hoverAt = 0;
   var TEST = ['data-testid','data-test-id','data-test','data-qa','data-qa-id','data-cy','data-e2e','data-automation-id','data-automationid','data-tracking-id'];
   var KEYS = ['Enter','Tab','Escape','Backspace','Delete','Insert','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
   var TYPING_KEYS = ['Backspace','Delete','Insert',' '];
@@ -32,6 +34,8 @@ const SOURCE = `(function () {
   var PROMOTE_HOPS = 4;
   var PROMOTE_VIEW = 0.5;
   var TONES = { strong: '#3ecf8e', weak: '#f0a02a', blocked: '#ef4444' };
+  var HOVER_COMBO = 'Control+Shift+M';
+  var HOVER_TRACK_MS = 60;
 
   function attr(el, name) {
     try { return el.getAttribute(name) || ''; } catch (e) { return ''; }
@@ -263,6 +267,13 @@ const SOURCE = `(function () {
     markProbe(pickTarget(event));
   });
 
+  bind('mousemove', document, function (event) {
+    var now = Date.now();
+    if (now - hoverAt < HOVER_TRACK_MS) return;
+    hoverAt = now;
+    hoverEl = pickTarget(event);
+  });
+
   bind('click', document, function (event) {
     if (event.button === 2) return;
     var now = Date.now();
@@ -319,6 +330,15 @@ const SOURCE = `(function () {
     if (event.repeat) return;
     var key = event.key;
     if (!key || MODIFIER_KEYS.indexOf(key) >= 0) return;
+
+    if (combo(event) === HOVER_COMBO) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (!hoverEl) return;
+      lastKeyAt = Date.now();
+      markProbe(hoverEl);
+      emit('hover', hoverEl, {});
+      return;
+    }
 
     var hard = event.ctrlKey || event.altKey || event.metaKey;
     var known = KEYS.indexOf(key) >= 0 || key === ' ';
@@ -388,6 +408,7 @@ const SOURCE = `(function () {
       queue = [];
       slots = {};
       probe = { el: null, seq: 0 };
+      hoverEl = null;
       window.__aftRecord.clear();
       try { delete window.__aftRecord; } catch (e) { window.__aftRecord = null; }
     }

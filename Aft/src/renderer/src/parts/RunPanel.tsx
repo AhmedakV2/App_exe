@@ -9,7 +9,7 @@ import type {
   StoredContext
 } from '../../../main/scenario/types'
 import { Glyph, IconButton } from '../icons'
-import { Bar, Empty, Metric, Pill, TextButton, Toggle } from '../ui'
+import { Bar, Empty, Metric, Pill, TextButton } from '../ui'
 import { formatMs, percent } from '../format'
 import ContextView from './ContextView'
 import ShotView from './ShotView'
@@ -49,6 +49,7 @@ export default function RunPanel({
   revision,
   request,
   blocked,
+  options,
   onReport,
   onBusy
 }: {
@@ -56,11 +57,14 @@ export default function RunPanel({
   revision: number
   request: string
   blocked: boolean
+  options: Partial<PlaybackOptions>
   onReport: (report: Report) => void
   onBusy: (running: boolean) => void
 }): React.JSX.Element {
   const [entries, setEntries] = useState<ScenarioEntry[]>([])
-  const [picked, setPicked] = useState('')
+  const [picked, setPicked] = useState<string | null>(null)
+  const [query, setQuery] = useState<string | null>(null)
+  const [listOpen, setListOpen] = useState(false)
   const [live, setLive] = useState<StepResult[]>([])
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [run, setRun] = useState<RunResult | null>(null)
@@ -68,14 +72,10 @@ export default function RunPanel({
   const [context, setContext] = useState<FailureContext | null>(null)
   const [shot, setShot] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
-  const [options, setOptions] = useState<Partial<PlaybackOptions>>({
-    screenshotOnFailure: true,
-    stopOnFailure: true,
-    verifyState: true
-  })
 
-  const selected = picked || request
+  const selected = picked === null ? request : picked
   const listRef = useRef<HTMLDivElement | null>(null)
+  const pickRef = useRef<HTMLDivElement | null>(null)
   const reportRef = useRef(onReport)
   const busyRef = useRef(onBusy)
 
@@ -112,6 +112,19 @@ export default function RunPanel({
   }, [revision])
 
   useEffect(() => {
+    if (!listOpen) return
+
+    const onOutside = (event: PointerEvent): void => {
+      const frame = pickRef.current
+      if (frame && event.target instanceof Node && frame.contains(event.target)) return
+      setListOpen(false)
+    }
+
+    window.addEventListener('pointerdown', onOutside, true)
+    return () => window.removeEventListener('pointerdown', onOutside, true)
+  }, [listOpen])
+
+  useEffect(() => {
     return window.aftPlayback.onProgress((payload) => {
       setProgress({ done: payload.done, total: payload.total })
       setLive((prev) => prev.concat(payload.step))
@@ -140,7 +153,19 @@ export default function RunPanel({
     setRun(null)
     setContext(null)
     setContexts([])
-    setProgress({ done: 0, total: entries.find((entry) => entry.id === selected)?.steps ?? 0 })
+    const total = entries.find((entry) => entry.id === selected)?.steps ?? 0
+    setProgress({ done: 0, total })
+
+    reportRef.current({
+      level: 'note',
+      text: 'Koşum başladı: ' + (entries.find((entry) => entry.id === selected)?.title ?? selected),
+      detail: [
+        total + ' adım',
+        'hata görüntüsü ' + (options.screenshotOnFailure ? 'açık' : 'kapalı'),
+        'ilk hatada dur ' + (options.stopOnFailure ? 'açık' : 'kapalı'),
+        'durum doğrulama ' + (options.verifyState ? 'açık' : 'kapalı')
+      ]
+    })
 
     try {
       const result = await window.aftPlayback.run({ scenarioId: selected, options })
@@ -190,8 +215,25 @@ export default function RunPanel({
     setContext(result.data.context)
   }, [])
 
-  const toggle = useCallback((key: keyof PlaybackOptions): void => {
-    setOptions((prev) => ({ ...prev, [key]: !prev[key] }))
+  const chosen = useMemo(
+    () => entries.find((entry) => entry.id === selected) ?? null,
+    [entries, selected]
+  )
+
+  const text = query === null ? (chosen?.title ?? '') : query
+
+  const found = useMemo(() => {
+    const needle = (query ?? '').trim().toLocaleLowerCase('tr')
+    const rows = needle
+      ? entries.filter((entry) => entry.title.toLocaleLowerCase('tr').includes(needle))
+      : entries
+    return rows.slice(0, 12)
+  }, [entries, query])
+
+  const pick = useCallback((entry: ScenarioEntry): void => {
+    setPicked(entry.id)
+    setQuery(null)
+    setListOpen(false)
   }, [])
 
   const shown = useMemo(() => (run ? flatten(run.steps) : live), [live, run])

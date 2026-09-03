@@ -19,6 +19,8 @@ export default function BrowserPage({
   listWidth,
   dock,
   dockWidth,
+  devtoolsOpen,
+  devtoolsWidth,
   revision,
   runRequest,
   recording,
@@ -27,6 +29,7 @@ export default function BrowserPage({
   onVision,
   onListGrip,
   onDockGrip,
+  onDevGrip,
   onCloseList,
   onDock,
   onAction,
@@ -43,6 +46,8 @@ export default function BrowserPage({
   listWidth: number
   dock: DockTab
   dockWidth: number
+  devtoolsOpen: boolean
+  devtoolsWidth: number
   revision: number
   runRequest: string
   recording: boolean
@@ -51,6 +56,7 @@ export default function BrowserPage({
   onVision: () => void
   onListGrip: (event: React.PointerEvent<HTMLDivElement>) => void
   onDockGrip: (event: React.PointerEvent<HTMLDivElement>) => void
+  onDevGrip: (event: React.PointerEvent<HTMLDivElement>) => void
   onCloseList: () => void
   onDock: (tab: DockTab) => void
   onAction: (action: AgentAction) => void
@@ -134,6 +140,7 @@ export default function BrowserPage({
               revision={revision}
               request={runRequest}
               blocked={recording}
+              options={playOptions}
               onReport={onReport}
               onBusy={onBusy}
             />

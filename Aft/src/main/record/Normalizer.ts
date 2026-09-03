@@ -60,6 +60,11 @@ export function normalize(raw: RawInteraction, options: RecordOptions): RecordIn
 
   if (!raw.element) return null
 
+  if (raw.kind === 'hover') {
+    if (!options.captureHover) return null
+    return { ...base, kind: 'hover', needsElement: true }
+  }
+
   if (raw.kind === 'input') {
     if (!raw.text) return null
     return { ...base, kind: 'clear-type', text: raw.text, needsElement: true }

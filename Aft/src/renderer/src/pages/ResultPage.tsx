@@ -95,6 +95,7 @@ export default function ResultPage({
     async (id: string): Promise<void> => {
       setSelected(id)
       setText('')
+      setContext(null)
       setBusy(true)
       try {
         const result = await window.aftData.run(id)
@@ -135,6 +136,7 @@ export default function ResultPage({
         return
       }
       setContext(result.data.context)
+      setTab('contexts')
     },
     [onReport]
   )
@@ -190,7 +192,7 @@ export default function ResultPage({
               }}
               aria-label="Senaryo süzgeci"
             >
-              <option value="">tüm senaryolar</option>
+              <option value="">Tüm senaryolar</option>
               {scenarios.map((entry) => (
                 <option key={entry.id} value={entry.id}>
                   {entry.title}
@@ -258,7 +260,7 @@ export default function ResultPage({
           grow
           scroll
           actions={
-            detail ? (
+            detail && !context ? (
               <Segmented
                 items={[
                   { id: 'steps', label: 'Adımlar' },
@@ -271,7 +273,16 @@ export default function ResultPage({
             ) : null
           }
         >
-          {detail && run ? (
+          {detail && run && context ? (
+            <ContextView
+              context={context}
+              inline
+              onClose={() => setContext(null)}
+              onShot={setShot}
+            />
+          ) : null}
+
+          {detail && run && !context ? (
             <>
               <div className="metric-row tight">
                 <Metric label="adım" value={run.steps} />
@@ -393,9 +404,6 @@ export default function ResultPage({
         </Card>
       </div>
 
-      {context ? (
-        <ContextView context={context} onClose={() => setContext(null)} onShot={setShot} />
-      ) : null}
       {shot ? <ShotView data={shot} onClose={() => setShot(null)} /> : null}
     </div>
   )

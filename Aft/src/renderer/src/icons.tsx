@@ -294,6 +294,53 @@ const GLYPHS: Record<string, React.JSX.Element> = {
     <>
       <path d="M13 2L5 14h6l-1 8 8-12h-6z" />
     </>
+  ),
+  folder: <path d="M3 20V5h6l2 3h10v12z" />,
+  folderOpen: (
+    <>
+      <path d="M3 20V5h6l2 3h10v3" />
+      <path d="M3 20l3-8h17l-3 8z" />
+    </>
+  ),
+  module: (
+    <>
+      <path d="M3 20V5h6l2 3h10v12z" />
+      <path d="M8 14h8" />
+    </>
+  ),
+  list: (
+    <>
+      <path d="M8 6h13" />
+      <path d="M8 12h13" />
+      <path d="M8 18h13" />
+      <path d="M3 6h2" />
+      <path d="M3 12h2" />
+      <path d="M3 18h2" />
+    </>
+  ),
+  drag: (
+    <>
+      <path d="M9 6h1" />
+      <path d="M9 12h1" />
+      <path d="M9 18h1" />
+      <path d="M14 6h1" />
+      <path d="M14 12h1" />
+      <path d="M14 18h1" />
+    </>
+  ),
+  inspect: (
+    <>
+      <path d="M3 3h8v8H3z" />
+      <path d="M21 8V3h-5" />
+      <path d="M3 16v5h5" />
+      <path d="M13 13l8 3-3.4 1.6L16 21z" />
+    </>
+  ),
+  code: (
+    <>
+      <path d="M9 6l-6 6 6 6" />
+      <path d="M15 6l6 6-6 6" />
+    </>
   )
 }
 

@@ -24,5 +24,6 @@ export {
 } from './migrate'
 export { Indexer } from './Indexer'
 export { Outbox, NullTransport, backoffFor, MAX_ATTEMPTS, type OutboxTransport } from './Outbox'
+export { FileTransport } from './FileTransport'
 export { Retention } from './Retention'
 export { DataStore, type DataStoreOptions } from './DataStore'

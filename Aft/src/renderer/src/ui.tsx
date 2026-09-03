@@ -64,6 +64,7 @@ export const Metric = memo(function Metric({
 
 export const Card = memo(function Card({
   label,
+  lead,
   actions,
   scroll,
   grow,
@@ -71,6 +72,7 @@ export const Card = memo(function Card({
   children
 }: {
   label: string
+  lead?: React.ReactNode
   actions?: React.ReactNode
   scroll?: boolean
   grow?: boolean
@@ -78,9 +80,10 @@ export const Card = memo(function Card({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <section className={'card' + (grow ? ' grow' : '')}>
+    <section className={'card' + (grow ? ' grow' : '') + (side ? ' side' : '')}>
       <header className="card-head">
         <span className="card-label">{label}</span>
+        {lead ? <span className="card-lead">{lead}</span> : null}
         <span className="card-push" />
         {actions}
       </header>
@@ -247,6 +250,94 @@ export const Segmented = memo(function Segmented({
         >
           {item.label}
         </button>
+      ))}
+    </div>
+  )
+})
+
+export type MenuItem = {
+  id: string
+  label: string
+  glyph?: string
+  danger?: boolean
+  disabled?: boolean
+  split?: boolean
+}
+
+export const Menu = memo(function Menu({
+  x,
+  y,
+  items,
+  onPick,
+  onClose
+}: {
+  x: number
+  y: number
+  items: MenuItem[]
+  onPick: (id: string) => void
+  onClose: () => void
+}): React.JSX.Element {
+  const frameRef = React.useRef<HTMLDivElement | null>(null)
+  const [spot, setSpot] = React.useState({ left: x, top: y })
+
+  React.useEffect(() => {
+    const frame = frameRef.current
+    if (!frame) return
+
+    const box = frame.getBoundingClientRect()
+    const view = document.documentElement
+    setSpot({
+      left: Math.max(6, Math.min(x, view.clientWidth - box.width - 6)),
+      top: Math.max(6, Math.min(y, view.clientHeight - box.height - 6))
+    })
+  }, [x, y])
+
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onClose()
+    }
+
+    const onOutside = (event: PointerEvent): void => {
+      const frame = frameRef.current
+      if (frame && event.target instanceof Node && frame.contains(event.target)) return
+      onClose()
+    }
+
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onOutside, true)
+    window.addEventListener('blur', onClose)
+
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onOutside, true)
+      window.removeEventListener('blur', onClose)
+    }
+  }, [onClose])
+
+  return (
+    <div
+      ref={frameRef}
+      className="menu"
+      role="menu"
+      style={{ left: spot.left, top: spot.top }}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      {items.map((item) => (
+        <React.Fragment key={item.id}>
+          {item.split ? <span className="menu-split" /> : null}
+          <button
+            className={'menu-item' + (item.danger ? ' danger' : '')}
+            role="menuitem"
+            disabled={item.disabled}
+            onClick={() => onPick(item.id)}
+            type="button"
+          >
+            {item.glyph ? <Glyph name={item.glyph} size={13} /> : <span className="menu-gap" />}
+            {item.label}
+          </button>
+        </React.Fragment>
       ))}
     </div>
   )

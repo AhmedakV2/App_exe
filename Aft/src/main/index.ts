@@ -30,14 +30,19 @@ import { HOME_URL, isHomeUrl, mountHome, registerHomeScheme, setHomeTheme } from
 
 const FRAME = 40
 const STAGE_RADIUS = 8
-const FRAME_COLOR = '#1e1f22'
+const FRAME_COLOR = '#101114'
 const AGENT_PARTITION = 'persist:aft-agent'
 const DRAG_TICK = 16
 const DRAG_MAX_MS = 30000
 const SETTINGS_WIDTH = 392
-const SETTINGS_HEIGHT = 560
+const SETTINGS_HEIGHT = 620
 const SETTINGS_MIN_WIDTH = 320
 const SETTINGS_MIN_HEIGHT = 280
+const DEVTOOLS_RATIO = 0.45
+const DEVTOOLS_MIN = 260
+const DEVTOOLS_GAP = 6
+const DEVTOOLS_MIN_RATIO = 0.15
+const DEVTOOLS_MAX_RATIO = 0.8
 const iconPath = app.isPackaged
   ? join(process.resourcesPath, 'build', 'icon.png')
   : join(__dirname, '../../build/icon.png')
@@ -45,6 +50,7 @@ const iconPath = app.isPackaged
 let win: BaseWindow
 let chatView: WebContentsView
 let targetView: WebContentsView
+let devtoolsView: WebContentsView | null = null
 let controller: BrowserController
 let chatOpen = false
 let terminalOpen = false
@@ -61,6 +67,8 @@ let settingsWin: BrowserWindow | null = null
 let settingsSpot: { x: number; y: number } | null = null
 let settingsSize = { width: SETTINGS_WIDTH, height: SETTINGS_HEIGHT }
 let chromeColor = FRAME_COLOR
+let devtoolsOpen = false
+let devtoolsRatio = DEVTOOLS_RATIO
 let prefs: AppPrefs | null = null
 
 registerHomeScheme()
@@ -117,7 +125,26 @@ function layout(): void {
   if (!win || win.isDestroyed()) return
   const area = visibleArea()
   chatView.setBounds(area)
-  targetView.setBounds(stageBounds(area))
+
+  const stage = stageBounds(area)
+  if (!devtoolsOpen || !devtoolsView) {
+    targetView.setBounds(stage)
+    return
+  }
+
+  const panel = Math.min(
+    Math.max(DEVTOOLS_MIN, Math.round(stage.width * devtoolsRatio)),
+    Math.max(0, stage.width - DEVTOOLS_MIN - DEVTOOLS_GAP)
+  )
+  const pageWidth = Math.max(0, stage.width - panel - DEVTOOLS_GAP)
+
+  targetView.setBounds({ x: stage.x, y: stage.y, width: pageWidth, height: stage.height })
+  devtoolsView.setBounds({
+    x: stage.x + pageWidth + DEVTOOLS_GAP,
+    y: stage.y,
+    width: panel,
+    height: stage.height
+  })
 }
 
 function readBox(value: unknown): StageBox | null {
@@ -160,7 +187,71 @@ function applyStageVisible(): void {
   if (!targetView || targetView.webContents.isDestroyed()) return
   const visible = stageShown && !modalOpen
   targetView.setVisible(visible)
+  if (devtoolsView && !devtoolsView.webContents.isDestroyed()) {
+    devtoolsView.setVisible(visible && devtoolsOpen)
+  }
   if (visible) layout()
+}
+
+function closeDevtools(): void {
+  const panel = devtoolsView
+  devtoolsView = null
+  devtoolsOpen = false
+
+  if (targetView && !targetView.webContents.isDestroyed()) targetView.webContents.closeDevTools()
+  if (panel) {
+    if (win && !win.isDestroyed()) win.contentView.removeChildView(panel)
+    if (!panel.webContents.isDestroyed()) panel.webContents.close()
+  }
+}
+
+function openDevtools(): void {
+  if (!win || win.isDestroyed()) return
+  if (!targetView || targetView.webContents.isDestroyed()) return
+  if (devtoolsOpen && devtoolsView) return
+
+  const panel = new WebContentsView({
+    webPreferences: { sandbox: false, contextIsolation: true }
+  })
+
+  panel.setBackgroundColor(chromeColor)
+  panel.setBorderRadius(STAGE_RADIUS)
+  win.contentView.addChildView(panel)
+
+  devtoolsView = panel
+  devtoolsOpen = true
+
+  panel.webContents.on('destroyed', () => {
+    if (devtoolsView !== panel) return
+    devtoolsView = null
+    devtoolsOpen = false
+    layout()
+    pushState()
+  })
+
+  targetView.webContents.setDevToolsWebContents(panel.webContents)
+  targetView.webContents.openDevTools({ mode: 'detach' })
+  layout()
+}
+
+function setDevtoolsSplit(value: unknown): void {
+  const ratio = Number(value)
+  if (!Number.isFinite(ratio)) return
+
+  const next = Math.min(DEVTOOLS_MAX_RATIO, Math.max(DEVTOOLS_MIN_RATIO, ratio))
+  if (next === devtoolsRatio) return
+
+  devtoolsRatio = next
+  if (devtoolsOpen) layout()
+}
+
+function setDevtools(open: boolean): void {
+  if (open === devtoolsOpen) return
+  if (open) openDevtools()
+  else closeDevtools()
+  applyStageVisible()
+  layout()
+  pushState()
 }
 
 function setModal(open: boolean): void {
@@ -203,6 +294,7 @@ function snapshotState(): BrowserState {
     terminalOpen,
     settingsOpen: settingsAlive(),
     vision: controller.isVisionOn(),
+    devtoolsOpen,
     maximized: !win || win.isDestroyed() ? false : win.isMaximized(),
     fullscreen: !win || win.isDestroyed() ? false : win.isFullScreen()
   }
@@ -334,7 +426,10 @@ function publishPrefs(value: unknown): void {
   prefs = {
     theme: raw.theme,
     autoTerminal: Boolean(raw.autoTerminal),
-    autoTerminalRestore: Boolean(raw.autoTerminalRestore)
+    autoTerminalRestore: Boolean(raw.autoTerminalRestore),
+    screenshotOnFailure: Boolean(raw.screenshotOnFailure),
+    stopOnFailure: Boolean(raw.stopOnFailure),
+    verifyState: Boolean(raw.verifyState)
   }
 
   if (settingsAlive()) (settingsWin as BrowserWindow).webContents.send('aft:prefs', prefs)
@@ -504,6 +599,12 @@ function bindShortcuts(wc: WebContents): void {
       return
     }
 
+    if (input.key === 'F12' && !input.alt && !input.control && !input.meta) {
+      event.preventDefault()
+      setDevtools(!devtoolsOpen)
+      return
+    }
+
     if (input.alt && !input.control && !input.meta && input.key === 'F12') {
       event.preventDefault()
       setTerminal(!terminalOpen, true)
@@ -661,6 +762,7 @@ function createWindow(): void {
 
   win.on('closed', () => {
     stopDrag()
+    closeDevtools()
     void unmountRecord()
       .catch(() => undefined)
       .then(() => unmountData())
@@ -731,7 +833,8 @@ app.whenReady().then(() => {
   ipcMain.on('aft:terminal', (_e, open: boolean) => setTerminal(Boolean(open), Boolean(open)))
 
   ipcMain.on('aft:drag', (_e, axis: unknown) => {
-    if (axis === 'chat' || axis === 'terminal' || axis === 'record') startDrag(axis)
+    if (axis === 'chat' || axis === 'terminal' || axis === 'record' || axis === 'devtools')
+      startDrag(axis)
     else stopDrag()
   })
 
@@ -742,6 +845,10 @@ app.whenReady().then(() => {
   ipcMain.on('aft:stage-shown', (_e, open: boolean) => setStageShown(Boolean(open)))
 
   ipcMain.on('aft:settings', (_e, open: boolean) => setSettings(Boolean(open)))
+
+  ipcMain.on('aft:devtools', (_e, open: boolean) => setDevtools(Boolean(open)))
+
+  ipcMain.on('aft:devtools-split', (_e, ratio: unknown) => setDevtoolsSplit(ratio))
 
   ipcMain.on('aft:prefs', (_e, value: unknown) => publishPrefs(value))
 

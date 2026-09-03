@@ -7,7 +7,9 @@ import { Glyph } from './icons'
 const SHORTCUTS: { name: string; code: string }[] = [
   { name: 'Terminal', code: 'Ctrl + K' },
   { name: 'Adres çubuğu', code: 'Ctrl + L' },
+  { name: 'Sayfayı incele', code: 'F12' },
   { name: 'Tam ekran', code: 'F11' },
+  { name: 'Kayıtta imleç adımı', code: 'Ctrl + Shift + M' },
   { name: 'Komut geçmişi', code: '↑ / ↓' }
 ]
 
@@ -15,6 +17,9 @@ export default function SettingsWindow(): React.JSX.Element {
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
   const [autoTerm, setAutoTerm] = useState(true)
   const [autoBack, setAutoBack] = useState(false)
+  const [shotOnFail, setShotOnFail] = useState(true)
+  const [stopOnFail, setStopOnFail] = useState(true)
+  const [verifyState, setVerifyState] = useState(true)
 
   useEffect(() => {
     paintTheme(theme)
@@ -27,6 +32,9 @@ export default function SettingsWindow(): React.JSX.Element {
       if (isThemeId(value.theme)) setTheme(value.theme)
       setAutoTerm(value.autoTerminal)
       setAutoBack(value.autoTerminalRestore)
+      setShotOnFail(value.screenshotOnFailure)
+      setStopOnFail(value.stopOnFailure)
+      setVerifyState(value.verifyState)
     })
   }, [])
 
@@ -58,12 +66,27 @@ export default function SettingsWindow(): React.JSX.Element {
     window.aft.patchPrefs({ autoTerminalRestore: next })
   }, [])
 
+  const toggleShot = useCallback((next: boolean): void => {
+    setShotOnFail(next)
+    window.aft.patchPrefs({ screenshotOnFailure: next })
+  }, [])
+
+  const toggleStop = useCallback((next: boolean): void => {
+    setStopOnFail(next)
+    window.aft.patchPrefs({ stopOnFailure: next })
+  }, [])
+
+  const toggleVerify = useCallback((next: boolean): void => {
+    setVerifyState(next)
+    window.aft.patchPrefs({ verifyState: next })
+  }, [])
+
   return (
     <div className="win">
       <header className="win-head">
         <span className="win-title">
           <Glyph name="settings" size={13} />
-          AYARLAR
+          Ayarlar
         </span>
         <span className="win-push" />
         <button
@@ -126,6 +149,40 @@ export default function SettingsWindow(): React.JSX.Element {
             />
             <span className="opt-text">
               <span className="opt-name">Koşum bitince kapat</span>
+            </span>
+          </label>
+        </section>
+
+        <section className="sheet-block">
+          <h3 className="sheet-label">Oynatma</h3>
+          <label className="opt-row">
+            <input
+              type="checkbox"
+              checked={shotOnFail}
+              onChange={(event) => toggleShot(event.target.checked)}
+            />
+            <span className="opt-text">
+              <span className="opt-name">Hatada ekran görüntüsü al</span>
+            </span>
+          </label>
+          <label className="opt-row">
+            <input
+              type="checkbox"
+              checked={stopOnFail}
+              onChange={(event) => toggleStop(event.target.checked)}
+            />
+            <span className="opt-text">
+              <span className="opt-name">İlk hatada dur</span>
+            </span>
+          </label>
+          <label className="opt-row">
+            <input
+              type="checkbox"
+              checked={verifyState}
+              onChange={(event) => toggleVerify(event.target.checked)}
+            />
+            <span className="opt-text">
+              <span className="opt-name">Sayfa durumunu doğrula</span>
             </span>
           </label>
         </section>

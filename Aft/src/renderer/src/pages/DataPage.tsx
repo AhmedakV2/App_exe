@@ -54,16 +54,31 @@ export default function DataPage({
         onReport({ level: 'err', text: 'Kuyruk boşaltılamadı: ' + result.message })
         return
       }
+
+      const report = result.data.report
       setOutbox(result.data.summary)
+
+      if (!report.claimed) {
+        onReport({ level: 'note', text: 'Kuyrukta gönderilecek kayıt yok' })
+        return
+      }
+
       onReport({
-        level: result.data.report.failed ? 'err' : 'ok',
-        text: 'Kuyruk: ' + result.data.report.sent + ' gönderildi',
-        detail: result.data.report.errors.slice(0, 3)
+        level: report.failed ? 'err' : 'ok',
+        text: 'Kuyruk: ' + report.sent + ' / ' + report.claimed + ' gönderildi',
+        detail: [
+          report.failed + ' hatalı',
+          result.data.summary.pending + ' bekleyen',
+          ...report.errors.slice(0, 3)
+        ]
       })
+    } catch (error) {
+      onReport({ level: 'err', text: 'Köprü hatası: ' + (error as Error).message })
     } finally {
       setBusy(false)
+      await load()
     }
-  }, [onReport])
+  }, [load, onReport])
 
   const reconcile = useCallback(async (): Promise<void> => {
     setBusy(true)
@@ -75,12 +90,18 @@ export default function DataPage({
       }
       onReport({
         level: 'ok',
-        text: 'Eşitleme: ' + result.data.report.removedRows + ' satır',
-        detail: result.data.report.orphanFiles.slice(0, 3)
+        text: 'Eşitleme tamam: ' + result.data.scenarios + ' senaryo indekslendi',
+        detail: [
+          result.data.report.removedRows + ' kayıt düşürüldü',
+          result.data.report.orphanFiles.length + ' artık dosya',
+          ...result.data.report.orphanFiles.slice(0, 3)
+        ]
       })
-      await load()
+    } catch (error) {
+      onReport({ level: 'err', text: 'Köprü hatası: ' + (error as Error).message })
     } finally {
       setBusy(false)
+      await load()
     }
   }, [load, onReport])
 
@@ -92,18 +113,21 @@ export default function DataPage({
         onReport({ level: 'err', text: 'Temizlik başarısız: ' + result.message })
         return
       }
+      setOutbox(result.data.summary)
       onReport({
         level: 'ok',
-        text: 'Temizlik: ' + result.data.report.runsRemoved + ' koşum',
+        text: 'Temizlik: ' + result.data.report.runsRemoved + ' koşum silindi',
         detail: [
           result.data.report.reportsRemoved + ' rapor',
           result.data.report.contextsRemoved + ' bağlam',
-          result.data.report.skippedPending + ' bekleyen'
+          result.data.report.skippedPending + ' kuyrukta beklediği için atlandı'
         ]
       })
-      await load()
+    } catch (error) {
+      onReport({ level: 'err', text: 'Köprü hatası: ' + (error as Error).message })
     } finally {
       setBusy(false)
+      await load()
     }
   }, [load, onReport])
 
@@ -210,6 +234,8 @@ export default function DataPage({
             <span className="kv-val mono">{stats?.journalMode ?? '—'}</span>
             <span className="kv-key">en eski bekleyen</span>
             <span className="kv-val">{formatShortDate(outbox?.oldestPendingAt ?? 0)}</span>
+            <span className="kv-key">gönderim hedefi</span>
+            <span className="kv-val mono">data/outbox</span>
           </div>
 
           {faults.length ? (

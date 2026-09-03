@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   DataStore,
   DEFAULT_RUN_QUERY,
+  FileTransport,
   type Indexer,
   type OutboxTransport,
   type RunQuery,
@@ -57,7 +58,8 @@ export class DataChannel {
     this.contexts = new ContextStore(join(options.userDataDir, 'playback', 'contexts'))
     this.store = new DataStore({
       filePath: join(options.userDataDir, 'data', 'aft.db'),
-      contexts: this.contexts
+      contexts: this.contexts,
+      transport: new FileTransport(join(options.userDataDir, 'data', 'outbox'))
     })
   }
 
@@ -124,9 +126,10 @@ export class DataChannel {
     )
 
     ipcMain.handle('aft:data:scenarios', () =>
-      this.guard('Senaryo indeksi hazir', (): ScenarioIndexPayload => ({
-        rows: this.store.indexer.scenarios()
-      }))
+      this.guard('Senaryo indeksi hazir', (): ScenarioIndexPayload => {
+        this.syncScenarios()
+        return { rows: this.store.indexer.scenarios() }
+      })
     )
 
     ipcMain.handle('aft:data:health', () =>
@@ -157,14 +160,16 @@ export class DataChannel {
 
     ipcMain.handle('aft:data:reconcile', () =>
       this.guard('Indeks uzlastirildi', async (): Promise<ReconcilePayload> => {
+        const scenarios = this.syncScenarios()
         const refs = await this.contexts.refs()
-        return { report: this.store.indexer.reconcile(refs) }
+        return { report: this.store.indexer.reconcile(refs), scenarios }
       })
     )
 
     ipcMain.handle('aft:data:sweep', () =>
       this.guard('Saklama politikasi uygulandi', async (): Promise<SweepPayload> => ({
-        report: await this.store.retention.sweep()
+        report: await this.store.retention.sweep(),
+        summary: this.store.outbox.summary()
       }))
     )
 

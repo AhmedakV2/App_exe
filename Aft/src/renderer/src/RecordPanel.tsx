@@ -378,6 +378,11 @@ export default function RecordPanel({
     void call('Ayar güncellenemedi', () => window.aftRecord.options({ captureScroll: !current }))
   }, [call, view])
 
+  const toggleHover = useCallback((): void => {
+    const current = Boolean(view?.options.captureHover)
+    void call('Ayar güncellenemedi', () => window.aftRecord.options({ captureHover: !current }))
+  }, [call, view])
+
   const edit = useCallback(async (request: RecordEditRequest, label: string): Promise<void> => {
     setBusy(true)
     try {
@@ -537,6 +542,14 @@ export default function RecordPanel({
           onClick={toggleScroll}
           disabled={busy || !live}
           active={Boolean(view?.options.captureScroll)}
+          small
+        />
+        <IconButton
+          name="target"
+          title="İmleç adımı kısayolu Ctrl+Shift+M"
+          onClick={toggleHover}
+          disabled={busy || !live}
+          active={Boolean(view?.options.captureHover)}
           small
         />
         <IconButton
