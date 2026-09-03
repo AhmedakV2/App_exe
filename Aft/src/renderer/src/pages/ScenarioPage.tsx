@@ -440,6 +440,7 @@ function TargetEditor({
 
 export default function ScenarioPage({
   revision,
+  createSeed,
   busy,
   baseUrl,
   onReport,
@@ -447,6 +448,7 @@ export default function ScenarioPage({
   onChanged
 }: {
   revision: number
+  createSeed: number
   busy: boolean
   baseUrl: string
   onReport: (report: Report) => void
@@ -466,6 +468,7 @@ export default function ScenarioPage({
   const [addKind, setAddKind] = useState<StepKind>('click')
   const [view, setView] = useState<'steps' | 'json'>('steps')
   const [folder, setFolder] = useState('')
+  const folderRef = useRef('')
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [ask, setAsk] = useState<Ask | null>(null)
   const [defaultsOpen, setDefaultsOpen] = useState(false)
@@ -604,6 +607,15 @@ export default function ScenarioPage({
     },
     [baseUrl]
   )
+
+  useEffect(() => {
+    folderRef.current = folder
+  }, [folder])
+
+  useEffect(() => {
+    if (!createSeed) return
+    create(folderRef.current)
+  }, [create, createSeed])
 
   const addStep = useCallback((): void => {
     const created = blankStep(addKind, KIND_TITLES[addKind] ?? addKind)

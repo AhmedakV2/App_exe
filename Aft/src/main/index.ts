@@ -313,6 +313,13 @@ function focusTerminal(): void {
   chatView.webContents.send('aft:focus-terminal')
 }
 
+function openPalette(): void {
+  if (!chatView || chatView.webContents.isDestroyed()) return
+  pageHold = false
+  chatView.webContents.focus()
+  chatView.webContents.send('aft:open-palette')
+}
+
 function focusTerminalOnLoad(): void {
   if (pageHold) return
   focusTerminal()
@@ -617,6 +624,12 @@ function bindShortcuts(wc: WebContents): void {
     if (key === 'k') {
       event.preventDefault()
       setTerminal(!terminalOpen, true)
+      return
+    }
+
+    if (key === 'p') {
+      event.preventDefault()
+      openPalette()
       return
     }
 

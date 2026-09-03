@@ -12,9 +12,9 @@ export const THEMES: Theme[] = [
   {
     id: 'grafit',
     label: 'Grafit',
-    note: 'Nötr siyah zemin, mavi vurgu',
-    chrome: '#09090b',
-    swatch: ['#09090b', '#18181b', '#3b82f6']
+    note: 'Koyu gri yüzey, turuncu vurgu',
+    chrome: '#101114',
+    swatch: ['#101114', '#23262c', '#ff7a29']
   },
   {
     id: 'gece',
