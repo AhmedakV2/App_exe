@@ -3,7 +3,7 @@ import type { FragileStep, HealthSummary } from '../../../main/data'
 import type { DescriptorSummary, HealingProposal, StrategyStat } from '../../../main/identity'
 import type { ValidationReport } from '../../../main/model'
 import { Glyph, IconButton } from '../icons'
-import { Bar, Card, Empty, Metric, PageHead, Pill, Segmented, TextButton } from '../ui'
+import { Bar, Card, Empty, Metric, PageHead, Pill, Segmented, Skeleton, TextButton } from '../ui'
 import { formatShortDate, percent, ratio } from '../format'
 import type { Report } from '../report'
 
@@ -187,7 +187,7 @@ export default function IdentityPage({
               glyph="shield"
               label="Modeli doğrula"
               onClick={() => void validate()}
-              disabled={busy}
+              busy={busy}
             />
             <IconButton
               name="reload"
@@ -242,39 +242,47 @@ export default function IdentityPage({
           }
         >
           {tab === 'fragile' ? (
-            fragile.length ? (
-              <div className="table">
-                <div className="tr th">
-                  <span className="td grow">adım</span>
-                  <span className="td">deneme</span>
-                  <span className="td">kesin</span>
-                  <span className="td">düşük</span>
-                  <span className="td">bulunamayan</span>
-                  <span className="td">onarılan</span>
-                  <span className="td">güven</span>
-                  <span className="td">son</span>
-                </div>
-                {fragile.map((entry) => (
-                  <div key={entry.descriptorId} className="tr">
-                    <span className="td grow">{entry.title}</span>
-                    <span className="td">{entry.attempts}</span>
-                    <span className="td ok">{entry.exact}</span>
-                    <span className="td warn">{entry.low}</span>
-                    <span className="td bad">{entry.missing}</span>
-                    <span className="td">{entry.healed}</span>
-                    <span className="td wide">
-                      <Bar
-                        value={entry.meanConfidence}
-                        tone={entry.meanConfidence > 0.82 ? 'ok' : 'warn'}
-                      />
-                      {percent(entry.meanConfidence)}
-                    </span>
-                    <span className="td dim">{formatShortDate(entry.lastSeenAt)}</span>
+            busy && !fragile.length ? (
+              <Skeleton rows={6} />
+            ) : fragile.length ? (
+              <div className="table-scroll">
+                <div className="table wide">
+                  <div className="tr th">
+                    <span className="td grow">adım</span>
+                    <span className="td num">deneme</span>
+                    <span className="td num">kesin</span>
+                    <span className="td num">düşük</span>
+                    <span className="td num">bulunamayan</span>
+                    <span className="td num">onarılan</span>
+                    <span className="td wide">güven</span>
+                    <span className="td wide">son</span>
                   </div>
-                ))}
+                  {fragile.map((entry) => (
+                    <div key={entry.descriptorId} className="tr">
+                      <span className="td grow">{entry.title}</span>
+                      <span className="td num">{entry.attempts}</span>
+                      <span className="td num ok">{entry.exact}</span>
+                      <span className="td num warn">{entry.low}</span>
+                      <span className="td num bad">{entry.missing}</span>
+                      <span className="td num">{entry.healed}</span>
+                      <span className="td wide">
+                        <Bar
+                          value={entry.meanConfidence}
+                          tone={entry.meanConfidence > 0.82 ? 'ok' : 'warn'}
+                        />
+                        {percent(entry.meanConfidence)}
+                      </span>
+                      <span className="td wide dim">{formatShortDate(entry.lastSeenAt)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
-              <Empty glyph="pulse" text="Kırılgan adım yok" />
+              <Empty
+                glyph="pulse"
+                text="Kırılgan adım yok"
+                hint="Tüm adımlar son koşumlarda yüksek güvenle çözümlendi."
+              />
             )
           ) : null}
 
@@ -291,46 +299,56 @@ export default function IdentityPage({
                 />
               </div>
               {rows.length ? (
-                <div className="table">
-                  <div className="tr th">
-                    <span className="td grow">ad</span>
-                    <span className="td">etiket</span>
-                    <span className="td">rol</span>
-                    <span className="td grow">adres</span>
-                    <span className="td">kalite</span>
-                    <span className="td">tarih</span>
-                    <span className="td act" />
-                  </div>
-                  {rows.map((entry) => (
-                    <div key={entry.id} className="tr">
-                      <span className="td grow">{entry.name || entry.id.slice(0, 12)}</span>
-                      <span className="td dim">{entry.tag}</span>
-                      <span className="td dim">{entry.role}</span>
-                      <span className="td grow mono">{entry.urlPattern}</span>
-                      <span className="td">
-                        <Pill tone={TIER_TONE[entry.tier] ?? 'flat'}>{percent(entry.score)}</Pill>
-                      </span>
-                      <span className="td dim">{formatShortDate(entry.capturedAt)}</span>
-                      <span className="td act">
-                        <IconButton
-                          name="spark"
-                          title="İstatistik"
-                          onClick={() => void inspect(entry.id)}
-                          small
-                        />
-                        <IconButton
-                          name="trash"
-                          title="Sil"
-                          onClick={() => void drop(entry.id)}
-                          small
-                          danger
-                        />
-                      </span>
+                <div className="table-scroll">
+                  <div className="table wide">
+                    <div className="tr th">
+                      <span className="td grow">ad</span>
+                      <span className="td wide">etiket</span>
+                      <span className="td wide">rol</span>
+                      <span className="td grow">adres</span>
+                      <span className="td wide">kalite</span>
+                      <span className="td wide">tarih</span>
+                      <span className="td act" />
                     </div>
-                  ))}
+                    {rows.map((entry) => (
+                      <div key={entry.id} className="tr">
+                        <span className="td grow">{entry.name || entry.id.slice(0, 12)}</span>
+                        <span className="td wide dim">{entry.tag}</span>
+                        <span className="td wide dim">{entry.role}</span>
+                        <span className="td grow mono">{entry.urlPattern}</span>
+                        <span className="td wide">
+                          <Pill tone={TIER_TONE[entry.tier] ?? 'flat'}>{percent(entry.score)}</Pill>
+                        </span>
+                        <span className="td wide dim">{formatShortDate(entry.capturedAt)}</span>
+                        <span className="td act">
+                          <IconButton
+                            name="spark"
+                            title="İstatistik"
+                            onClick={() => void inspect(entry.id)}
+                            small
+                          />
+                          <IconButton
+                            name="trash"
+                            title="Sil"
+                            onClick={() => void drop(entry.id)}
+                            small
+                            danger
+                          />
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
-                <Empty glyph="target" text="Descriptor yok" />
+                <Empty
+                  glyph="target"
+                  text={filter ? 'Eşleşen descriptor yok' : 'Descriptor yok'}
+                  hint={
+                    filter
+                      ? 'Filtreyi temizleyerek tüm kimlik kataloğunu görebilirsiniz.'
+                      : 'Bir senaryo kaydettiğinizde yakalanan öğe kimlikleri burada toplanır.'
+                  }
+                />
               )}
             </>
           ) : null}
@@ -377,38 +395,48 @@ export default function IdentityPage({
                 ))}
               </div>
             ) : (
-              <Empty glyph="shield" text="Bekleyen onay yok" />
+              <Empty
+                glyph="shield"
+                text="Bekleyen onay yok"
+                hint="Otomatik onarım önerileri onay beklediğinde bu listede görünür."
+              />
             )
           ) : null}
 
           {tab === 'strategies' ? (
             strategyRows.length ? (
-              <div className="table">
-                <div className="tr th">
-                  <span className="td grow">strateji</span>
-                  <span className="td">deneme</span>
-                  <span className="td">tutan</span>
-                  <span className="td wide">başarı</span>
-                  <span className="td">son</span>
-                </div>
-                {strategyRows.map(({ kind, stat }) => (
-                  <div key={kind} className="tr">
-                    <span className="td grow">{kind}</span>
-                    <span className="td">{stat.attempts}</span>
-                    <span className="td">{stat.hits}</span>
-                    <span className="td wide">
-                      <Bar
-                        value={ratio(stat.hits, stat.attempts)}
-                        tone={ratio(stat.hits, stat.attempts) > 0.7 ? 'ok' : 'warn'}
-                      />
-                      {percent(ratio(stat.hits, stat.attempts))}
-                    </span>
-                    <span className="td dim">{formatShortDate(stat.lastSeenAt)}</span>
+              <div className="table-scroll">
+                <div className="table wide">
+                  <div className="tr th">
+                    <span className="td grow">strateji</span>
+                    <span className="td num">deneme</span>
+                    <span className="td num">tutan</span>
+                    <span className="td wide">başarı</span>
+                    <span className="td wide">son</span>
                   </div>
-                ))}
+                  {strategyRows.map(({ kind, stat }) => (
+                    <div key={kind} className="tr">
+                      <span className="td grow">{kind}</span>
+                      <span className="td num">{stat.attempts}</span>
+                      <span className="td num">{stat.hits}</span>
+                      <span className="td wide">
+                        <Bar
+                          value={ratio(stat.hits, stat.attempts)}
+                          tone={ratio(stat.hits, stat.attempts) > 0.7 ? 'ok' : 'warn'}
+                        />
+                        {percent(ratio(stat.hits, stat.attempts))}
+                      </span>
+                      <span className="td wide dim">{formatShortDate(stat.lastSeenAt)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
-              <Empty glyph="spark" text="Strateji istatistiği yok" />
+              <Empty
+                glyph="spark"
+                text="Strateji istatistiği yok"
+                hint="Senaryolar çalıştıkça hangi kimlik stratejisinin tuttuğu burada ölçülür."
+              />
             )
           ) : null}
         </Card>

@@ -22,21 +22,6 @@ export const PageHead = memo(function PageHead({
   )
 })
 
-export const Section = memo(function Section({
-  label,
-  children
-}: {
-  label: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <section className="form-group">
-      <span className="card-split">{label}</span>
-      {children}
-    </section>
-  )
-})
-
 export const Skeleton = memo(function Skeleton({ rows = 3 }: { rows?: number }): React.JSX.Element {
   return (
     <div className="skeleton-stack">
@@ -82,12 +67,14 @@ export const Card = memo(function Card({
   actions,
   scroll,
   grow,
+  flush,
   children
 }: {
   label: string
   actions?: React.ReactNode
   scroll?: boolean
   grow?: boolean
+  flush?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   return (
@@ -97,7 +84,9 @@ export const Card = memo(function Card({
         <span className="card-push" />
         {actions}
       </header>
-      <div className={'card-body' + (scroll ? ' scroll' : '')}>{children}</div>
+      <div className={'card-body' + (scroll ? ' scroll' : '') + (flush ? ' flush' : '')}>
+        {children}
+      </div>
     </section>
   )
 })

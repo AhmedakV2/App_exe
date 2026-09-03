@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import type { DataStats, OutboxSummary, ScenarioIndexRow } from '../../../main/data'
 import { Glyph, IconButton } from '../icons'
-import { Card, Empty, Metric, PageHead, Pill, TextButton } from '../ui'
+import { Card, Empty, Metric, PageHead, Pill, Skeleton, TextButton } from '../ui'
 import { formatBytes, formatShortDate } from '../format'
 import type { Report } from '../report'
 
@@ -107,6 +107,8 @@ export default function DataPage({
     }
   }, [load, onReport])
 
+  const loading = busy && !stats
+
   return (
     <div className="page">
       <PageHead
@@ -126,19 +128,14 @@ export default function DataPage({
               glyph="cloud"
               label="Kuyruğu gönder"
               onClick={() => void flush()}
-              disabled={busy}
+              busy={busy}
             />
-            <TextButton
-              glyph="link"
-              label="Eşitle"
-              onClick={() => void reconcile()}
-              disabled={busy}
-            />
+            <TextButton glyph="link" label="Eşitle" onClick={() => void reconcile()} busy={busy} />
             <TextButton
               glyph="broom"
               label="Temizle"
               onClick={() => void sweep()}
-              disabled={busy}
+              busy={busy}
               tone="danger"
             />
             <IconButton
@@ -168,27 +165,37 @@ export default function DataPage({
       </div>
 
       <div className="page-body cols-2">
-        <Card label="Senaryo indeksi" scroll grow>
-          {scenarios.length ? (
-            <div className="table">
-              <div className="tr th">
-                <span className="td grow">senaryo</span>
-                <span className="td">adım</span>
-                <span className="td">şema</span>
-                <span className="td">güncelleme</span>
-              </div>
-              {scenarios.map((entry) => (
-                <div key={entry.id} className="tr">
-                  <span className="td grow">{entry.title}</span>
-                  <span className="td">{entry.steps}</span>
-                  <span className="td dim mono">{entry.schemaVersion}</span>
-                  <span className="td dim">{formatShortDate(entry.updatedAt)}</span>
+        <Card label="Senaryo indeksi" grow>
+          {loading ? <Skeleton rows={6} /> : null}
+
+          {!loading && scenarios.length ? (
+            <div className="table-scroll">
+              <div className="table wide">
+                <div className="tr th">
+                  <span className="td grow">senaryo</span>
+                  <span className="td num">adım</span>
+                  <span className="td num">şema</span>
+                  <span className="td wide">güncelleme</span>
                 </div>
-              ))}
+                {scenarios.map((entry) => (
+                  <div key={entry.id} className="tr">
+                    <span className="td grow">{entry.title}</span>
+                    <span className="td num">{entry.steps}</span>
+                    <span className="td num dim mono">{entry.schemaVersion}</span>
+                    <span className="td wide dim">{formatShortDate(entry.updatedAt)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ) : (
-            <Empty glyph="library" text="Senaryo yok" />
-          )}
+          ) : null}
+
+          {!loading && !scenarios.length ? (
+            <Empty
+              glyph="library"
+              text="İndekste senaryo yok"
+              hint="Senaryolar sekmesinden bir senaryo kaydettiğinizde burada listelenir."
+            />
+          ) : null}
         </Card>
 
         <Card label="Depo" scroll>
@@ -214,7 +221,12 @@ export default function DataPage({
                 </div>
               ))}
             </div>
-          ) : null}
+          ) : (
+            <div className="note ok">
+              <Glyph name="check" size={12} />
+              Bütünlük sorunu bulunmadı
+            </div>
+          )}
         </Card>
       </div>
     </div>
