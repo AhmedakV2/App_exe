@@ -158,6 +158,26 @@ export const Field = memo(function Field({
   )
 })
 
+export const FieldRow = memo(function FieldRow({
+  label,
+  hint,
+  children
+}: {
+  label: string
+  hint?: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <label className="form-row">
+      <span className="field-label">{label}</span>
+      <span className="form-control">
+        {children}
+        {hint ? <span className="field-hint">{hint}</span> : null}
+      </span>
+    </label>
+  )
+})
+
 export const Toggle = memo(function Toggle({
   label,
   checked,

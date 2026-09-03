@@ -761,18 +761,53 @@ textarea {
 
 .form-row {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  align-items: center;
-  gap: var(--sp-4);
+  grid-template-columns: 128px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-3) var(--sp-4);
   min-width: 0;
 }
 
 .form-row > .field-label {
-  padding-top: 0;
+  min-height: var(--field-h);
+  display: flex;
+  align-items: center;
+}
+
+.form-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.form-control > input,
+.form-control > select {
+  width: 100%;
+}
+
+.form-row.wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.form-row.wide > .field-label {
+  min-height: 0;
+}
+
+@container (max-width: 340px) {
+  .form-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-2);
+  }
+
+  .form-row > .field-label {
+    min-height: 0;
+  }
 }
 
 .field input,
 .field select,
+.form-control input,
+.form-control select,
 .picker,
 .rec-field input,
 .rec-name,
@@ -793,6 +828,8 @@ textarea {
 
 .field input:hover,
 .field select:hover,
+.form-control input:hover,
+.form-control select:hover,
 .picker:hover,
 .rec-field input:hover,
 .rec-name:hover {
@@ -801,6 +838,8 @@ textarea {
 
 .field input:focus,
 .field select:focus,
+.form-control input:focus,
+.form-control select:focus,
 .picker:focus,
 .rec-field input:focus,
 .rec-name:focus {
@@ -808,6 +847,7 @@ textarea {
   box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
+.form-control input[type='number'],
 .field input[type='number'] {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
@@ -1598,7 +1638,7 @@ textarea {
 }
 
 .page-body.cols-3 > .card:last-child {
-  flex: 0 0 344px;
+  flex: 0 0 400px;
 }
 
 .page-body.cols-2 > .card.grow,
@@ -1622,6 +1662,7 @@ textarea {
 }
 
 .card-body {
+  container-type: inline-size;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1648,13 +1689,38 @@ textarea {
 }
 
 .card-split {
-  margin-top: var(--sp-1);
-  padding-top: var(--sp-3);
-  border-top: var(--hair) solid var(--line);
-  font: 650 var(--fs-micro) var(--ui);
+  padding-bottom: var(--sp-2);
+  border-bottom: var(--hair) solid var(--line);
+  font: 500 var(--fs-meta) var(--ui);
   letter-spacing: var(--track);
   text-transform: uppercase;
   color: var(--faint);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.form-group + .form-group {
+  margin-top: var(--sp-6);
+}
+
+.form-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding-bottom: var(--sp-2);
+  border-bottom: var(--hair) solid var(--line);
+}
+
+.form-head > .card-split {
+  flex: 1;
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .metric-row {
@@ -2037,6 +2103,7 @@ textarea {
   gap: var(--sp-2) var(--sp-4);
   padding: var(--sp-3);
   background: var(--field);
+  border: var(--hair) solid var(--line);
   border-radius: var(--r);
 }
 
@@ -2045,9 +2112,7 @@ textarea {
 }
 
 .kv-key {
-  font: 600 var(--fs-micro) var(--ui);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font: 400 var(--fs-meta) var(--ui);
   color: var(--faint);
   white-space: nowrap;
 }
@@ -2148,9 +2213,15 @@ textarea {
 
 .step-actions {
   display: flex;
-  gap: 3px;
-  padding-bottom: var(--sp-2);
-  border-bottom: var(--hair) solid var(--line);
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.step-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
 }
 
 .run-step {
