@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FragileStep, HealthSummary, RunRow } from '../../../main/data'
-import { Glyph, IconButton } from '../icons'
-import { Bar, Card, Empty, Metric, PageHead, Pill, Segmented } from '../ui'
+import { IconButton } from '../icons'
+import { Card, Empty, Metric, PageHead, Pill, Segmented } from '../ui'
 import { DonutChart, Legend, Sparkline, StackChart, TrendChart } from '../parts/Charts'
 import type { ChartBucket, ChartSeries, DonutSlice, TrendPoint } from '../parts/Charts'
 import { formatMs, formatShortDate, percent, ratio } from '../format'
@@ -51,15 +51,6 @@ interface Slot {
   to: number
   passed: number
   failed: number
-}
-
-interface ScenarioStat {
-  id: string
-  title: string
-  runs: number
-  passed: number
-  meanMs: number
-  lastAt: number
 }
 
 function pad(value: number): string {
@@ -263,31 +254,6 @@ export default function StatsPage({
     return SPANS.map((span, at) => ({ key: span.key, label: span.label, values: [counts[at]] }))
   }, [scoped])
 
-  const scenarios = useMemo<ScenarioStat[]>(() => {
-    const map = new Map<string, ScenarioStat & { totalMs: number }>()
-
-    for (const run of scoped) {
-      const entry = map.get(run.scenarioId) ?? {
-        id: run.scenarioId,
-        title: run.scenarioTitle,
-        runs: 0,
-        passed: 0,
-        meanMs: 0,
-        lastAt: 0,
-        totalMs: 0
-      }
-      entry.runs += 1
-      entry.passed += run.ok ? 1 : 0
-      entry.totalMs += run.totalMs
-      entry.lastAt = Math.max(entry.lastAt, run.startedAt)
-      map.set(run.scenarioId, entry)
-    }
-
-    return [...map.values()]
-      .map((entry) => ({ ...entry, meanMs: entry.runs ? entry.totalMs / entry.runs : 0 }))
-      .sort((a, b) => ratio(a.passed, a.runs) - ratio(b.passed, b.runs) || b.runs - a.runs)
-  }, [scoped])
-
   const empty = Boolean(now) && !runs.length
 
   return (
@@ -365,7 +331,7 @@ export default function StatsPage({
             </div>
           </div>
 
-          <div className="stat-row tall">
+          <div className="stat-row">
             <Card
               label="Koşum hacmi"
               grow
@@ -380,8 +346,8 @@ export default function StatsPage({
                 <div className="table scroll-y">
                   <div className="tr th">
                     <span className="td grow">dönem</span>
-                    <span className="td num">başarılı</span>
-                    <span className="td num">başarısız</span>
+                    <span className="td num">geçen</span>
+                    <span className="td num">kalan</span>
                     <span className="td num">oran</span>
                   </div>
                   {slots.map((slot) => (
@@ -405,7 +371,7 @@ export default function StatsPage({
             </Card>
           </div>
 
-          <div className="stat-row tall">
+          <div className="stat-row">
             <Card
               label="Başarı oranı eğilimi"
               grow
@@ -439,72 +405,7 @@ export default function StatsPage({
             </Card>
 
             <Card label="Süre dağılımı" side>
-              <StackChart buckets={spans} series={SPAN_SERIES} />
-            </Card>
-          </div>
-
-          <div className="stat-row tall">
-            <Card label="Senaryo başarımı" grow scroll>
-              {scenarios.length ? (
-                <div className="table">
-                  <div className="tr th">
-                    <span className="td grow">senaryo</span>
-                    <span className="td wide">başarı</span>
-                    <span className="td num">koşum</span>
-                    <span className="td date">ort. süre</span>
-                    <span className="td date">son</span>
-                  </div>
-                  {scenarios.map((entry) => {
-                    const rate = ratio(entry.passed, entry.runs)
-                    return (
-                      <div key={entry.id} className="tr">
-                        <span className="td grow">{entry.title}</span>
-                        <span className="td wide">
-                          <Bar
-                            value={rate}
-                            tone={rate >= 0.9 ? 'ok' : rate >= 0.6 ? 'warn' : 'bad'}
-                          />
-                          {percent(rate)}
-                        </span>
-                        <span className="td num dim">{entry.runs}</span>
-                        <span className="td date dim">{formatMs(entry.meanMs)}</span>
-                        <span className="td date dim">{formatShortDate(entry.lastAt)}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <Empty glyph="library" text="Bu aralıkta senaryo koşumu yok" />
-              )}
-            </Card>
-
-            <Card label="Kırılgan adımlar" side scroll>
-              {fragile.length ? (
-                <div className="table">
-                  <div className="tr th">
-                    <span className="td grow">adım</span>
-                    <span className="td num">deneme</span>
-                    <span className="td">güven</span>
-                  </div>
-                  {fragile.slice(0, 20).map((step) => (
-                    <div key={step.descriptorId} className="tr">
-                      <span className="td grow">{step.title || step.descriptorId}</span>
-                      <span className="td num dim">{step.attempts}</span>
-                      <span className="td">
-                        <Pill tone={step.meanConfidence >= 0.8 ? 'ok' : 'warn'}>
-                          {percent(step.meanConfidence)}
-                        </Pill>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="center">
-                  <span className="hero-note">
-                    <Glyph name="check" size={13} /> Kırılgan adım yok
-                  </span>
-                </div>
-              )}
+              <StackChart buckets={spans} series={SPAN_SERIES} dense />
             </Card>
           </div>
         </div>
