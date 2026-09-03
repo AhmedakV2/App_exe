@@ -192,7 +192,7 @@ export default function ResultPage({
               }}
               aria-label="Senaryo süzgeci"
             >
-              <option value="">tüm senaryolar</option>
+              <option value="">Tüm senaryolar</option>
               {scenarios.map((entry) => (
                 <option key={entry.id} value={entry.id}>
                   {entry.title}

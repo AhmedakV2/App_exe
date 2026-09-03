@@ -30,7 +30,7 @@ import { HOME_URL, isHomeUrl, mountHome, registerHomeScheme, setHomeTheme } from
 
 const FRAME = 40
 const STAGE_RADIUS = 8
-const FRAME_COLOR = '#1e1f22'
+const FRAME_COLOR = '#101114'
 const AGENT_PARTITION = 'persist:aft-agent'
 const DRAG_TICK = 16
 const DRAG_MAX_MS = 30000

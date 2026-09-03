@@ -36,7 +36,7 @@ export default memo(function ElementList({
   return (
     <section className="panel" style={{ width }}>
       <header className="panel-head">
-        <span className="panel-title">ÖĞELER</span>
+        <span className="panel-title">Öğeler</span>
         <span className="panel-count">{rows.length}</span>
         <span className="panel-push" />
         <button
