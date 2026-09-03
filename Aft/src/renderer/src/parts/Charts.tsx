@@ -37,12 +37,18 @@ interface Hover {
   y: number
 }
 
-const PAD_TOP = 16
+const PAD_TOP = 10
 const PAD_RIGHT = 12
-const PAD_BOTTOM = 22
+const PAD_BOTTOM = 18
+const MIN_PLOT = 24
+const TIGHT_PLOT = 110
 const PAD_LEFT = 42
 const TREND_RIGHT = 28
 const TIP_FLIP = 86
+const DONUT_MIN = 84
+const DONUT_MAX = 156
+const LEGEND_ROOM = 160
+const RING = 14
 const BAR_MAX = 24
 const GAP = 2
 const RADIUS = 4
@@ -126,9 +132,9 @@ function columnPath(x: number, y: number, width: number, height: number, round: 
   )
 }
 
-function labelStep(count: number, width: number): number {
-  if (count <= 6) return 1
-  const room = Math.max(1, Math.floor(width / 64))
+function labelStep(count: number, width: number, chars: number, dense: boolean): number {
+  const need = chars * 5.2 + (dense ? 10 : 38)
+  const room = Math.max(1, Math.floor(width / need))
   return Math.max(1, Math.ceil(count / room))
 }
 
@@ -176,12 +182,14 @@ export const StackChart = memo(function StackChart({
   buckets,
   series,
   format,
-  cap
+  cap,
+  dense
 }: {
   buckets: ChartBucket[]
   series: ChartSeries[]
   format?: (value: number) => string
   cap?: boolean
+  dense?: boolean
 }): React.JSX.Element {
   const { ref, size } = useBoxSize()
   const [hover, setHover] = useState<Hover | null>(null)
@@ -194,14 +202,24 @@ export const StackChart = memo(function StackChart({
 
   const plotWidth = size.width - PAD_LEFT - PAD_RIGHT
   const plotHeight = size.height - PAD_TOP - PAD_BOTTOM
-  const ready = plotWidth > 40 && plotHeight > 40 && buckets.length > 0
+  const ready = plotWidth > 40 && plotHeight > MIN_PLOT && buckets.length > 0
 
-  const ticks = useMemo(() => niceTicks(Math.max(1, ...totals)), [totals])
+  const ticks = useMemo(
+    () => niceTicks(Math.max(1, ...totals), plotHeight < TIGHT_PLOT ? 2 : 4),
+    [plotHeight, totals]
+  )
   const top = ticks[ticks.length - 1] || 1
   const band = ready ? plotWidth / buckets.length : 0
   const barWidth = Math.min(BAR_MAX, Math.max(3, band - GAP * 3))
   const baseline = PAD_TOP + plotHeight
-  const skip = ready ? labelStep(buckets.length, plotWidth) : 1
+  const skip = ready
+    ? labelStep(
+        buckets.length,
+        plotWidth,
+        buckets.reduce((long, bucket) => Math.max(long, bucket.label.length), 0),
+        Boolean(dense)
+      )
+    : 1
   const active = hover ? buckets[hover.index] : null
 
   return (
@@ -320,13 +338,20 @@ export const TrendChart = memo(function TrendChart({
 
   const plotWidth = size.width - PAD_LEFT - TREND_RIGHT
   const plotHeight = size.height - PAD_TOP - PAD_BOTTOM
-  const ready = plotWidth > 40 && plotHeight > 40 && points.length > 1
+  const ready = plotWidth > 40 && plotHeight > MIN_PLOT && points.length > 1
 
-  const ticks = useMemo(() => niceTicks(top), [top])
+  const ticks = useMemo(() => niceTicks(top, plotHeight < TIGHT_PLOT ? 2 : 4), [plotHeight, top])
   const ceiling = ticks[ticks.length - 1] || 1
   const baseline = PAD_TOP + plotHeight
   const stepX = ready ? plotWidth / (points.length - 1) : 0
-  const skip = ready ? labelStep(points.length, plotWidth) : 1
+  const skip = ready
+    ? labelStep(
+        points.length,
+        plotWidth,
+        points.reduce((long, point) => Math.max(long, point.label.length), 0),
+        false
+      )
+    : 1
 
   const xOf = (index: number): number => PAD_LEFT + stepX * index
   const yOf = (value: number): number => baseline - (value / ceiling) * plotHeight
@@ -387,7 +412,7 @@ export const TrendChart = memo(function TrendChart({
                 className="axis-text"
                 x={xOf(index)}
                 y={size.height - 6}
-                textAnchor="middle"
+                textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'}
                 fill={INK}
               >
                 {entry.label}
@@ -473,59 +498,64 @@ export const TrendChart = memo(function TrendChart({
 
 export const DonutChart = memo(function DonutChart({
   slices,
-  caption,
-  size = 148
+  caption
 }: {
   slices: DonutSlice[]
   caption: string
-  size?: number
 }): React.JSX.Element {
+  const { ref, size } = useBoxSize()
   const total = slices.reduce((sum, slice) => sum + slice.value, 0)
-  const radius = size / 2 - 12
+  const box = Math.round(
+    Math.min(DONUT_MAX, Math.max(DONUT_MIN, Math.min(size.height, size.width - LEGEND_ROOM)))
+  )
+  const ready = size.width > 0 && size.height > 0
+  const radius = box / 2 - RING / 2 - 2
   const circumference = 2 * Math.PI * radius
   let offset = 0
 
   return (
-    <div className="donut-wrap">
-      <div className="donut" style={{ width: size, height: size }}>
-        <svg width={size} height={size} role="img">
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke={GRID}
-            strokeWidth="14"
-          />
-          {total
-            ? slices.map((slice) => {
-                if (slice.value <= 0) return null
-                const length = (slice.value / total) * circumference
-                const dash = Math.max(1, length - GAP * 2)
-                const node = (
-                  <circle
-                    key={slice.id}
-                    cx={size / 2}
-                    cy={size / 2}
-                    r={radius}
-                    fill="none"
-                    stroke={slice.color}
-                    strokeWidth="14"
-                    strokeDasharray={dash + ' ' + (circumference - dash)}
-                    strokeDashoffset={-offset}
-                    transform={'rotate(-90 ' + size / 2 + ' ' + size / 2 + ')'}
-                  />
-                )
-                offset += length
-                return node
-              })
-            : null}
-        </svg>
-        <span className="donut-mid">
-          <span className="donut-value">{total}</span>
-          <span className="donut-note">{caption}</span>
-        </span>
-      </div>
+    <div className="donut-wrap" ref={ref}>
+      {ready ? (
+        <div className="donut" style={{ width: box, height: box }}>
+          <svg width={box} height={box} role="img">
+            <circle
+              cx={box / 2}
+              cy={box / 2}
+              r={radius}
+              fill="none"
+              stroke={GRID}
+              strokeWidth={RING}
+            />
+            {total
+              ? slices.map((slice) => {
+                  if (slice.value <= 0) return null
+                  const length = (slice.value / total) * circumference
+                  const dash = Math.max(1, length - GAP * 2)
+                  const node = (
+                    <circle
+                      key={slice.id}
+                      cx={box / 2}
+                      cy={box / 2}
+                      r={radius}
+                      fill="none"
+                      stroke={slice.color}
+                      strokeWidth={RING}
+                      strokeDasharray={dash + ' ' + (circumference - dash)}
+                      strokeDashoffset={-offset}
+                      transform={'rotate(-90 ' + box / 2 + ' ' + box / 2 + ')'}
+                    />
+                  )
+                  offset += length
+                  return node
+                })
+              : null}
+          </svg>
+          <span className="donut-mid">
+            <span className="donut-value">{total}</span>
+            <span className="donut-note">{caption}</span>
+          </span>
+        </div>
+      ) : null}
 
       <div className="chart-legend column">
         {slices.map((slice) => (

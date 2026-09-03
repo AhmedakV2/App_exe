@@ -3253,9 +3253,7 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: var(--gap);
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 2px;
+  overflow: hidden;
   transition: opacity 120ms linear;
 }
 
@@ -3277,9 +3275,10 @@ textarea {
 
 .stat-row {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 1 0;
   gap: var(--gap);
   min-width: 0;
+  min-height: 0;
 }
 
 .stat-row > .card {
@@ -3289,10 +3288,6 @@ textarea {
 
 .stat-row > .card.side {
   flex: 0 0 344px;
-}
-
-.stat-row.tall > .card {
-  height: 288px;
 }
 
 .stat-hero {
@@ -3478,6 +3473,7 @@ textarea {
   gap: var(--sp-4);
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
 }
 
 .donut {
@@ -3517,13 +3513,12 @@ textarea {
 }
 
 @media (max-width: 1180px) {
-  .stat-band,
-  .stat-row {
-    flex-wrap: wrap;
+  .stat-hero {
+    flex: 0 0 216px;
   }
 
   .stat-row > .card.side {
-    flex: 1 1 280px;
+    flex: 0 0 260px;
   }
 }
 
