@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import type { ScanReport } from '../../../main/browser/types'
 import { IconButton } from '../icons'
-import { Card, Empty, Metric, PageHead, Pill, Segmented, Skeleton } from '../ui'
+import { Card, Empty, Metric, PageHead, Pill, Segmented } from '../ui'
 import { formatMs, shortUrl } from '../format'
 import type { Report } from '../report'
 
@@ -118,57 +118,49 @@ export default function CoveragePage({
       ) : null}
 
       <div className="page-body cols-2">
-        <Card label="Erişilemeyen bölgeler" grow>
-          {busy && !report ? <Skeleton rows={5} /> : null}
-
+        <Card label="Erişilemeyen bölgeler" scroll grow>
           {report && report.blindSpots.length ? (
             <div className="table-scroll">
               <div className="table wide">
                 <div className="tr th">
-                  <span className="td wide">tür</span>
+                  <span className="td">tür</span>
                   <span className="td grow">ayrıntı</span>
-                  <span className="td wide">çerçeve</span>
+                  <span className="td">çerçeve</span>
                 </div>
                 {report.blindSpots.map((spot, index) => (
                   <div key={index} className="tr">
-                    <span className="td wide">
+                    <span className="td">
                       <Pill tone="warn">{SPOT_LABELS[spot.kind] ?? spot.kind}</Pill>
                     </span>
                     <span className="td grow">{spot.detail}</span>
-                    <span className="td wide dim mono">{spot.frameId.slice(0, 10)}</span>
+                    <span className="td dim mono">{spot.frameId.slice(0, 10)}</span>
                   </div>
                 ))}
               </div>
             </div>
-          ) : null}
-
-          {!busy && (!report || !report.blindSpots.length) ? (
+          ) : (
             <Empty
               glyph="layers"
-              text={report ? 'Kör nokta bulunmadı' : 'Henüz tarama yapılmadı'}
-              hint={
-                report
-                  ? 'Seçilen seviyede sayfanın tamamı erişilebilir durumda.'
-                  : 'Bir seviye seçip sağ üstteki tara düğmesiyle kapsam raporu üretin.'
-              }
+              text="Kör nokta bulunmadı"
+              hint="Seçilen seviyede sayfanın tamamı erişilebilir durumda ya da henüz tarama yapılmadı."
             />
-          ) : null}
+          )}
         </Card>
 
-        <Card label="Çerçeveler">
+        <Card label="Çerçeveler" scroll>
           {report && report.frames.length ? (
             <div className="table-scroll">
               <div className="table wide">
                 <div className="tr th">
-                  <span className="td num">derinlik</span>
+                  <span className="td">derinlik</span>
                   <span className="td grow">adres</span>
-                  <span className="td wide">durum</span>
+                  <span className="td">durum</span>
                 </div>
                 {report.frames.map((frame) => (
                   <div key={frame.id} className="tr">
-                    <span className="td num">{frame.depth}</span>
+                    <span className="td">{frame.depth}</span>
                     <span className="td grow mono">{shortUrl(frame.url) || '—'}</span>
-                    <span className="td wide">
+                    <span className="td">
                       <Pill tone={frame.failed ? 'bad' : 'ok'}>
                         {frame.failed ? 'bağlanamadı' : 'bağlı'}
                       </Pill>
@@ -188,28 +180,24 @@ export default function CoveragePage({
       </div>
 
       {report ? (
-        <section className="card">
-          <div className="card-body">
-            <div className="kv wide">
-              <span className="kv-key">şema</span>
-              <span className="kv-val mono">{coverage?.version}</span>
-              <span className="kv-key">görünüm</span>
-              <span className="kv-val mono">
-                {report.viewport.width} × {report.viewport.height} · {report.viewport.pageHeight}
-              </span>
-              <span className="kv-key">engel kontrolü</span>
-              <span className="kv-val">
-                {coverage?.occlusionChecked} /{' '}
-                {(coverage?.occlusionChecked ?? 0) + (coverage?.occlusionSkipped ?? 0)}
-              </span>
-              <span className="kv-key">dinleyici</span>
-              <span className="kv-val">
-                {coverage?.listenersProbed} /{' '}
-                {(coverage?.listenersProbed ?? 0) + (coverage?.listenersSkipped ?? 0)}
-              </span>
-            </div>
-          </div>
-        </section>
+        <div className="kv wide">
+          <span className="kv-key">şema</span>
+          <span className="kv-val mono">{coverage?.version}</span>
+          <span className="kv-key">görünüm</span>
+          <span className="kv-val mono">
+            {report.viewport.width} × {report.viewport.height} · {report.viewport.pageHeight}
+          </span>
+          <span className="kv-key">engel kontrolü</span>
+          <span className="kv-val">
+            {coverage?.occlusionChecked} /{' '}
+            {(coverage?.occlusionChecked ?? 0) + (coverage?.occlusionSkipped ?? 0)}
+          </span>
+          <span className="kv-key">dinleyici</span>
+          <span className="kv-val">
+            {coverage?.listenersProbed} /{' '}
+            {(coverage?.listenersProbed ?? 0) + (coverage?.listenersSkipped ?? 0)}
+          </span>
+        </div>
       ) : null}
     </div>
   )

@@ -564,7 +564,7 @@ export default function RecordPanel({
         <span className={'rec-state ' + status}>{STATUS_LABELS[status]}</span>
       </div>
 
-      {summary.length || view?.baseUrl ? (
+      {summary.length || view?.baseUrl || live ? (
         <div className="dock-block">
           {summary.length ? (
             <div className="dock-stats">
@@ -577,6 +577,9 @@ export default function RecordPanel({
             </div>
           ) : null}
           {view?.baseUrl ? <span className="dock-meta">{shortUrl(view.baseUrl)}</span> : null}
+          {live && view?.options.captureHover ? (
+            <span className="dock-meta">imleç adımı için sayfada Ctrl + Shift + M</span>
+          ) : null}
         </div>
       ) : null}
 
