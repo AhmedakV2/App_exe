@@ -10,8 +10,7 @@ import type {
 import { isThemeId, paintTheme, readTheme, storeTheme, themeOf } from './themes'
 import type { ThemeId } from './themes'
 import { Glyph, IconButton } from './icons'
-import { clamp, formatMs, shortUrl, toUrl } from './format'
-import { isHomeUrl } from '../../main/home/search'
+import { clamp, formatMs } from './format'
 import { useConsole } from './useConsole'
 import type { Report } from './report'
 import BrowserPage from './pages/BrowserPage'
@@ -21,6 +20,7 @@ import ResultPage from './pages/ResultPage'
 import IdentityPage from './pages/IdentityPage'
 import CoveragePage from './pages/CoveragePage'
 import DataPage from './pages/DataPage'
+import Drawer from './parts/Drawer'
 
 type PageId = 'browser' | 'scenarios' | 'results' | 'identity' | 'coverage' | 'data'
 
@@ -54,6 +54,7 @@ const TERM_KEY = 'aft:term-height'
 const DOCK_KEY = 'aft:dock-width'
 const DOCK_TAB_KEY = 'aft:dock-tab'
 const PAGE_KEY = 'aft:page'
+const RAIL_KEY = 'aft:rail-mini'
 const AUTO_TERM_KEY = 'aft:auto-terminal'
 const AUTO_BACK_KEY = 'aft:auto-terminal-restore'
 
@@ -134,7 +135,7 @@ function readDock(): DockTab {
 const Brand = memo(function Brand(): React.JSX.Element {
   return (
     <span className="brand" title="AFT">
-      <svg width="26" height="26" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
         <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
       </svg>
     </span>
@@ -160,14 +161,14 @@ export default function App(): React.JSX.Element {
   const [page, setPage] = useState<PageId>(() => readPage())
   const [listOpen, setListOpen] = useState(false)
   const [drag, setDrag] = useState<DragAxis | null>(null)
-  const [urlFocused, setUrlFocused] = useState(false)
-  const [urlDraft, setUrlDraft] = useState('')
   const [recording, setRecording] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [library, setLibrary] = useState(0)
   const [runRequest, setRunRequest] = useState('')
   const [focusSeed, setFocusSeed] = useState(0)
+  const [urlSeed, setUrlSeed] = useState(0)
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
+  const [railMini, setRailMini] = useState(() => readFlag(RAIL_KEY, false))
   const [autoTerm, setAutoTerm] = useState(() => readFlag(AUTO_TERM_KEY, true))
   const [autoBack, setAutoBack] = useState(() => readFlag(AUTO_BACK_KEY, false))
   const [listWidth, setListWidth] = useState(() => readSize(LIST_KEY, LIST_SIZE))
@@ -180,7 +181,6 @@ export default function App(): React.JSX.Element {
   const term = useConsole()
   const { push: pushLine, absorb: absorbResult } = term
 
-  const urlRef = useRef<HTMLInputElement | null>(null)
   const spaceRef = useRef<HTMLDivElement | null>(null)
   const stageBoxRef = useRef<StageBox | null>(null)
   const dragRef = useRef<DragAxis | null>(null)
@@ -254,6 +254,10 @@ export default function App(): React.JSX.Element {
       return
     }
   }, [dock, page])
+
+  useEffect(() => {
+    storeFlag(RAIL_KEY, railMini)
+  }, [railMini])
 
   useEffect(() => {
     window.aft.setStageShown(hasStage)
@@ -347,7 +351,10 @@ export default function App(): React.JSX.Element {
   }, [pushLine])
 
   useEffect(() => {
-    return window.aft.onFocusUrl(() => urlRef.current?.focus())
+    return window.aft.onFocusUrl(() => {
+      setPage('browser')
+      setUrlSeed((prev) => prev + 1)
+    })
   }, [])
 
   useEffect(() => {
@@ -412,14 +419,6 @@ export default function App(): React.JSX.Element {
   const nav = useCallback((kind: NavKind): void => window.aft.nav(kind), [])
   const winAction = useCallback((action: WindowAction): void => window.aft.window(action), [])
 
-  const goBack = useCallback(() => nav('back'), [nav])
-  const goForward = useCallback(() => nav('forward'), [nav])
-  const goHome = useCallback(() => nav('home'), [nav])
-  const refreshPage = useCallback(
-    () => nav(state.loading ? 'stop' : 'reload'),
-    [nav, state.loading]
-  )
-
   const minimizeWindow = useCallback(() => winAction('minimize'), [winAction])
   const maximizeWindow = useCallback(() => winAction('maximize'), [winAction])
   const closeWindow = useCallback(() => winAction('close'), [winAction])
@@ -433,16 +432,22 @@ export default function App(): React.JSX.Element {
     })
   }, [])
 
-  const toggleTerminal = useCallback((): void => {
-    setPage('browser')
+  const toggleDrawer = useCallback((): void => {
     window.aft.setTerminal(!terminalOpen)
   }, [terminalOpen])
 
-  const closeTerminal = useCallback((): void => window.aft.setTerminal(false), [])
+  const closeDrawer = useCallback((): void => window.aft.setTerminal(false), [])
+
+  const openPalette = useCallback((): void => {
+    if (!terminalOpen) window.aft.setTerminal(true)
+    setFocusSeed((prev) => prev + 1)
+  }, [terminalOpen])
 
   const toggleSettings = useCallback((): void => {
     window.aft.setSettings(!settingsOpen)
   }, [settingsOpen])
+
+  const toggleRail = useCallback((): void => setRailMini((prev) => !prev), [])
 
   const beginDrag = useCallback(
     (axis: DragAxis, event: React.PointerEvent<HTMLDivElement>): void => {
@@ -541,36 +546,7 @@ export default function App(): React.JSX.Element {
     }
   }, [absorbResult, pushLine, state.vision])
 
-  const onUrlFocus = useCallback((): void => {
-    setUrlFocused(true)
-    setUrlDraft(isHomeUrl(state.url) ? '' : state.url)
-    requestAnimationFrame(() => urlRef.current?.select())
-  }, [state.url])
-
-  const onUrlBlur = useCallback((): void => {
-    setUrlFocused(false)
-    setUrlDraft('')
-  }, [])
-
-  const onUrlKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        urlRef.current?.blur()
-        return
-      }
-
-      if (event.key !== 'Enter') return
-      event.preventDefault()
-
-      const url = toUrl(urlDraft)
-      if (!url) return
-
-      urlRef.current?.blur()
-      runAction({ action: 'go_to_url', url })
-    },
-    [runAction, urlDraft]
-  )
+  const onVision = useCallback((): void => void toggleVision(), [toggleVision])
 
   const status = useMemo(() => {
     if (recording) return { label: 'kayıtta', tone: 'rec' }
@@ -580,60 +556,24 @@ export default function App(): React.JSX.Element {
   }, [playing, recording, state.loading])
 
   return (
-    <div className={'shell' + (drag ? ' drag-' + drag : '')}>
-      <header className="shell-bar">
-        <div className="bar-left">
+    <div className={'shell' + (drag ? ' drag-' + drag : '') + (railMini ? ' rail-mini' : '')}>
+      <header className="titlebar">
+        <div className="title-brand">
           <Brand />
-
-          {hasStage ? (
-            <>
-              <IconButton name="back" title="Geri" onClick={goBack} disabled={!state.canGoBack} />
-              <IconButton
-                name="forward"
-                title="İleri"
-                onClick={goForward}
-                disabled={!state.canGoForward}
-              />
-              <IconButton
-                name={state.loading ? 'stop' : 'reload'}
-                title={state.loading ? 'Durdur' : 'Yenile'}
-                onClick={refreshPage}
-              />
-              <IconButton name="home" title="Ana sayfa" onClick={goHome} />
-              <IconButton
-                name={state.vision ? 'eye' : 'eyeOff'}
-                title="Görüş"
-                onClick={() => void toggleVision()}
-                active={state.vision}
-                badge={state.vision ? term.elements.length : 0}
-              />
-            </>
-          ) : null}
+          <span className="title-name">AFT</span>
         </div>
 
-        <div className="bar-drag" onDoubleClick={maximizeWindow} />
+        <div className="title-drag" onDoubleClick={maximizeWindow} />
 
-        {hasStage ? (
-          <div className={'omnibox' + (urlFocused ? ' focused' : '')}>
-            <input
-              ref={urlRef}
-              className="omni-input"
-              value={urlFocused ? urlDraft : shortUrl(state.url)}
-              onChange={(event) => setUrlDraft(event.target.value)}
-              onFocus={onUrlFocus}
-              onBlur={onUrlBlur}
-              onKeyDown={onUrlKeyDown}
-              placeholder="Adres"
-              spellCheck={false}
-              aria-label="Adres çubuğu"
-            />
-            {state.loading ? <span className="omni-load" /> : null}
-          </div>
-        ) : null}
+        <button className="cmd-trigger" onClick={openPalette} type="button">
+          <Glyph name="search" size={13} />
+          <span className="cmd-text">Komut çalıştır veya ara</span>
+          <span className="cmd-key">Ctrl K</span>
+        </button>
 
-        <div className="bar-drag" onDoubleClick={maximizeWindow} />
+        <div className="title-drag" onDoubleClick={maximizeWindow} />
 
-        <div className="bar-right">
+        <div className="title-win">
           <IconButton name="minimize" title="Küçült" onClick={minimizeWindow} small />
           <IconButton
             name={state.maximized ? 'restore' : 'maximize'}
@@ -645,114 +585,143 @@ export default function App(): React.JSX.Element {
         </div>
       </header>
 
-      <aside className="shell-side">
-        <div className="rail-group">
+      <aside className="sidebar">
+        <span className="rail-label">Çalışma alanı</span>
+
+        <nav className="rail-group" aria-label="Ana gezinme">
           {NAV.map((item) => {
-            const on = item.suite ? Boolean(dock) : item.id === page
+            const on = item.suite ? Boolean(dock) : item.id === page && !item.suite
             return (
               <button
                 key={item.label}
-                className={'nav-btn' + (on ? ' sel' : '')}
+                className={'nav-item' + (on ? ' sel' : '')}
                 title={item.label}
-                aria-label={item.label}
                 aria-pressed={on}
                 onClick={() => pick(item)}
                 type="button"
               >
-                <Glyph name={item.glyph} size={19} />
+                <Glyph name={item.glyph} size={16} />
+                <span className="nav-text">{item.label}</span>
                 {item.suite && recording ? <span className="nav-dot rec" /> : null}
                 {item.suite && !recording && playing ? <span className="nav-dot run" /> : null}
               </button>
             )
           })}
-        </div>
+        </nav>
 
         <span className="rail-gap" />
 
-        <div className="rail-group">
+        <span className="rail-label">Araçlar</span>
+
+        <nav className="rail-group" aria-label="Yardımcı araçlar">
           <button
-            className={'nav-btn' + (listOpen && page === 'browser' ? ' sel' : '')}
+            className={'nav-item' + (listOpen && page === 'browser' ? ' sel' : '')}
             title="Öğeler"
-            aria-label="Öğeler"
             aria-pressed={listOpen && page === 'browser'}
             onClick={toggleList}
             type="button"
           >
-            <Glyph name="grid" size={19} />
+            <Glyph name="grid" size={16} />
+            <span className="nav-text">Öğeler</span>
           </button>
           <button
-            className={'nav-btn' + (terminalOpen && page === 'browser' ? ' sel' : '')}
-            title="Terminal Ctrl+K"
-            aria-label="Terminal"
-            aria-pressed={terminalOpen && page === 'browser'}
-            onClick={toggleTerminal}
+            className={'nav-item' + (terminalOpen ? ' sel' : '')}
+            title="Yardımcı panel Ctrl+K"
+            aria-pressed={terminalOpen}
+            onClick={toggleDrawer}
             type="button"
           >
-            <Glyph name="terminal" size={19} />
+            <Glyph name="terminal" size={16} />
+            <span className="nav-text">Panel</span>
           </button>
           <button
-            className={'nav-btn' + (settingsOpen ? ' sel' : '')}
+            className={'nav-item' + (settingsOpen ? ' sel' : '')}
             title="Ayarlar"
-            aria-label="Ayarlar"
             aria-pressed={settingsOpen}
             onClick={toggleSettings}
             type="button"
           >
-            <Glyph name="settings" size={19} />
+            <Glyph name="settings" size={16} />
+            <span className="nav-text">Ayarlar</span>
+          </button>
+        </nav>
+
+        <div className="rail-foot">
+          <button
+            className="ghost-btn"
+            title={railMini ? 'Kenar çubuğunu genişlet' : 'Kenar çubuğunu daralt'}
+            aria-label={railMini ? 'Kenar çubuğunu genişlet' : 'Kenar çubuğunu daralt'}
+            onClick={toggleRail}
+            type="button"
+          >
+            <Glyph name={railMini ? 'expand' : 'collapse'} size={15} />
           </button>
         </div>
       </aside>
 
-      <div className="workspace" ref={spaceRef}>
-        {page === 'browser' ? (
-          <BrowserPage
-            stageRef={setStageEl}
+      <main className="stagearea" ref={spaceRef}>
+        <div className="workspace">
+          {page === 'browser' ? (
+            <BrowserPage
+              stageRef={setStageEl}
+              state={state}
+              visionCount={term.elements.length}
+              urlSeed={urlSeed}
+              elements={term.elements}
+              listOpen={listOpen}
+              listWidth={listSize}
+              dock={dock}
+              dockWidth={dockSize}
+              revision={library}
+              runRequest={runRequest}
+              recording={recording}
+              playing={playing}
+              onNav={nav}
+              onVision={onVision}
+              onListGrip={beginListDrag}
+              onDockGrip={beginDockDrag}
+              onCloseList={toggleList}
+              onDock={openDock}
+              onAction={runAction}
+              onReport={report}
+              onSaved={onSaved}
+              onBusy={onPlayBusy}
+            />
+          ) : null}
+
+          {page === 'scenarios' ? (
+            <ScenarioPage
+              revision={library}
+              busy={playing || recording}
+              baseUrl={state.url}
+              onReport={report}
+              onRun={requestRun}
+              onChanged={onLibraryChanged}
+            />
+          ) : null}
+
+          {page === 'results' ? <ResultPage revision={library} onReport={report} /> : null}
+          {page === 'identity' ? <IdentityPage revision={library} onReport={report} /> : null}
+          {page === 'coverage' ? <CoveragePage revision={library} onReport={report} /> : null}
+          {page === 'data' ? <DataPage revision={library} onReport={report} /> : null}
+        </div>
+
+        {terminalOpen ? (
+          <Drawer
             api={term}
-            vision={state.vision}
-            listOpen={listOpen}
-            listWidth={listSize}
-            terminalOpen={terminalOpen}
-            termHeight={termSize}
+            height={termSize}
             focusSeed={focusSeed}
-            dock={dock}
-            dockWidth={dockSize}
-            revision={library}
-            runRequest={runRequest}
-            recording={recording}
-            playing={playing}
-            onListGrip={beginListDrag}
-            onTermGrip={beginTermDrag}
-            onDockGrip={beginDockDrag}
-            onCloseList={toggleList}
-            onCloseTerminal={closeTerminal}
-            onDock={openDock}
-            onAction={runAction}
-            onReport={report}
-            onSaved={onSaved}
-            onBusy={onPlayBusy}
+            onGrip={beginTermDrag}
+            onClose={closeDrawer}
           />
         ) : null}
+      </main>
 
-        {page === 'scenarios' ? (
-          <ScenarioPage
-            revision={library}
-            busy={playing || recording}
-            baseUrl={state.url}
-            onReport={report}
-            onRun={requestRun}
-            onChanged={onLibraryChanged}
-          />
-        ) : null}
-
-        {page === 'results' ? <ResultPage revision={library} onReport={report} /> : null}
-        {page === 'identity' ? <IdentityPage revision={library} onReport={report} /> : null}
-        {page === 'coverage' ? <CoveragePage revision={library} onReport={report} /> : null}
-        {page === 'data' ? <DataPage revision={library} onReport={report} /> : null}
-      </div>
-
-      <footer className="shell-foot">
+      <footer className="statusbar">
         <span className={'status-live ' + status.tone} />
         <span className="status-item">{status.label}</span>
+        <span className="status-sep" />
+        <span className="status-item">{PAGE_LABELS[page]}</span>
         <span className="status-sep" />
         <span className="status-item">{term.elements.length} öğe</span>
         <span className="status-sep" />

@@ -22,6 +22,31 @@ export const PageHead = memo(function PageHead({
   )
 })
 
+export const Section = memo(function Section({
+  label,
+  children
+}: {
+  label: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <section className="form-group">
+      <span className="card-split">{label}</span>
+      {children}
+    </section>
+  )
+})
+
+export const Skeleton = memo(function Skeleton({ rows = 3 }: { rows?: number }): React.JSX.Element {
+  return (
+    <div className="skeleton-stack">
+      {Array.from({ length: rows }, (_, index) => (
+        <span key={index} className={'skeleton ' + (index % 2 ? 'line-2' : 'line-1')} />
+      ))}
+    </div>
+  )
+})
+
 export const Pill = memo(function Pill({
   tone = 'flat',
   children
@@ -79,15 +104,21 @@ export const Card = memo(function Card({
 
 export const Empty = memo(function Empty({
   glyph,
-  text
+  text,
+  hint,
+  action
 }: {
   glyph: string
   text: string
+  hint?: string
+  action?: React.ReactNode
 }): React.JSX.Element {
   return (
     <div className="empty">
-      <Glyph name={glyph} size={20} />
+      <Glyph name={glyph} size={22} />
       <span>{text}</span>
+      {hint ? <span className="empty-hint">{hint}</span> : null}
+      {action}
     </div>
   )
 })
@@ -111,15 +142,18 @@ export const Bar = memo(function Bar({
 
 export const Field = memo(function Field({
   label,
+  hint,
   children
 }: {
   label: string
+  hint?: string
   children: React.ReactNode
 }): React.JSX.Element {
   return (
     <label className="field">
       <span className="field-label">{label}</span>
       {children}
+      {hint ? <span className="field-hint">{hint}</span> : null}
     </label>
   )
 })
@@ -156,22 +190,24 @@ export const TextButton = memo(function TextButton({
   label,
   onClick,
   disabled,
+  busy,
   tone
 }: {
   glyph?: string
   label: string
   onClick: () => void
   disabled?: boolean
+  busy?: boolean
   tone?: 'primary' | 'danger'
 }): React.JSX.Element {
   return (
     <button
-      className={'txt-btn' + (tone ? ' ' + tone : '')}
+      className={'txt-btn' + (tone ? ' ' + tone : '') + (busy ? ' busy' : '')}
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || busy}
       type="button"
     >
-      {glyph ? <Glyph name={glyph} size={13} /> : null}
+      {busy ? <span className="spinner tiny" /> : glyph ? <Glyph name={glyph} size={13} /> : null}
       {label}
     </button>
   )

@@ -1,10 +1,9 @@
 import React from 'react'
-import type { AgentAction } from '../../../main/browser/types'
-import type { Console as ConsoleApi } from '../useConsole'
-import ConsolePanel from '../parts/Console'
+import type { AgentAction, BrowserState, NavKind, PageElement } from '../../../main/browser/types'
 import ElementList from '../parts/ElementList'
 import RecordPanel from '../RecordPanel'
 import RunPanel from '../parts/RunPanel'
+import StageBar from '../parts/StageBar'
 import { Glyph } from '../icons'
 import type { Report } from '../report'
 
@@ -12,24 +11,23 @@ export type DockTab = 'record' | 'playback' | null
 
 export default function BrowserPage({
   stageRef,
-  api,
-  vision,
+  state,
+  visionCount,
+  urlSeed,
+  elements,
   listOpen,
   listWidth,
-  terminalOpen,
-  termHeight,
-  focusSeed,
   dock,
   dockWidth,
   revision,
   runRequest,
   recording,
   playing,
+  onNav,
+  onVision,
   onListGrip,
-  onTermGrip,
   onDockGrip,
   onCloseList,
-  onCloseTerminal,
   onDock,
   onAction,
   onReport,
@@ -37,24 +35,23 @@ export default function BrowserPage({
   onBusy
 }: {
   stageRef: (node: HTMLDivElement | null) => void
-  api: ConsoleApi
-  vision: boolean
+  state: BrowserState
+  visionCount: number
+  urlSeed: number
+  elements: PageElement[]
   listOpen: boolean
   listWidth: number
-  terminalOpen: boolean
-  termHeight: number
-  focusSeed: number
   dock: DockTab
   dockWidth: number
   revision: number
   runRequest: string
   recording: boolean
   playing: boolean
+  onNav: (kind: NavKind) => void
+  onVision: () => void
   onListGrip: (event: React.PointerEvent<HTMLDivElement>) => void
-  onTermGrip: (event: React.PointerEvent<HTMLDivElement>) => void
   onDockGrip: (event: React.PointerEvent<HTMLDivElement>) => void
   onCloseList: () => void
-  onCloseTerminal: () => void
   onDock: (tab: DockTab) => void
   onAction: (action: AgentAction) => void
   onReport: (report: Report) => void
@@ -65,8 +62,8 @@ export default function BrowserPage({
     <div className="split">
       {listOpen ? (
         <ElementList
-          elements={api.elements}
-          vision={vision}
+          elements={elements}
+          vision={state.vision}
           width={listWidth}
           onAction={onAction}
           onClose={onCloseList}
@@ -75,16 +72,15 @@ export default function BrowserPage({
       ) : null}
 
       <div className="main">
+        <StageBar
+          state={state}
+          visionCount={visionCount}
+          urlSeed={urlSeed}
+          onNav={onNav}
+          onAction={onAction}
+          onVision={onVision}
+        />
         <div className="stage" ref={stageRef} />
-        {terminalOpen ? (
-          <ConsolePanel
-            api={api}
-            height={termHeight}
-            focusSeed={focusSeed}
-            onGrip={onTermGrip}
-            onClose={onCloseTerminal}
-          />
-        ) : null}
       </div>
 
       {dock ? (
@@ -104,7 +100,7 @@ export default function BrowserPage({
               type="button"
             >
               <Glyph name="record" size={13} />
-              KAYIT
+              Kayıt
               {recording ? <span className="dock-dot rec" /> : null}
             </button>
             <button
@@ -113,7 +109,7 @@ export default function BrowserPage({
               type="button"
             >
               <Glyph name="play" size={13} />
-              OYNATMA
+              Oynatma
               {playing ? <span className="dock-dot run" /> : null}
             </button>
             <span className="dock-push" />

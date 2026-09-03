@@ -12,30 +12,30 @@ export const THEMES: Theme[] = [
   {
     id: 'grafit',
     label: 'Grafit',
-    note: 'Koyu gri yüzey, turuncu vurgu',
-    chrome: '#1e1f22',
-    swatch: ['#1e1f22', '#2f3237', '#ff7a29']
+    note: 'Nötr siyah zemin, mavi vurgu',
+    chrome: '#09090b',
+    swatch: ['#09090b', '#18181b', '#3b82f6']
   },
   {
     id: 'gece',
     label: 'Gece Mavisi',
-    note: 'Derin lacivert, açık mavi vurgu',
-    chrome: '#10151f',
-    swatch: ['#10151f', '#1f2c3e', '#4aa8ff']
+    note: 'Derin lacivert, gök mavisi vurgu',
+    chrome: '#080b12',
+    swatch: ['#080b12', '#131a26', '#38bdf8']
   },
   {
     id: 'kagit',
     label: 'Kağıt',
     note: 'Açık zemin, indigo vurgu',
-    chrome: '#e7e8ec',
-    swatch: ['#e7e8ec', '#ffffff', '#3355e0']
+    chrome: '#f4f4f5',
+    swatch: ['#f4f4f5', '#ffffff', '#2563eb']
   },
   {
     id: 'orman',
     label: 'Orman',
-    note: 'Koyu yeşil yüzey, nane vurgu',
-    chrome: '#14201a',
-    swatch: ['#14201a', '#22382c', '#4fd18b']
+    note: 'Koyu yeşil yüzey, zümrüt vurgu',
+    chrome: '#070f0b',
+    swatch: ['#070f0b', '#111c16', '#10b981']
   }
 ]
 
