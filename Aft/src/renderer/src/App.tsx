@@ -21,6 +21,7 @@ import ResultPage from './pages/ResultPage'
 import IdentityPage from './pages/IdentityPage'
 import CoveragePage from './pages/CoveragePage'
 import DataPage from './pages/DataPage'
+import StatsPage from './pages/StatsPage'
 import Drawer from './parts/Drawer'
 
 type PageId = 'browser' | 'scenarios' | 'results' | 'stats' | 'identity' | 'coverage' | 'data'
@@ -210,14 +211,14 @@ export default function App(): React.JSX.Element {
   const [page, setPage] = useState<PageId>(() => readPage())
   const [listOpen, setListOpen] = useState(false)
   const [drag, setDrag] = useState<DragAxis | null>(null)
+  const [urlSeed, setUrlSeed] = useState(0)
+  const [railMini, setRailMini] = useState(() => readFlag(RAIL_KEY, false))
   const [recording, setRecording] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [library, setLibrary] = useState(0)
   const [runRequest, setRunRequest] = useState('')
   const [focusSeed, setFocusSeed] = useState(0)
-  const [urlSeed, setUrlSeed] = useState(0)
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
-  const [railMini, setRailMini] = useState(() => readFlag(RAIL_KEY, false))
   const [autoTerm, setAutoTerm] = useState(() => readFlag(AUTO_TERM_KEY, true))
   const [autoBack, setAutoBack] = useState(() => readFlag(AUTO_BACK_KEY, false))
   const [playOptions, setPlayOptions] = useState<Partial<PlaybackOptions>>(() => ({
@@ -302,6 +303,10 @@ export default function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    storeFlag(RAIL_KEY, railMini)
+  }, [railMini])
+
+  useEffect(() => {
     paintTheme(theme)
     storeTheme(theme)
     window.aft.setChrome(themeOf(theme).chrome)
@@ -317,8 +322,8 @@ export default function App(): React.JSX.Element {
   }, [dock, page])
 
   useEffect(() => {
-    storeFlag(RAIL_KEY, railMini)
-  }, [railMini])
+    stageElRef.current = stageEl
+  }, [stageEl])
 
   useEffect(() => {
     window.aft.setStageShown(hasStage)
@@ -550,11 +555,16 @@ export default function App(): React.JSX.Element {
     setFocusSeed((prev) => prev + 1)
   }, [terminalOpen])
 
+  const toggleRail = useCallback((): void => setRailMini((prev) => !prev), [])
+
   const toggleSettings = useCallback((): void => {
     window.aft.setSettings(!settingsOpen)
   }, [settingsOpen])
 
-  const toggleRail = useCallback((): void => setRailMini((prev) => !prev), [])
+  const toggleDevtools = useCallback((): void => {
+    setPage('browser')
+    window.aft.setDevtools(!devtoolsOpen)
+  }, [devtoolsOpen])
 
   const beginDrag = useCallback(
     (axis: DragAxis, event: React.PointerEvent<HTMLDivElement>): void => {
@@ -665,7 +675,6 @@ export default function App(): React.JSX.Element {
     if (state.loading) return { label: 'yükleniyor', tone: 'busy' }
     return { label: 'hazır', tone: 'idle' }
   }, [playing, recording, state.loading])
-
   return (
     <div className={'shell' + (drag ? ' drag-' + drag : '') + (railMini ? ' rail-mini' : '')}>
       <header className="titlebar">
@@ -736,6 +745,16 @@ export default function App(): React.JSX.Element {
             <span className="nav-text">Öğeler</span>
           </button>
           <button
+            className={'nav-item' + (devtoolsOpen && page === 'browser' ? ' sel' : '')}
+            title="Sayfayı incele F12"
+            aria-pressed={devtoolsOpen && page === 'browser'}
+            onClick={toggleDevtools}
+            type="button"
+          >
+            <Glyph name="inspect" size={16} />
+            <span className="nav-text">İncele</span>
+          </button>
+          <button
             className={'nav-item' + (terminalOpen ? ' sel' : '')}
             title="Yardımcı panel Ctrl+K"
             aria-pressed={terminalOpen}
@@ -783,14 +802,18 @@ export default function App(): React.JSX.Element {
               listWidth={listSize}
               dock={dock}
               dockWidth={dockSize}
+              devtoolsOpen={devtoolsOpen}
+              devtoolsWidth={devSize}
               revision={library}
               runRequest={runRequest}
               recording={recording}
               playing={playing}
+              playOptions={playOptions}
               onNav={nav}
               onVision={onVision}
               onListGrip={beginListDrag}
               onDockGrip={beginDockDrag}
+              onDevGrip={beginDevDrag}
               onCloseList={toggleList}
               onDock={openDock}
               onAction={runAction}
@@ -812,6 +835,7 @@ export default function App(): React.JSX.Element {
           ) : null}
 
           {page === 'results' ? <ResultPage revision={library} onReport={report} /> : null}
+          {page === 'stats' ? <StatsPage revision={library} onReport={report} /> : null}
           {page === 'identity' ? <IdentityPage revision={library} onReport={report} /> : null}
           {page === 'coverage' ? <CoveragePage revision={library} onReport={report} /> : null}
           {page === 'data' ? <DataPage revision={library} onReport={report} /> : null}

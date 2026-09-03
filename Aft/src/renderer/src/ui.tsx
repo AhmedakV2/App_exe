@@ -68,6 +68,7 @@ export const Card = memo(function Card({
   actions,
   scroll,
   grow,
+  side,
   flush,
   children
 }: {
@@ -76,6 +77,7 @@ export const Card = memo(function Card({
   actions?: React.ReactNode
   scroll?: boolean
   grow?: boolean
+  side?: boolean
   flush?: boolean
   children: React.ReactNode
 }): React.JSX.Element {

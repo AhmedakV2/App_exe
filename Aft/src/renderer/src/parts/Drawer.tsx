@@ -97,21 +97,23 @@ export default memo(function Drawer({
       <div className="drawer-pane" hidden={tab !== 'dom'}>
         {api.elements.length ? (
           <div className="table-scroll">
-            <div className="table">
-              <div className="tr th">
-                <span className="td no">#</span>
-                <span className="td grow">ad</span>
-                <span className="td wide">tür</span>
-                <span className="td wide">etiket</span>
-              </div>
-              {api.elements.map((item) => (
-                <div key={item.i} className="tr">
-                  <span className="td no">{item.i}</span>
-                  <span className="td grow">{item.name || item.text || item.tag}</span>
-                  <span className="td wide dim">{item.type || '—'}</span>
-                  <span className="td wide mono">{item.tag}</span>
+            <div className="table-scroll">
+              <div className="table wide">
+                <div className="tr th">
+                  <span className="td no">#</span>
+                  <span className="td grow">ad</span>
+                  <span className="td wide">tür</span>
+                  <span className="td wide">etiket</span>
                 </div>
-              ))}
+                {api.elements.map((item) => (
+                  <div key={item.i} className="tr">
+                    <span className="td no">{item.i}</span>
+                    <span className="td grow">{item.name || item.text || item.tag}</span>
+                    <span className="td wide dim">{item.type || '—'}</span>
+                    <span className="td wide mono">{item.tag}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ) : (

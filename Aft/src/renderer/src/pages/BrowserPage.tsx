@@ -1,5 +1,6 @@
 import React from 'react'
 import type { AgentAction, BrowserState, NavKind, PageElement } from '../../../main/browser/types'
+import type { PlaybackOptions } from '../../../main/scenario/types'
 import ElementList from '../parts/ElementList'
 import RecordPanel from '../RecordPanel'
 import RunPanel from '../parts/RunPanel'
@@ -25,6 +26,7 @@ export default function BrowserPage({
   runRequest,
   recording,
   playing,
+  playOptions,
   onNav,
   onVision,
   onListGrip,
@@ -52,6 +54,7 @@ export default function BrowserPage({
   runRequest: string
   recording: boolean
   playing: boolean
+  playOptions: Partial<PlaybackOptions>
   onNav: (kind: NavKind) => void
   onVision: () => void
   onListGrip: (event: React.PointerEvent<HTMLDivElement>) => void
@@ -86,7 +89,18 @@ export default function BrowserPage({
           onAction={onAction}
           onVision={onVision}
         />
-        <div className="stage" ref={stageRef} />
+        <div className="stage" ref={stageRef}>
+          {devtoolsOpen ? (
+            <div
+              className="dev-grip"
+              style={{ right: devtoolsWidth }}
+              onPointerDown={onDevGrip}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="İnceleme paneli genişliği"
+            />
+          ) : null}
+        </div>
       </div>
 
       {dock ? (
