@@ -3247,8 +3247,6 @@ textarea {
   color: var(--faint);
 }
 
-/* --- İstatistik sayfası --- */
-
 .stat-flow {
   flex: 1;
   min-height: 0;

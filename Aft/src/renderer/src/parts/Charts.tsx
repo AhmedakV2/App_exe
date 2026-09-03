@@ -50,7 +50,6 @@ const SURFACE = 'var(--panel)'
 const GRID = 'var(--line)'
 const INK = 'var(--faint)'
 
-// Kart içinde kalan çizim alanını ölçer, grafikler bu ölçüye göre çizilir.
 function useBoxSize(): { ref: (node: HTMLDivElement | null) => void; size: BoxSize } {
   const [node, setNode] = useState<HTMLDivElement | null>(null)
   const [size, setSize] = useState<BoxSize>({ width: 0, height: 0 })
@@ -74,7 +73,6 @@ function useBoxSize(): { ref: (node: HTMLDivElement | null) => void; size: BoxSi
   return { ref: setNode, size }
 }
 
-// Eksen için 1/2/5 katlarına yuvarlanmış okunabilir kademeler üretir.
 function niceTicks(max: number, count = 4): number[] {
   if (!Number.isFinite(max) || max <= 0) return [0, 1]
 
@@ -88,7 +86,6 @@ function niceTicks(max: number, count = 4): number[] {
   return ticks
 }
 
-// Tabanı düz, tepesi yuvarlatılmış sütun yolu üretir.
 function columnPath(x: number, y: number, width: number, height: number, round: boolean): string {
   if (height <= 0) return ''
   const r = round ? Math.min(RADIUS, width / 2, height) : 0
@@ -129,19 +126,16 @@ function columnPath(x: number, y: number, width: number, height: number, round: 
   )
 }
 
-// Kalabalık eksende etiketleri sondan başlayarak seyreltir.
 function labelStep(count: number, width: number): number {
   if (count <= 6) return 1
   const room = Math.max(1, Math.floor(width / 64))
   return Math.max(1, Math.ceil(count / room))
 }
 
-// Balonun ve uç etiketinin çizim alanı dışına taşmasını engeller.
 function clampX(x: number, width: number, room: number): number {
   return Math.min(Math.max(x, room), Math.max(room, width - room))
 }
 
-// Tepeye yakın balonu işaretin altına çevirir, kart kenarında kırpılmasını önler.
 function tipBelow(y: number): boolean {
   return y < TIP_FLIP
 }

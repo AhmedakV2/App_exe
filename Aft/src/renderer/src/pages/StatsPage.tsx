@@ -66,14 +66,12 @@ function pad(value: number): string {
   return String(value).padStart(2, '0')
 }
 
-// Gün başlangıcına iner, kova sınırlarını gün ızgarasına oturtur.
 function startOfDay(at: number): number {
   const value = new Date(at)
   value.setHours(0, 0, 0, 0)
   return value.getTime()
 }
 
-// Pazartesiyi haftanın ilk günü sayarak hafta başlangıcını verir.
 function startOfWeek(at: number): number {
   const value = new Date(startOfDay(at))
   const shift = (value.getDay() + 6) % 7
@@ -81,7 +79,6 @@ function startOfWeek(at: number): number {
   return value.getTime()
 }
 
-// Seçili aralığı gün ya da hafta kovalarına böler.
 function buildSlots(from: number, to: number, weekly: boolean): Slot[] {
   const slots: Slot[] = []
   let cursor = weekly ? startOfWeek(from) : startOfDay(from)
