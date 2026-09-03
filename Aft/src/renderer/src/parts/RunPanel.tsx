@@ -62,7 +62,9 @@ export default function RunPanel({
   onBusy: (running: boolean) => void
 }): React.JSX.Element {
   const [entries, setEntries] = useState<ScenarioEntry[]>([])
-  const [picked, setPicked] = useState('')
+  const [picked, setPicked] = useState<string | null>(null)
+  const [query, setQuery] = useState<string | null>(null)
+  const [listOpen, setListOpen] = useState(false)
   const [live, setLive] = useState<StepResult[]>([])
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [run, setRun] = useState<RunResult | null>(null)
@@ -71,8 +73,9 @@ export default function RunPanel({
   const [shot, setShot] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
 
-  const selected = picked || request
+  const selected = picked === null ? request : picked
   const listRef = useRef<HTMLDivElement | null>(null)
+  const pickRef = useRef<HTMLDivElement | null>(null)
   const reportRef = useRef(onReport)
   const busyRef = useRef(onBusy)
 
@@ -107,6 +110,19 @@ export default function RunPanel({
       alive = false
     }
   }, [revision])
+
+  useEffect(() => {
+    if (!listOpen) return
+
+    const onOutside = (event: PointerEvent): void => {
+      const frame = pickRef.current
+      if (frame && event.target instanceof Node && frame.contains(event.target)) return
+      setListOpen(false)
+    }
+
+    window.addEventListener('pointerdown', onOutside, true)
+    return () => window.removeEventListener('pointerdown', onOutside, true)
+  }, [listOpen])
 
   useEffect(() => {
     return window.aftPlayback.onProgress((payload) => {
@@ -199,6 +215,27 @@ export default function RunPanel({
     setContext(result.data.context)
   }, [])
 
+  const chosen = useMemo(
+    () => entries.find((entry) => entry.id === selected) ?? null,
+    [entries, selected]
+  )
+
+  const text = query === null ? (chosen?.title ?? '') : query
+
+  const found = useMemo(() => {
+    const needle = (query ?? '').trim().toLocaleLowerCase('tr')
+    const rows = needle
+      ? entries.filter((entry) => entry.title.toLocaleLowerCase('tr').includes(needle))
+      : entries
+    return rows.slice(0, 12)
+  }, [entries, query])
+
+  const pick = useCallback((entry: ScenarioEntry): void => {
+    setPicked(entry.id)
+    setQuery(null)
+    setListOpen(false)
+  }, [])
+
   const shown = useMemo(() => (run ? flatten(run.steps) : live), [live, run])
   const percentDone = progress.total ? progress.done / progress.total : 0
   const activeId = live.length ? live[live.length - 1].stepId : ''
@@ -206,20 +243,57 @@ export default function RunPanel({
   return (
     <section className="run">
       <div className="side-bar">
-        <select
-          className="picker"
-          value={selected}
-          onChange={(event) => setPicked(event.target.value)}
-          disabled={running}
-          aria-label="Senaryo"
-        >
-          <option value="">senaryo seç</option>
-          {entries.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.title}
-            </option>
-          ))}
-        </select>
+        <div className="finder" ref={pickRef}>
+          <div className="search">
+            <Glyph name="search" size={13} />
+            <input
+              value={text}
+              onChange={(event) => {
+                setQuery(event.target.value)
+                setPicked('')
+                setListOpen(true)
+              }}
+              onFocus={() => setListOpen(true)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setListOpen(false)
+                  return
+                }
+                if (event.key !== 'Enter' || !found.length) return
+                event.preventDefault()
+                pick(found[0])
+              }}
+              placeholder="Senaryo ara"
+              disabled={running}
+              spellCheck={false}
+              aria-label="Senaryo ara"
+            />
+            {selected ? <Glyph name="check" size={13} /> : null}
+          </div>
+
+          {listOpen && !running ? (
+            <div className="finder-list">
+              {found.length ? (
+                found.map((entry) => (
+                  <button
+                    key={entry.id}
+                    className={'finder-row' + (entry.id === selected ? ' sel' : '')}
+                    onClick={() => pick(entry)}
+                    type="button"
+                  >
+                    <Glyph name="file" size={12} />
+                    <span className="finder-title">{entry.title}</span>
+                    {entry.folder ? <span className="finder-path">{entry.folder}</span> : null}
+                    <span className="finder-meta">{entry.steps}</span>
+                  </button>
+                ))
+              ) : (
+                <span className="finder-empty">Eşleşme yok</span>
+              )}
+            </div>
+          ) : null}
+        </div>
+
         <IconButton
           name="play"
           title="Başlat"
