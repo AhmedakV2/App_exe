@@ -63,7 +63,7 @@ export default function SettingsWindow(): React.JSX.Element {
       <header className="win-head">
         <span className="win-title">
           <Glyph name="settings" size={13} />
-          AYARLAR
+          Ayarlar
         </span>
         <span className="win-push" />
         <button
