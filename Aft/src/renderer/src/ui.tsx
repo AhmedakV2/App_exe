@@ -58,6 +58,7 @@ export const Card = memo(function Card({
   actions,
   scroll,
   grow,
+  side,
   children
 }: {
   label: string
@@ -65,10 +66,11 @@ export const Card = memo(function Card({
   actions?: React.ReactNode
   scroll?: boolean
   grow?: boolean
+  side?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <section className={'card' + (grow ? ' grow' : '')}>
+    <section className={'card' + (grow ? ' grow' : '') + (side ? ' side' : '')}>
       <header className="card-head">
         <span className="card-label">{label}</span>
         {lead ? <span className="card-lead">{lead}</span> : null}

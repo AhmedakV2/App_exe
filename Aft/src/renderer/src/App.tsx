@@ -22,8 +22,9 @@ import ResultPage from './pages/ResultPage'
 import IdentityPage from './pages/IdentityPage'
 import CoveragePage from './pages/CoveragePage'
 import DataPage from './pages/DataPage'
+import StatsPage from './pages/StatsPage'
 
-type PageId = 'browser' | 'scenarios' | 'results' | 'identity' | 'coverage' | 'data'
+type PageId = 'browser' | 'scenarios' | 'results' | 'stats' | 'identity' | 'coverage' | 'data'
 
 type NavItem = { id: PageId; label: string; glyph: string; suite?: boolean }
 
@@ -32,6 +33,7 @@ const NAV: NavItem[] = [
   { id: 'browser', label: 'Kayıt ve oynatma', glyph: 'suite', suite: true },
   { id: 'scenarios', label: 'Senaryolar', glyph: 'library' },
   { id: 'results', label: 'Sonuçlar', glyph: 'history' },
+  { id: 'stats', label: 'İstatistik', glyph: 'spark' },
   { id: 'identity', label: 'Kimlik', glyph: 'pulse' },
   { id: 'coverage', label: 'Kapsam', glyph: 'radar' },
   { id: 'data', label: 'Veri', glyph: 'database' }
@@ -41,6 +43,7 @@ const PAGE_LABELS: Record<PageId, string> = {
   browser: 'Tarayıcı',
   scenarios: 'Senaryolar',
   results: 'Sonuçlar',
+  stats: 'İstatistik',
   identity: 'Kimlik',
   coverage: 'Kapsam',
   data: 'Veri'
@@ -873,6 +876,7 @@ export default function App(): React.JSX.Element {
         ) : null}
 
         {page === 'results' ? <ResultPage revision={library} onReport={report} /> : null}
+        {page === 'stats' ? <StatsPage revision={library} onReport={report} /> : null}
         {page === 'identity' ? <IdentityPage revision={library} onReport={report} /> : null}
         {page === 'coverage' ? <CoveragePage revision={library} onReport={report} /> : null}
         {page === 'data' ? <DataPage revision={library} onReport={report} /> : null}
