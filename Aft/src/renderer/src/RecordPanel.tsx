@@ -3,6 +3,7 @@ import type { AlternativeView, RecordStepView, RecordView } from '../../main/bri
 import type { RecordEditRequest } from '../../main/bridge/record-types'
 import type { AssertionOption } from '../../main/record/types'
 import { Glyph, IconButton } from './icons'
+import { Empty, TextButton } from './ui'
 
 type ReportLevel = 'ok' | 'err' | 'note'
 
@@ -486,22 +487,22 @@ export default function RecordPanel({
   }, [edit])
 
   const summary = useMemo(() => {
-    if (!counters) return ''
+    if (!counters) return []
     return [
-      steps.length + ' adım',
-      counters.suppressed + ' elenen',
-      counters.merged + ' birleşen',
-      counters.weak + ' zayıf',
-      counters.scans + ' tarama'
-    ].join(' · ')
+      { label: 'adım', value: steps.length },
+      { label: 'elenen', value: counters.suppressed },
+      { label: 'birleşen', value: counters.merged },
+      { label: 'zayıf', value: counters.weak },
+      { label: 'tarama', value: counters.scans }
+    ]
   }, [counters, steps.length])
 
   const live = status === 'recording' || status === 'paused'
   const savable = steps.length > 0 && Boolean(report?.ok)
 
   return (
-    <section className="rec">
-      <div className="rec-bar">
+    <section className="rec-panel">
+      <div className="dock-block dock-bar">
         {status === 'recording' ? (
           <IconButton name="pause" title="Duraklat" onClick={pause} disabled={busy} small />
         ) : (
@@ -550,12 +551,19 @@ export default function RecordPanel({
         <span className={'rec-state ' + status}>{STATUS_LABELS[status]}</span>
       </div>
 
-      {summary || view?.baseUrl ? (
-        <div className="rec-meta">
-          {summary ? <span className="rec-meta-row">{summary}</span> : null}
-          {view?.baseUrl ? (
-            <span className="rec-meta-row muted">{shortUrl(view.baseUrl)}</span>
+      {summary.length || view?.baseUrl ? (
+        <div className="dock-block">
+          {summary.length ? (
+            <div className="dock-stats">
+              {summary.map((item) => (
+                <span key={item.label} className="stat-chip">
+                  <b>{item.value}</b>
+                  {item.label}
+                </span>
+              ))}
+            </div>
           ) : null}
+          {view?.baseUrl ? <span className="dock-meta">{shortUrl(view.baseUrl)}</span> : null}
         </div>
       ) : null}
 
@@ -579,10 +587,11 @@ export default function RecordPanel({
             />
           ))
         ) : (
-          <div className="rec-empty">
-            <Glyph name="record" size={20} />
-            <span>Adım yok</span>
-          </div>
+          <Empty
+            glyph="record"
+            text="Adım yok"
+            hint="Kaydı başlatıp sahnedeki sayfayla etkileşime geçtiğinizde adımlar burada birikir."
+          />
         )}
       </div>
 
@@ -603,36 +612,38 @@ export default function RecordPanel({
         </div>
       ) : null}
 
-      <div className="rec-foot">
-        <input
-          ref={nameRef}
-          className="rec-name"
-          key={view?.id ?? 'idle'}
-          defaultValue={view?.title ?? ''}
-          placeholder="Senaryo adı"
-          disabled={busy || !steps.length}
-          spellCheck={false}
-          aria-label="Senaryo adı"
-        />
-        <button
-          className="rec-save"
-          onClick={() => void save()}
-          disabled={busy || !savable}
-          title="Senaryo olarak kaydet"
-          type="button"
-        >
-          <Glyph name="save" size={14} />
-          kaydet
-        </button>
-        <button
-          className="rec-wipe"
-          onClick={clearAll}
-          disabled={busy || !steps.length}
-          title="Tüm adımları sil"
-          type="button"
-        >
-          <Glyph name="trash" size={14} />
-        </button>
+      <div className="dock-block">
+        <label className="field">
+          <span className="field-label">Senaryo adı</span>
+          <input
+            ref={nameRef}
+            className="rec-name"
+            key={view?.id ?? 'idle'}
+            defaultValue={view?.title ?? ''}
+            placeholder="giris-akisi"
+            disabled={busy || !steps.length}
+            spellCheck={false}
+            aria-label="Senaryo adı"
+          />
+        </label>
+
+        <div className="dock-actions">
+          <TextButton
+            glyph="save"
+            label="Senaryo olarak kaydet"
+            onClick={() => void save()}
+            disabled={!savable}
+            busy={busy}
+            tone="primary"
+          />
+          <TextButton
+            glyph="trash"
+            label="Tümünü sil"
+            onClick={clearAll}
+            disabled={busy || !steps.length}
+            tone="danger"
+          />
+        </div>
       </div>
     </section>
   )

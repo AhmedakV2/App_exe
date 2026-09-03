@@ -199,8 +199,8 @@ export default function RunPanel({
   const activeId = live.length ? live[live.length - 1].stepId : ''
 
   return (
-    <section className="run">
-      <div className="side-bar">
+    <section className="run-panel">
+      <div className="dock-block dock-bar">
         <select
           className="picker"
           value={selected}
@@ -227,35 +227,39 @@ export default function RunPanel({
         <IconButton name="reload" title="Yenile" onClick={refresh} disabled={running} small />
       </div>
 
-      <div className="side-opts">
-        <Toggle
-          label="Hata görüntüsü"
-          checked={Boolean(options.screenshotOnFailure)}
-          disabled={running}
-          onChange={() => toggle('screenshotOnFailure')}
-        />
-        <Toggle
-          label="İlk hatada dur"
-          checked={Boolean(options.stopOnFailure)}
-          disabled={running}
-          onChange={() => toggle('stopOnFailure')}
-        />
-        <Toggle
-          label="Durum doğrula"
-          checked={Boolean(options.verifyState)}
-          disabled={running}
-          onChange={() => toggle('verifyState')}
-        />
-      </div>
+      <div className="dock-block">
+        <span className="dock-label">Koşum seçenekleri</span>
 
-      {running ? (
-        <div className="progress">
-          <Bar value={percentDone} />
-          <span className="progress-text">
-            {progress.done} / {progress.total}
-          </span>
+        <div className="side-opts">
+          <Toggle
+            label="Hata görüntüsü"
+            checked={Boolean(options.screenshotOnFailure)}
+            disabled={running}
+            onChange={() => toggle('screenshotOnFailure')}
+          />
+          <Toggle
+            label="İlk hatada dur"
+            checked={Boolean(options.stopOnFailure)}
+            disabled={running}
+            onChange={() => toggle('stopOnFailure')}
+          />
+          <Toggle
+            label="Durum doğrula"
+            checked={Boolean(options.verifyState)}
+            disabled={running}
+            onChange={() => toggle('verifyState')}
+          />
         </div>
-      ) : null}
+
+        {running ? (
+          <div className="progress">
+            <Bar value={percentDone} />
+            <span className="progress-text">
+              {progress.done} / {progress.total}
+            </span>
+          </div>
+        ) : null}
+      </div>
 
       <div className="side-list" ref={listRef}>
         {shown.length ? (
@@ -278,12 +282,18 @@ export default function RunPanel({
             </div>
           ))
         ) : (
-          <Empty glyph="play" text="Koşum yok" />
+          <Empty
+            glyph="play"
+            text="Koşum yok"
+            hint="Bir senaryo seçip başlat düğmesine bastığınızda adımlar burada canlı akar."
+          />
         )}
       </div>
 
       {run ? (
-        <div className="side-foot">
+        <div className="dock-block">
+          <span className="dock-label">Özet</span>
+
           <div className="metric-row tight">
             <Metric
               label="durum"
