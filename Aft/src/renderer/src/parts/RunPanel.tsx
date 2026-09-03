@@ -9,7 +9,7 @@ import type {
   StoredContext
 } from '../../../main/scenario/types'
 import { Glyph, IconButton } from '../icons'
-import { Bar, Empty, Metric, Pill, TextButton, Toggle } from '../ui'
+import { Bar, Empty, Metric, Pill, TextButton } from '../ui'
 import { formatMs, percent } from '../format'
 import ContextView from './ContextView'
 import ShotView from './ShotView'
@@ -49,6 +49,7 @@ export default function RunPanel({
   revision,
   request,
   blocked,
+  options,
   onReport,
   onBusy
 }: {
@@ -56,6 +57,7 @@ export default function RunPanel({
   revision: number
   request: string
   blocked: boolean
+  options: Partial<PlaybackOptions>
   onReport: (report: Report) => void
   onBusy: (running: boolean) => void
 }): React.JSX.Element {
@@ -70,11 +72,6 @@ export default function RunPanel({
   const [context, setContext] = useState<FailureContext | null>(null)
   const [shot, setShot] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
-  const [options, setOptions] = useState<Partial<PlaybackOptions>>({
-    screenshotOnFailure: true,
-    stopOnFailure: true,
-    verifyState: true
-  })
 
   const selected = picked === null ? request : picked
   const listRef = useRef<HTMLDivElement | null>(null)
@@ -156,7 +153,19 @@ export default function RunPanel({
     setRun(null)
     setContext(null)
     setContexts([])
-    setProgress({ done: 0, total: entries.find((entry) => entry.id === selected)?.steps ?? 0 })
+    const total = entries.find((entry) => entry.id === selected)?.steps ?? 0
+    setProgress({ done: 0, total })
+
+    reportRef.current({
+      level: 'note',
+      text: 'Koşum başladı: ' + (entries.find((entry) => entry.id === selected)?.title ?? selected),
+      detail: [
+        total + ' adım',
+        'hata görüntüsü ' + (options.screenshotOnFailure ? 'açık' : 'kapalı'),
+        'ilk hatada dur ' + (options.stopOnFailure ? 'açık' : 'kapalı'),
+        'durum doğrulama ' + (options.verifyState ? 'açık' : 'kapalı')
+      ]
+    })
 
     try {
       const result = await window.aftPlayback.run({ scenarioId: selected, options })
@@ -204,10 +213,6 @@ export default function RunPanel({
       return
     }
     setContext(result.data.context)
-  }, [])
-
-  const toggle = useCallback((key: keyof PlaybackOptions): void => {
-    setOptions((prev) => ({ ...prev, [key]: !prev[key] }))
   }, [])
 
   const chosen = useMemo(
@@ -299,27 +304,6 @@ export default function RunPanel({
         />
         <IconButton name="square" title="Durdur" onClick={cancel} disabled={!running} small />
         <IconButton name="reload" title="Yenile" onClick={refresh} disabled={running} small />
-      </div>
-
-      <div className="side-opts">
-        <Toggle
-          label="Hata görüntüsü"
-          checked={Boolean(options.screenshotOnFailure)}
-          disabled={running}
-          onChange={() => toggle('screenshotOnFailure')}
-        />
-        <Toggle
-          label="İlk hatada dur"
-          checked={Boolean(options.stopOnFailure)}
-          disabled={running}
-          onChange={() => toggle('stopOnFailure')}
-        />
-        <Toggle
-          label="Durum doğrula"
-          checked={Boolean(options.verifyState)}
-          disabled={running}
-          onChange={() => toggle('verifyState')}
-        />
       </div>
 
       {running ? (

@@ -308,12 +308,6 @@ const GLYPHS: Record<string, React.JSX.Element> = {
       <path d="M8 14h8" />
     </>
   ),
-  code: (
-    <>
-      <path d="M9 7l-5 5 5 5" />
-      <path d="M15 7l5 5-5 5" />
-    </>
-  ),
   list: (
     <>
       <path d="M8 6h13" />
@@ -332,6 +326,20 @@ const GLYPHS: Record<string, React.JSX.Element> = {
       <path d="M14 6h1" />
       <path d="M14 12h1" />
       <path d="M14 18h1" />
+    </>
+  ),
+  inspect: (
+    <>
+      <path d="M3 3h8v8H3z" />
+      <path d="M21 8V3h-5" />
+      <path d="M3 16v5h5" />
+      <path d="M13 13l8 3-3.4 1.6L16 21z" />
+    </>
+  ),
+  code: (
+    <>
+      <path d="M9 6l-6 6 6 6" />
+      <path d="M15 6l6 6-6 6" />
     </>
   )
 }

@@ -92,6 +92,7 @@ export const STEP_KINDS: readonly StepKind[] = [
   'upload',
   'navigate',
   'wait',
+  'refresh',
   'assert',
   'group'
 ]

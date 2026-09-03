@@ -198,7 +198,9 @@ textarea {
 .shell.drag-chat,
 .shell.drag-chat *,
 .shell.drag-record,
-.shell.drag-record * {
+.shell.drag-record *,
+.shell.drag-devtools,
+.shell.drag-devtools * {
   cursor: ew-resize !important;
   user-select: none;
 }
@@ -802,6 +804,7 @@ textarea {
 }
 
 .stage {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
@@ -1043,6 +1046,7 @@ textarea {
   max-height: 76%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--panel);
   border: var(--hair) solid var(--line);
   border-radius: var(--r);
@@ -1085,10 +1089,79 @@ textarea {
   flex-direction: column;
 }
 
+.sw.on {
+  background: var(--accent);
+}
+
+.sw.on::after {
+  left: 15px;
+}
+
+.sw:disabled {
+  opacity: 0.4;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.toggle.off {
+  opacity: 0.5;
+}
+
+.toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-box {
+  width: 28px;
+  height: 15px;
+  border-radius: 99px;
+  background: var(--edge-line);
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.toggle-box::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.12s;
+}
+
+.toggle input:checked + .toggle-box {
+  background: var(--accent);
+}
+
+.toggle input:checked + .toggle-box::after {
+  left: 15px;
+}
+
+.toggle-box svg {
+  display: none;
+}
+
 .log {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scroll-padding-block: var(--sp-2);
   padding: var(--sp-2) 0;
   font-family: var(--mono);
   font-size: var(--fs-meta);
@@ -1751,6 +1824,26 @@ textarea {
   gap: 2px;
   width: 68px;
   justify-content: flex-end;
+}
+
+.td.num {
+  width: 58px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+.td.date {
+  width: 88px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+.td.tight {
+  width: 74px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .td.dim {
@@ -2994,24 +3087,6 @@ textarea {
   cursor: grab;
 }
 
-.json-edit {
-  flex: 1;
-  min-height: 260px;
-  padding: var(--sp-3);
-  resize: vertical;
-  background: var(--field);
-  border: var(--hair) solid var(--line);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font: 450 var(--fs-meta) / 1.6 var(--mono);
-  outline: none;
-  tab-size: 2;
-}
-
-.json-edit:focus {
-  border-color: var(--accent);
-}
-
 .menu {
   position: fixed;
   z-index: 80;
@@ -3166,4 +3241,87 @@ textarea {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+.code-area {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: var(--sp-3);
+  resize: none;
+  border: var(--hair) solid var(--line);
+  border-radius: var(--r);
+  background: var(--field);
+  color: var(--muted);
+  font: 450 var(--fs-meta) / 1.7 var(--mono);
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.code-area:focus {
+  outline: none;
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.sheet-inline {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin: calc(var(--sp-3) * -1);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.sheet-frame.inline {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.sheet-frame.inline .sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.dev-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 4;
+  cursor: col-resize;
+  background: var(--line);
+}
+
+.dev-grip:hover,
+.shell.drag-devtools .dev-grip {
+  background: var(--accent);
+}
+
+.tr.sel {
+  background: var(--accent-soft);
+}
+
+.td.pick {
+  cursor: pointer;
+  color: var(--text);
+}
+
+.td.pick:hover {
+  color: var(--accent);
 }
