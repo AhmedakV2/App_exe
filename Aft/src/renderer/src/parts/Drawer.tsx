@@ -4,12 +4,11 @@ import ConsoleStream from './Console'
 import { Glyph } from '../icons'
 import { Empty } from '../ui'
 
-export type DrawerTab = 'terminal' | 'agent' | 'dom'
+export type DrawerTab = 'terminal' | 'agent'
 
 const TABS: { id: DrawerTab; label: string; glyph: string }[] = [
   { id: 'terminal', label: 'Terminal', glyph: 'terminal' },
-  { id: 'agent', label: 'Ajan', glyph: 'spark' },
-  { id: 'dom', label: 'DOM', glyph: 'layers' }
+  { id: 'agent', label: 'Ajan', glyph: 'spark' }
 ]
 
 export default memo(function Drawer({
@@ -92,37 +91,6 @@ export default memo(function Drawer({
           text="Ajan akışı beklemede"
           hint="Otonom ajan devreye alındığında plan, adım ve karar akışı bu panelde canlı olarak listelenecek."
         />
-      </div>
-
-      <div className="drawer-pane" hidden={tab !== 'dom'}>
-        {api.elements.length ? (
-          <div className="table-scroll">
-            <div className="table-scroll">
-              <div className="table wide">
-                <div className="tr th">
-                  <span className="td no">#</span>
-                  <span className="td grow">ad</span>
-                  <span className="td wide">tür</span>
-                  <span className="td wide">etiket</span>
-                </div>
-                {api.elements.map((item) => (
-                  <div key={item.i} className="tr">
-                    <span className="td no">{item.i}</span>
-                    <span className="td grow">{item.name || item.text || item.tag}</span>
-                    <span className="td wide dim">{item.type || '—'}</span>
-                    <span className="td wide mono">{item.tag}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <Empty
-            glyph="layers"
-            text="DOM analizi yok"
-            hint="Görüş açıldığında sayfadaki etkileşimli öğeler burada tablolanır."
-          />
-        )}
       </div>
     </section>
   )

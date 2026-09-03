@@ -47,6 +47,13 @@ const api = {
       ipcRenderer.removeListener('aft:focus-terminal', handler)
     }
   },
+  onOpenPalette: (fn: () => void): (() => void) => {
+    const handler = (): void => fn()
+    ipcRenderer.on('aft:open-palette', handler)
+    return (): void => {
+      ipcRenderer.removeListener('aft:open-palette', handler)
+    }
+  },
   onPointer: (fn: (spot: unknown) => void): (() => void) => {
     const handler = (_e: IpcRendererEvent, spot: unknown): void => fn(spot)
     ipcRenderer.on('aft:pointer', handler)

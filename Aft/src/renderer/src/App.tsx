@@ -7,7 +7,7 @@ import type {
   StageBox,
   WindowAction
 } from '../../main/browser/types'
-import { isThemeId, paintTheme, readTheme, storeTheme, themeOf } from './themes'
+import { isThemeId, paintTheme, readTheme, storeTheme, THEMES, themeOf } from './themes'
 import type { ThemeId } from './themes'
 import { Glyph, IconButton } from './icons'
 import { clamp, formatMs } from './format'
@@ -23,6 +23,8 @@ import CoveragePage from './pages/CoveragePage'
 import DataPage from './pages/DataPage'
 import StatsPage from './pages/StatsPage'
 import Drawer from './parts/Drawer'
+import CommandPalette from './parts/CommandPalette'
+import type { Command } from './parts/CommandPalette'
 
 type PageId = 'browser' | 'scenarios' | 'results' | 'stats' | 'identity' | 'coverage' | 'data'
 
@@ -212,6 +214,8 @@ export default function App(): React.JSX.Element {
   const [listOpen, setListOpen] = useState(false)
   const [drag, setDrag] = useState<DragAxis | null>(null)
   const [urlSeed, setUrlSeed] = useState(0)
+  const [createSeed, setCreateSeed] = useState(0)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const [railMini, setRailMini] = useState(() => readFlag(RAIL_KEY, false))
   const [recording, setRecording] = useState(false)
   const [playing, setPlaying] = useState(false)
@@ -462,6 +466,10 @@ export default function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    return window.aft.onOpenPalette(() => setPaletteOpen(true))
+  }, [])
+
+  useEffect(() => {
     return window.aft.onPointer((spot) => {
       const axis = dragRef.current
       const box = spaceRef.current?.getBoundingClientRect()
@@ -550,10 +558,9 @@ export default function App(): React.JSX.Element {
 
   const closeDrawer = useCallback((): void => window.aft.setTerminal(false), [])
 
-  const openPalette = useCallback((): void => {
-    if (!terminalOpen) window.aft.setTerminal(true)
-    setFocusSeed((prev) => prev + 1)
-  }, [terminalOpen])
+  const openPalette = useCallback((): void => setPaletteOpen(true), [])
+
+  const closePalette = useCallback((): void => setPaletteOpen(false), [])
 
   const toggleRail = useCallback((): void => setRailMini((prev) => !prev), [])
 
@@ -669,6 +676,206 @@ export default function App(): React.JSX.Element {
 
   const onVision = useCallback((): void => void toggleVision(), [toggleVision])
 
+  const goPage = useCallback((id: PageId): void => setPage(id), [])
+
+  const commands = useMemo((): Command[] => {
+    const pages: Command[] = NAV.filter((item) => !item.suite).map((item) => ({
+      id: 'page:' + item.id,
+      group: 'Sayfalar',
+      label: item.label + ' sekmesini aç',
+      glyph: item.glyph,
+      keywords: item.id
+    }))
+
+    return pages.concat(
+      {
+        id: 'scenario:new',
+        group: 'Senaryolar',
+        label: 'Yeni senaryo oluştur',
+        glyph: 'plus',
+        keywords: 'senaryo ekle olustur yeni scenario'
+      },
+      {
+        id: 'scenario:library',
+        group: 'Senaryolar',
+        label: 'Senaryo kütüphanesini aç',
+        glyph: 'library',
+        keywords: 'senaryo liste kutuphane proje modul'
+      },
+      {
+        id: 'scenario:run',
+        group: 'Senaryolar',
+        label: 'Senaryo çalıştır',
+        glyph: 'play',
+        hint: 'Oynatma paneli',
+        keywords: 'senaryo kosum calistir oynat playback'
+      },
+      {
+        id: 'scenario:results',
+        group: 'Senaryolar',
+        label: 'Senaryo koşum sonuçlarını aç',
+        glyph: 'history',
+        keywords: 'senaryo sonuc kosum rapor'
+      },
+      {
+        id: 'scenario:stats',
+        group: 'Senaryolar',
+        label: 'Senaryo istatistiklerini aç',
+        glyph: 'spark',
+        keywords: 'senaryo istatistik grafik trend'
+      },
+      {
+        id: 'record:start',
+        group: 'Kayıt',
+        label: 'Kayıt panelini aç',
+        glyph: 'record',
+        keywords: 'kayit record adim yakala'
+      },
+      {
+        id: 'record:playback',
+        group: 'Kayıt',
+        label: 'Oynatma panelini aç',
+        glyph: 'play',
+        keywords: 'oynatma playback kosum'
+      },
+      {
+        id: 'panel:elements',
+        group: 'Paneller',
+        label: 'Öğeler panelini aç veya kapat',
+        glyph: 'grid',
+        keywords: 'ogeler eleman element liste'
+      },
+      {
+        id: 'panel:devtools',
+        group: 'Paneller',
+        label: 'İnceleme panelini aç veya kapat',
+        glyph: 'inspect',
+        hint: 'F12',
+        keywords: 'incele devtools gelistirici'
+      },
+      {
+        id: 'panel:terminal',
+        group: 'Paneller',
+        label: 'Yardımcı paneli aç veya kapat',
+        glyph: 'terminal',
+        hint: 'Ctrl K',
+        keywords: 'terminal panel konsol ajan log'
+      },
+      {
+        id: 'panel:settings',
+        group: 'Paneller',
+        label: 'Ayarları aç',
+        glyph: 'settings',
+        keywords: 'ayar tema kisayol'
+      },
+      {
+        id: 'browser:reload',
+        group: 'Tarayıcı',
+        label: 'Sayfayı yenile',
+        glyph: 'reload',
+        keywords: 'yenile reload sayfa'
+      },
+      {
+        id: 'browser:home',
+        group: 'Tarayıcı',
+        label: 'Ana sayfaya dön',
+        glyph: 'home',
+        keywords: 'ana sayfa home'
+      },
+      {
+        id: 'browser:url',
+        group: 'Tarayıcı',
+        label: 'Adres çubuğuna git',
+        glyph: 'globe',
+        hint: 'Ctrl L',
+        keywords: 'adres url git'
+      },
+      {
+        id: 'browser:vision',
+        group: 'Tarayıcı',
+        label: state.vision ? 'Görüşü kapat' : 'Görüşü aç',
+        glyph: state.vision ? 'eyeOff' : 'eye',
+        keywords: 'gorus vision tarama'
+      },
+      ...THEMES.map((item) => ({
+        id: 'theme:' + item.id,
+        group: 'Tema',
+        label: item.label + ' temasına geç',
+        glyph: 'layers',
+        hint: item.note,
+        keywords: 'tema renk ' + item.id
+      }))
+    )
+  }, [state.vision])
+
+  const runCommand = useCallback(
+    (id: string): void => {
+      setPaletteOpen(false)
+
+      const [scope, key] = id.split(':')
+
+      if (scope === 'page') {
+        goPage(key as PageId)
+        return
+      }
+
+      if (scope === 'theme') {
+        if (isThemeId(key)) setTheme(key)
+        return
+      }
+
+      if (scope === 'scenario') {
+        if (key === 'new') {
+          goPage('scenarios')
+          setCreateSeed((prev) => prev + 1)
+          return
+        }
+        if (key === 'library') {
+          goPage('scenarios')
+          return
+        }
+        if (key === 'run') {
+          setPage('browser')
+          setDock('playback')
+          return
+        }
+        if (key === 'results') {
+          goPage('results')
+          return
+        }
+        goPage('stats')
+        return
+      }
+
+      if (scope === 'record') {
+        setPage('browser')
+        setDock(key === 'start' ? 'record' : 'playback')
+        return
+      }
+
+      if (scope === 'panel') {
+        if (key === 'elements') toggleList()
+        else if (key === 'devtools') toggleDevtools()
+        else if (key === 'terminal') toggleDrawer()
+        else toggleSettings()
+        return
+      }
+
+      if (key === 'vision') {
+        onVision()
+        return
+      }
+
+      setPage('browser')
+      if (key === 'url') {
+        setUrlSeed((prev) => prev + 1)
+        return
+      }
+      nav(key as NavKind)
+    },
+    [goPage, nav, onVision, toggleDevtools, toggleDrawer, toggleList, toggleSettings]
+  )
+
   const status = useMemo(() => {
     if (recording) return { label: 'kayıtta', tone: 'rec' }
     if (playing) return { label: 'koşumda', tone: 'run' }
@@ -687,8 +894,8 @@ export default function App(): React.JSX.Element {
 
         <button className="cmd-trigger" onClick={openPalette} type="button">
           <Glyph name="search" size={13} />
-          <span className="cmd-text">Komut çalıştır veya ara</span>
-          <span className="cmd-key">Ctrl K</span>
+          <span className="cmd-text">İşlem ara veya çalıştır</span>
+          <span className="cmd-key">Ctrl P</span>
         </button>
 
         <div className="title-drag" onDoubleClick={maximizeWindow} />
@@ -826,6 +1033,7 @@ export default function App(): React.JSX.Element {
           {page === 'scenarios' ? (
             <ScenarioPage
               revision={library}
+              createSeed={createSeed}
               busy={playing || recording}
               baseUrl={state.url}
               onReport={report}
@@ -851,6 +1059,10 @@ export default function App(): React.JSX.Element {
           />
         ) : null}
       </main>
+
+      {paletteOpen ? (
+        <CommandPalette commands={commands} onRun={runCommand} onClose={closePalette} />
+      ) : null}
 
       <footer className="statusbar">
         <span className={'status-live ' + status.tone} />
