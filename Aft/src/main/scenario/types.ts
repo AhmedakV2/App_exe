@@ -180,6 +180,7 @@ export interface ScenarioStep {
   deltaY: number
   optionValue: string
   files: string[]
+  waitMs: number
   timeoutMs: number
   retries: number
   scanLevel: ScanLevel | null

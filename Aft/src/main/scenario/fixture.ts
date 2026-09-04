@@ -178,7 +178,8 @@ export const PLAYBACK_SCENARIO = `{
     {
       "id": "gecis-bekle",
       "kind": "wait",
-      "title": "Sayfa gecisini bekle"
+      "title": "Sayfa gecisini bekle",
+      "waitMs": 1200
     },
     {
       "id": "sonuc-adres",

@@ -83,6 +83,7 @@ export interface ActionRequest {
   optionValue?: string
   files?: string[]
   timeoutMs?: number
+  waitMs?: number
   force?: boolean
   mode?: InputMode
 }
@@ -155,6 +156,16 @@ export const NAVIGATION_GRACE: Partial<Record<ActionKind, number>> = {
   'select-option': 250
 }
 
+export const MIN_WAIT_MS = 0
+
+export const MAX_WAIT_MS = 600000
+
+export const DEFAULT_WAIT_MS = 1000
+
+export const DEFAULT_HOVER_HOLD_MS = 320
+
+export const MAX_HOVER_HOLD_MS = 10000
+
 export interface ActionOptions {
   actionability: ActionabilityOptions
   navigation: NavigationOptions
@@ -162,6 +173,7 @@ export interface ActionOptions {
   promptText: string
   downloadPath: string
   typeDelayMs: number
+  hoverHoldMs: number
   fallbackToDirect: boolean
 }
 
@@ -172,5 +184,6 @@ export const DEFAULT_ACTION: ActionOptions = {
   promptText: '',
   downloadPath: '',
   typeDelayMs: 0,
+  hoverHoldMs: DEFAULT_HOVER_HOLD_MS,
   fallbackToDirect: true
 }

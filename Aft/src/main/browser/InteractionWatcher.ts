@@ -13,6 +13,14 @@ const PROBE_LIMIT = 16
 
 const HANDLE_GROUP = 'aft-record-handles'
 
+export const DEFAULT_HOVER_DWELL_MS = 650
+
+export interface WatchTuning {
+  hoverDwellMs: number
+}
+
+export const DEFAULT_TUNING: WatchTuning = { hoverDwellMs: DEFAULT_HOVER_DWELL_MS }
+
 const SOURCE = `(function () {
   if (window.__aftRecord) return;
   var queue = [];
@@ -24,8 +32,10 @@ const SOURCE = `(function () {
   var probe = { el: null, seq: 0 };
   var lastPointerAt = 0;
   var lastKeyAt = 0;
-  var hoverEl = null;
-  var hoverAt = 0;
+  var hoverRaw = null;
+  var hoverTimer = null;
+  var hoverSent = null;
+  var hoverStart = 0;
   var TEST = ['data-testid','data-test-id','data-test','data-qa','data-qa-id','data-cy','data-e2e','data-automation-id','data-automationid','data-tracking-id'];
   var KEYS = ['Enter','Tab','Escape','Backspace','Delete','Insert','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'];
   var TYPING_KEYS = ['Backspace','Delete','Insert',' '];
@@ -35,7 +45,8 @@ const SOURCE = `(function () {
   var PROMOTE_VIEW = 0.5;
   var TONES = { strong: '#3ecf8e', weak: '#f0a02a', blocked: '#ef4444' };
   var HOVER_COMBO = 'Control+Shift+M';
-  var HOVER_TRACK_MS = 60;
+  var HOVER_DWELL_MS = __AFT_HOVER_DWELL__;
+  var HOVER_MIN_SIZE = 4;
 
   function attr(el, name) {
     try { return el.getAttribute(name) || ''; } catch (e) { return ''; }
@@ -213,6 +224,35 @@ const SOURCE = `(function () {
     return promote(pick(event));
   }
 
+  function dwellable(el) {
+    if (!el || el.nodeType !== 1) return false;
+    var tag = (el.tagName || '').toLowerCase();
+    if (tag === 'html' || tag === 'body') return false;
+    var rect = box(el);
+    return !!rect && rect.w >= HOVER_MIN_SIZE && rect.h >= HOVER_MIN_SIZE;
+  }
+
+  function cancelDwell() {
+    if (!hoverTimer) return;
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
+
+  function armDwell(node) {
+    hoverRaw = node;
+    cancelDwell();
+    if (!HOVER_DWELL_MS || !node) return;
+    hoverStart = Date.now();
+    hoverTimer = setTimeout(function () {
+      hoverTimer = null;
+      var el = promote(hoverRaw);
+      if (!dwellable(el) || el === hoverSent) return;
+      hoverSent = el;
+      markProbe(el);
+      emit('hover', el, { dwellMs: Date.now() - hoverStart });
+    }, HOVER_DWELL_MS);
+  }
+
   function post(item) {
     try {
       if (typeof window.__aftRecordSend !== 'function') return false;
@@ -249,6 +289,7 @@ const SOURCE = `(function () {
       optionLabel: '',
       files: [],
       deltaY: 0,
+      dwellMs: 0,
       scrollY: Math.round(window.pageYOffset || 0),
       detail: 0
     };
@@ -264,14 +305,14 @@ const SOURCE = `(function () {
   }
 
   bind('mousedown', document, function (event) {
-    markProbe(pickTarget(event));
+    cancelDwell();
+    var el = pickTarget(event);
+    hoverSent = el;
+    markProbe(el);
   });
 
   bind('mousemove', document, function (event) {
-    var now = Date.now();
-    if (now - hoverAt < HOVER_TRACK_MS) return;
-    hoverAt = now;
-    hoverEl = pickTarget(event);
+    armDwell(pick(event));
   });
 
   bind('click', document, function (event) {
@@ -331,12 +372,16 @@ const SOURCE = `(function () {
     var key = event.key;
     if (!key || MODIFIER_KEYS.indexOf(key) >= 0) return;
 
+    cancelDwell();
+
     if (combo(event) === HOVER_COMBO) {
       if (typeof event.preventDefault === 'function') event.preventDefault();
-      if (!hoverEl) return;
+      var resting = promote(hoverRaw);
+      if (!dwellable(resting)) return;
       lastKeyAt = Date.now();
-      markProbe(hoverEl);
-      emit('hover', hoverEl, {});
+      hoverSent = resting;
+      markProbe(resting);
+      emit('hover', resting, { dwellMs: HOVER_DWELL_MS });
       return;
     }
 
@@ -352,6 +397,8 @@ const SOURCE = `(function () {
   });
 
   bind('wheel', document, function (event) {
+    cancelDwell();
+    hoverSent = null;
     seedScroll(pick(event)).wheel += wheelDelta(event);
   });
 
@@ -401,6 +448,7 @@ const SOURCE = `(function () {
       layer = null;
     },
     stop: function () {
+      cancelDwell();
       for (var i = 0; i < bound.length; i++) bound[i][1].removeEventListener(bound[i][0], bound[i][2], true);
       for (var j = 0; j < jobs.length; j++) if (jobs[j].timer) clearTimeout(jobs[j].timer);
       bound = [];
@@ -408,12 +456,18 @@ const SOURCE = `(function () {
       queue = [];
       slots = {};
       probe = { el: null, seq: 0 };
-      hoverEl = null;
+      hoverRaw = null;
+      hoverSent = null;
       window.__aftRecord.clear();
       try { delete window.__aftRecord; } catch (e) { window.__aftRecord = null; }
     }
   };
 })()`
+
+function sourceFor(tuning: WatchTuning): string {
+  const dwell = Math.max(0, Math.round(tuning.hoverDwellMs))
+  return SOURCE.replace('__AFT_HOVER_DWELL__', String(dwell))
+}
 
 const DRAIN = 'window.__aftRecord ? JSON.stringify(window.__aftRecord.drain()) : ""'
 
@@ -439,6 +493,7 @@ export class InteractionWatcher {
   private readonly bindings = new Set<string>()
   private readonly probes = new Map<string, Promise<number>>()
   private timer: ReturnType<typeof setInterval> | null = null
+  private source = sourceFor(DEFAULT_TUNING)
   private sink: RawSink | null = null
   private relay: Promise<void> = Promise.resolve()
   private draining = false
@@ -447,10 +502,11 @@ export class InteractionWatcher {
 
   constructor(private readonly tp: Transport) {}
 
-  async start(sink: RawSink): Promise<void> {
+  async start(sink: RawSink, tuning: WatchTuning = DEFAULT_TUNING): Promise<void> {
     this.sink = sink
     if (this.active) return
     this.active = true
+    this.source = sourceFor(tuning)
 
     this.offs.push(
       this.tp.on('Runtime.executionContextCreated', (params, sessionId) => {
@@ -571,7 +627,7 @@ export class InteractionWatcher {
     if (!this.scripts.has(sessionId)) {
       const added = await this.tp.trySend<{ identifier?: string }>(
         'Page.addScriptToEvaluateOnNewDocument',
-        { source: SOURCE, worldName: WORLD, runImmediately: true },
+        { source: this.source, worldName: WORLD, runImmediately: true },
         sessionId
       )
       if (added?.identifier) this.scripts.set(sessionId, added.identifier)
@@ -593,7 +649,7 @@ export class InteractionWatcher {
       if (typeof world?.executionContextId !== 'number') continue
 
       const ref = this.remember(sessionId, frameId, world.executionContextId)
-      await this.evaluate(ref, SOURCE)
+      await this.evaluate(ref, this.source)
     }
   }
 
@@ -709,6 +765,7 @@ export class InteractionWatcher {
       optionLabel: String(item['optionLabel'] ?? ''),
       files: Array.isArray(item['files']) ? (item['files'] as string[]) : [],
       deltaY: Number(item['deltaY'] ?? 0),
+      dwellMs: Number(item['dwellMs'] ?? 0),
       scrollY: Number(item['scrollY'] ?? 0),
       detail: Number(item['detail'] ?? 0)
     }

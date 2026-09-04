@@ -96,6 +96,7 @@ export function build(
     deltaY: intent.deltaY,
     optionValue: intent.optionValue,
     files: intent.files.slice(),
+    waitMs: intent.kind === 'hover' ? intent.waitMs : 0,
     timeoutMs: options.stepTimeoutMs,
     retries: options.retries,
     scanLevel: null,
@@ -106,11 +107,11 @@ export function build(
   }
 }
 
-export function waitStep(id: string, timeoutMs: number, options: RecordOptions): ScenarioStep {
+export function waitStep(id: string, waitMs: number, options: RecordOptions): ScenarioStep {
   return {
     id,
     kind: 'wait',
-    title: 'Bekle: ' + timeoutMs + ' ms',
+    title: waitTitle(waitMs),
     target: null,
     assertion: null,
     condition: null,
@@ -121,7 +122,8 @@ export function waitStep(id: string, timeoutMs: number, options: RecordOptions):
     deltaY: 0,
     optionValue: '',
     files: [],
-    timeoutMs,
+    waitMs,
+    timeoutMs: options.stepTimeoutMs,
     retries: 0,
     scanLevel: null,
     mode: options.inputMode,
@@ -146,6 +148,7 @@ export function assertStep(id: string, assertion: Assertion, options: RecordOpti
     deltaY: 0,
     optionValue: '',
     files: [],
+    waitMs: 0,
     timeoutMs: options.stepTimeoutMs,
     retries: 0,
     scanLevel: null,
@@ -213,10 +216,21 @@ export function scrollTitle(deltaY: number, label: string): string {
   return KIND_LABELS['scroll'] + ': ' + deltaY + ' px' + (label ? ' (' + label + ')' : '')
 }
 
+export function waitTitle(waitMs: number): string {
+  return KIND_LABELS['wait'] + ': ' + waitMs + ' ms'
+}
+
+export function hoverTitle(label: string, waitMs: number): string {
+  const head = KIND_LABELS['hover'] + (label ? ': ' + label : '')
+  return waitMs > 0 ? head + ' (' + waitMs + ' ms)' : head
+}
+
 function titleOf(kind: string, label: string, intent: RecordIntent): string {
   const head = KIND_LABELS[kind] ?? kind
 
   if (kind === 'navigate') return head + ': ' + intent.url
+  if (kind === 'wait') return waitTitle(intent.waitMs)
+  if (kind === 'hover') return hoverTitle(label, intent.waitMs)
   if (kind === 'scroll') return scrollTitle(intent.deltaY, label)
   if (kind === 'press-key') return head + ': ' + intent.key + (label ? ' (' + label + ')' : '')
   if (kind === 'clear-type' || kind === 'type') {

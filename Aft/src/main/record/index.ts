@@ -17,9 +17,12 @@ export {
   assertionOptions,
   build,
   descriptorTarget,
+  hoverTitle,
+  scrollTitle,
   steadyTarget,
   stepId,
-  waitStep
+  waitStep,
+  waitTitle
 } from './StepFactory'
 export { edit, renumber, type EditOutcome } from './Editor'
 export { compose, defaultTitle, sessionId, type Composition } from './Composer'

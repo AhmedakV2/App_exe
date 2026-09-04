@@ -46,6 +46,7 @@ export interface AgentAction {
   key?: string
   optionValue?: string
   files?: string[]
+  waitMs?: number
   force?: boolean
 }
 

@@ -110,7 +110,7 @@ export class Recorder {
     this.session = session
     this.interactedAt = 0
 
-    await this.host.watch((batch) => this.accept(batch))
+    await this.host.watch((batch) => this.accept(batch), { hoverDwellMs: options.hoverDwellMs })
     this.watching = true
 
     this.notice('info', '', 'Kayit basladi: ' + (url || 'bos sayfa'), [

@@ -49,8 +49,10 @@ export function suppress(
   }
 
   if (intent.kind === 'hover') {
+    if (!key) return { ...NONE, drop: true, reason: 'imlec adimi hedefsiz' }
+
     const previous = trailing(steps, (step) => step.sourceKey === key, 1)[0]
-    if (previous && previous.kind === 'hover' && key) {
+    if (previous && previous.kind === 'hover') {
       return { ...NONE, drop: true, reason: 'ayni eleman uzerinde tekrar eden imlec adimi elendi' }
     }
     return NONE
@@ -69,6 +71,12 @@ export function suppress(
   const remove: string[] = []
   let removeReason = ''
 
+  const resting = last && last.kind === 'hover' && Boolean(key) && last.sourceKey === key
+  if (resting && intent.at - last.at <= options.hoverMergeMs) {
+    remove.push(last.id)
+    removeReason = 'eylem oncesi imlec adimi elendi'
+  }
+
   const scrolledIntoView =
     last &&
     last.kind === 'scroll' &&
@@ -80,8 +88,12 @@ export function suppress(
     removeReason = 'eylem oncesi kaydirma elendi'
   }
 
+  const dropped = new Set(remove)
+  const rest = remove.length ? steps.filter((step) => !dropped.has(step.id)) : steps
+  const tail = rest[rest.length - 1] ?? null
+
   if (intent.kind === 'clear-type' && key) {
-    const chain = trailing(steps, (step) => step.sourceKey === key, 2)
+    const chain = trailing(rest, (step) => step.sourceKey === key, 2)
     let merge = chain[0] ?? null
 
     if (merge && merge.kind === 'click' && intent.at - merge.at <= options.focusClickMs) {
@@ -96,7 +108,7 @@ export function suppress(
   }
 
   if (intent.kind === 'select-option' && key) {
-    const merge = trailing(steps, (step) => step.sourceKey === key, 1)[0]
+    const merge = trailing(rest, (step) => step.sourceKey === key, 1)[0]
     if (merge && merge.kind === 'click' && intent.at - merge.at <= options.focusClickMs) {
       remove.push(merge.id)
       removeReason = 'liste acma tiklamasi elendi'
@@ -107,7 +119,7 @@ export function suppress(
   }
 
   if (intent.kind === 'upload' && key) {
-    const merge = trailing(steps, (step) => step.sourceKey === key, 1)[0]
+    const merge = trailing(rest, (step) => step.sourceKey === key, 1)[0]
     if (merge && merge.kind === 'click' && intent.at - merge.at <= options.focusClickMs) {
       remove.push(merge.id)
       removeReason = 'dosya secici tiklamasi elendi'
@@ -115,14 +127,14 @@ export function suppress(
   }
 
   if (intent.kind === 'click' && key) {
-    const previous = trailing(steps, (step) => step.sourceKey === key, 1)[0]
+    const previous = trailing(rest, (step) => step.sourceKey === key, 1)[0]
     if (previous && previous.kind === 'click' && intent.at - previous.at <= options.doubleClickMs) {
       return { ...NONE, drop: true, reason: 'ayni eleman uzerinde tekrar eden tiklama elendi' }
     }
   }
 
-  if (intent.kind === 'press-key' && last && last.kind === 'press-key') {
-    if (last.step.key === intent.key && last.sourceKey === key && intent.at - last.at <= 120) {
+  if (intent.kind === 'press-key' && tail && tail.kind === 'press-key') {
+    if (tail.step.key === intent.key && tail.sourceKey === key && intent.at - tail.at <= 120) {
       return { ...NONE, drop: true, reason: 'tekrar eden tus elendi' }
     }
   }
