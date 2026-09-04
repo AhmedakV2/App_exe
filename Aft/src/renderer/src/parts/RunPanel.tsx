@@ -161,9 +161,9 @@ export default function RunPanel({
       text: 'Koşum başladı: ' + (entries.find((entry) => entry.id === selected)?.title ?? selected),
       detail: [
         total + ' adım',
-        'hata görüntüsü ' + (options.screenshotOnFailure ? 'açık' : 'kapalı'),
+        'Hata görüntüsü ' + (options.screenshotOnFailure ? 'açık' : 'kapalı'),
         'ilk hatada dur ' + (options.stopOnFailure ? 'açık' : 'kapalı'),
-        'durum doğrulama ' + (options.verifyState ? 'açık' : 'kapalı')
+        'Durum doğrulama ' + (options.verifyState ? 'açık' : 'kapalı')
       ]
     })
 
@@ -352,13 +352,13 @@ export default function RunPanel({
 
           <div className="metric-row tight">
             <Metric
-              label="durum"
+              label="Durum"
               value={RUN_LABELS[run.status] ?? run.status}
               tone={run.ok ? 'ok' : 'bad'}
             />
-            <Metric label="geçen" value={run.metrics.passed + '/' + run.metrics.steps} />
-            <Metric label="güven" value={percent(run.metrics.meanConfidence)} />
-            <Metric label="süre" value={formatMs(run.metrics.totalMs)} />
+            <Metric label="Geçen" value={run.metrics.passed + '/' + run.metrics.steps} />
+            <Metric label="Güven" value={percent(run.metrics.meanConfidence)} />
+            <Metric label="Süre" value={formatMs(run.metrics.totalMs)} />
           </div>
 
           {run.failures.slice(0, 3).map((failure, index) => (

@@ -65,7 +65,13 @@ export default memo(function PromptSheet({
         <header className="sheet-head">
           <span className="sheet-title">{title}</span>
           <span className="sheet-push" />
-          <button className="shot-btn" title="Kapat" onClick={onClose} type="button">
+          <button
+            className="sheet-close"
+            title="Kapat"
+            aria-label="Kapat"
+            onClick={onClose}
+            type="button"
+          >
             <Glyph name="close" size={14} />
           </button>
         </header>

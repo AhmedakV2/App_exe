@@ -80,13 +80,13 @@ export default memo(function ContextView({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="sheet-head">
-          <span className="sheet-title">
+          <span className="sheet-title bad">
             <Glyph name="alert" size={14} />
             {context.stepTitle}
           </span>
           <span className="sheet-push" />
           <button
-            className="ghost-btn"
+            className="sheet-close"
             title="Kapat"
             aria-label="Kapat"
             onClick={onClose}
@@ -98,29 +98,29 @@ export default memo(function ContextView({
 
         <div className="sheet-body">
           <div className="metric-row">
-            <Metric label="durum" value={resolution ? resolution.state : 'akış'} tone="bad" />
+            <Metric label="Durum" value={resolution ? resolution.state : 'akış'} tone="bad" />
             <Metric
-              label="güven"
+              label="Güven"
               value={resolution ? percent(resolution.confidence) : '—'}
               tone={resolution && resolution.confidence >= 0.82 ? 'ok' : 'warn'}
             />
-            <Metric label="tarama" value={'seviye ' + context.scanLevel} />
-            <Metric label="eleman" value={context.elements.length} />
+            <Metric label="Tarama" value={'seviye ' + context.scanLevel} />
+            <Metric label="Eleman" value={context.elements.length} />
             <Metric
-              label="kör nokta"
+              label="Kör nokta"
               value={context.blindSpots.length}
               tone={context.blindSpots.length ? 'warn' : 'flat'}
             />
           </div>
 
           <div className="kv">
-            <span className="kv-key">adres</span>
+            <span className="kv-key">Adres</span>
             <span className="kv-val mono">{shortUrl(context.url)}</span>
-            <span className="kv-key">başlık</span>
+            <span className="kv-key">Başlık</span>
             <span className="kv-val">{context.title || '—'}</span>
-            <span className="kv-key">zaman</span>
+            <span className="kv-key">Zaman</span>
             <span className="kv-val">{formatDate(context.capturedAt)}</span>
-            <span className="kv-key">paket</span>
+            <span className="kv-key">Paket</span>
             <span className="kv-val mono">{context.id}</span>
           </div>
 
@@ -226,7 +226,7 @@ export default memo(function ContextView({
                       <span className="row-num">{item.ordinal}</span>
                       <span className="row-key">{item.tag}</span>
                       <span className="row-mid">{item.name || item.text || item.role}</span>
-                      {item.interactive ? <Pill>etkileşilebilir</Pill> : null}
+                      {item.interactive ? <Pill>Etkileşilebilir</Pill> : null}
                     </div>
                   ))}
                 </div>

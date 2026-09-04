@@ -341,7 +341,7 @@ function TargetEditor({
             onChange({ ...blankTarget(next as TargetKind), label: target?.label ?? '' })
           }}
         >
-          <option value="none">hedef yok</option>
+          <option value="none">Hedef yok</option>
           {TARGET_KINDS.map((item) => (
             <option key={item} value={item}>
               {item}
@@ -1083,7 +1083,7 @@ export default function ScenarioPage({
               {report?.warnings.length ? (
                 <Pill tone="warn">{report.warnings.length} uyarı</Pill>
               ) : null}
-              {dirty ? <Pill tone="accent">kaydedilmedi</Pill> : null}
+              {dirty ? <Pill tone="accent">Kaydedilmedi</Pill> : null}
               <Pill>{steps.length} adım</Pill>
             </>
           ) : null
@@ -1405,9 +1405,9 @@ export default function ScenarioPage({
 
               {step.target?.descriptor ? (
                 <div className="kv">
-                  <span className="kv-key">kalite</span>
+                  <span className="kv-key">Kalite</span>
                   <span className="kv-val">{percent(step.target.descriptor.quality.score)}</span>
-                  <span className="kv-key">strateji</span>
+                  <span className="kv-key">Strateji</span>
                   <span className="kv-val">
                     {step.target.descriptor.strategies.map((entry) => entry.kind).join(', ')}
                   </span>
@@ -1524,14 +1524,14 @@ export default function ScenarioPage({
               />
 
               <div className="kv">
-                <span className="kv-key">şema</span>
+                <span className="kv-key">Şema</span>
                 <span className="kv-val mono">{draft.version}</span>
-                <span className="kv-key">kimlik</span>
+                <span className="kv-key">Kimlik</span>
                 <span className="kv-val mono">{draft.id}</span>
-                <span className="kv-key">adres</span>
+                <span className="kv-key">Adres</span>
                 <span className="kv-val mono">{shortUrl(draft.baseUrl)}</span>
-                <span className="kv-key">konum</span>
-                <span className="kv-val mono">{place || 'kök'}</span>
+                <span className="kv-key">Konum</span>
+                <span className="kv-val mono">{place || 'Kök'}</span>
               </div>
             </>
           ) : (

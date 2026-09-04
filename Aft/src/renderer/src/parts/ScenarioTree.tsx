@@ -230,7 +230,7 @@ export default memo(function ScenarioTree({
               </button>
               <Glyph name={row.folder.kind === 'module' ? 'module' : 'folder'} size={13} />
               <span className="tree-title">{row.folder.name}</span>
-              <span className="tree-kind">{row.folder.kind === 'module' ? 'modül' : 'proje'}</span>
+              <span className="tree-kind">{row.folder.kind === 'module' ? 'Modül' : 'Proje'}</span>
               <span className="tree-meta">{row.folder.scenarios}</span>
             </div>
           ) : (
