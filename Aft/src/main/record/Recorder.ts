@@ -172,6 +172,17 @@ export class Recorder {
     this.emit()
   }
 
+  setHover(next: boolean): boolean {
+    const session = this.session
+    if (!session) return false
+
+    session.options = { ...session.options, captureHover: next }
+    session.updatedAt = Date.now()
+    this.notice('info', '', next ? 'Imlec adimlari acildi' : 'Imlec adimlari kapatildi')
+    this.emit()
+    return next
+  }
+
   applyEdit(request: EditRequest): EditOutcome {
     const session = this.session
     if (!session) return { ok: false, message: 'Etkin kayit yok', stepId: '' }

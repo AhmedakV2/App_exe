@@ -155,6 +155,10 @@ async function main(): Promise<number> {
     await delay(320)
     await controller.dispatch({ kind: 'hover', ordinal: golge })
     await delay(DWELL_MS)
+    recorder.setHover(false)
+    await controller.dispatch({ kind: 'hover', ordinal: cerceve })
+    await delay(DWELL_MS)
+    recorder.setHover(true)
     await controller.dispatch({ kind: 'click', ordinal: gonder })
     await delay(SETTLE_MS)
 
@@ -196,7 +200,14 @@ async function main(): Promise<number> {
       'adres adimi=' + session.steps.filter((entry) => entry.kind === 'navigate').length
     )
 
-    const imlecAdimi = session.steps.find((entry) => entry.kind === 'hover')
+    const imlecAdimlari = session.steps.filter((entry) => entry.kind === 'hover')
+    expect(
+      'imlec adimlari kapaliyken bekletme yazilmadi',
+      imlecAdimlari.length === 1,
+      'imlec adimi=' + imlecAdimlari.length
+    )
+
+    const imlecAdimi = imlecAdimlari[0]
     expect(
       'imlec bekletmesi adim olarak kaydedildi',
       Boolean(imlecAdimi?.step.target),

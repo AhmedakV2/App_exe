@@ -8,6 +8,7 @@ import {
   mountIdentity,
   mountPlayback,
   mountRecord,
+  recordChannel,
   unmountData,
   unmountIdentity,
   unmountPlayback,
@@ -596,6 +597,12 @@ function windowAction(action: WindowAction): void {
   pushState()
 }
 
+function toggleHoverCapture(): void {
+  const channel = recordChannel()
+  if (!channel || !channel.session()) return
+  channel.toggleHover()
+}
+
 function bindShortcuts(wc: WebContents): void {
   wc.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return
@@ -630,6 +637,12 @@ function bindShortcuts(wc: WebContents): void {
     if (key === 'p') {
       event.preventDefault()
       openPalette()
+      return
+    }
+
+    if (key === 'h') {
+      event.preventDefault()
+      toggleHoverCapture()
       return
     }
 

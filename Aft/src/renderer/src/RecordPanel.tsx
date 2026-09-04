@@ -576,7 +576,7 @@ export default function RecordPanel({
         />
         <IconButton
           name="target"
-          title="İmleç bekletmesini adım olarak yakala"
+          title="İmleç adımları · Ctrl + H"
           onClick={toggleHover}
           disabled={busy || !live}
           active={Boolean(view?.options.captureHover)}
@@ -607,10 +607,13 @@ export default function RecordPanel({
             </div>
           ) : null}
           {view?.baseUrl ? <span className="dock-meta">{shortUrl(view.baseUrl)}</span> : null}
-          {live && view?.options.captureHover ? (
+          {live ? (
             <span className="dock-meta">
-              imleç {view.options.hoverDwellMs} ms beklerse adım açılır · elle yakalama Ctrl + Shift
-              + M
+              {view?.options.captureHover
+                ? 'imleç ' +
+                  view.options.hoverDwellMs +
+                  ' ms beklerse adım açılır · Ctrl + H ile kapat'
+                : 'imleç adımları kapalı · Ctrl + H ile aç'}
             </span>
           ) : null}
         </div>
