@@ -283,20 +283,20 @@ export default function ResultPage({
           {detail && run && !context ? (
             <>
               <div className="metric-row">
-                <Metric label="adım" value={run.steps} />
-                <Metric label="geçen" value={run.passed} tone="ok" />
-                <Metric label="kalan" value={run.failed} tone={run.failed ? 'bad' : 'flat'} />
-                <Metric label="güven" value={percent(run.meanConfidence)} />
-                <Metric label="süre" value={formatMs(run.totalMs)} />
-                <Metric label="tarama" value={detail.metrics.scans} />
-                <Metric label="kesin" value={detail.metrics.resolvedExact} />
+                <Metric label="Adım" value={run.steps} />
+                <Metric label="Geçen" value={run.passed} tone="ok" />
+                <Metric label="Kalan" value={run.failed} tone={run.failed ? 'bad' : 'flat'} />
+                <Metric label="Güven" value={percent(run.meanConfidence)} />
+                <Metric label="Süre" value={formatMs(run.totalMs)} />
+                <Metric label="Tarama" value={detail.metrics.scans} />
+                <Metric label="Kesin" value={detail.metrics.resolvedExact} />
                 <Metric
-                  label="düşük"
+                  label="Düşük"
                   value={detail.metrics.resolvedLow}
                   tone={detail.metrics.resolvedLow ? 'warn' : 'flat'}
                 />
                 <Metric
-                  label="bulunamayan"
+                  label="Bulunamayan"
                   value={detail.metrics.resolvedMissing}
                   tone={detail.metrics.resolvedMissing ? 'bad' : 'flat'}
                 />
@@ -318,11 +318,11 @@ export default function ResultPage({
                   <div className="table wide">
                     <div className="tr th">
                       <span className="td no">#</span>
-                      <span className="td grow">adım</span>
-                      <span className="td">tür</span>
-                      <span className="td">güven</span>
-                      <span className="td">süre</span>
-                      <span className="td">durum</span>
+                      <span className="td grow">Adım</span>
+                      <span className="td">Tür</span>
+                      <span className="td">Güven</span>
+                      <span className="td">Süre</span>
+                      <span className="td">Durum</span>
                     </div>
                     {detail.steps.map((entry) => (
                       <div key={entry.runId + entry.stepIndex} className="tr">

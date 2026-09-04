@@ -30,6 +30,8 @@ type PageId = 'browser' | 'scenarios' | 'results' | 'stats' | 'identity' | 'cove
 
 type NavItem = { id: PageId; label: string; glyph: string; suite?: boolean }
 
+const NAV_ICON = 22
+
 const NAV: NavItem[] = [
   { id: 'browser', label: 'Tarayıcı', glyph: 'globe' },
   { id: 'browser', label: 'Kayıt ve oynatma', glyph: 'suite', suite: true },
@@ -61,7 +63,6 @@ const DOCK_KEY = 'aft:dock-width'
 const DEV_KEY = 'aft:devtools-width'
 const DOCK_TAB_KEY = 'aft:dock-tab'
 const PAGE_KEY = 'aft:page'
-const RAIL_KEY = 'aft:rail-mini'
 const AUTO_TERM_KEY = 'aft:auto-terminal'
 const AUTO_BACK_KEY = 'aft:auto-terminal-restore'
 const SHOT_KEY = 'aft:play-screenshot'
@@ -156,26 +157,25 @@ const Brand = memo(function Brand(): React.JSX.Element {
 })
 
 const STEP_LABELS: Record<string, string> = {
-  passed: 'geçti',
-  failed: 'kaldı',
-  errored: 'hata',
-  skipped: 'atlandı'
+  passed: 'Geçti',
+  failed: 'Kaldı',
+  errored: 'Hata',
+  skipped: 'Atlandı'
 }
 
 function stepDetail(step: StepResult): string[] {
   const detail: string[] = []
   if (step.resolution) {
     detail.push(
-      'kimlik: ' +
+      'Kimlik: ' +
         step.resolution.state +
-        ' · güven ' +
-        Math.round(step.resolution.confidence * 100) +
-        '%'
+        ' · güven %' +
+        Math.round(step.resolution.confidence * 100)
     )
   }
   for (const check of step.assertions) {
     detail.push(
-      'doğrulama: ' +
+      'Doğrulama: ' +
         check.kind +
         ' · beklenen "' +
         check.expected +
@@ -185,10 +185,10 @@ function stepDetail(step: StepResult): string[] {
     )
   }
   if (step.stateCheck && !step.stateCheck.ok) {
-    detail.push('durum: ' + step.stateCheck.reasons.join(', '))
+    detail.push('Durum: ' + step.stateCheck.reasons.join(', '))
   }
-  if (step.outcome?.code) detail.push('kod: ' + step.outcome.code)
-  if (step.contextId) detail.push('bağlam: ' + step.contextId)
+  if (step.outcome?.code) detail.push('Kod: ' + step.outcome.code)
+  if (step.contextId) detail.push('Bağlam: ' + step.contextId)
   if (step.message) detail.push(step.message)
   return detail
 }
@@ -216,7 +216,6 @@ export default function App(): React.JSX.Element {
   const [urlSeed, setUrlSeed] = useState(0)
   const [createSeed, setCreateSeed] = useState(0)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [railMini, setRailMini] = useState(() => readFlag(RAIL_KEY, false))
   const [recording, setRecording] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [library, setLibrary] = useState(0)
@@ -305,10 +304,6 @@ export default function App(): React.JSX.Element {
     window.aft.requestState()
     return off
   }, [])
-
-  useEffect(() => {
-    storeFlag(RAIL_KEY, railMini)
-  }, [railMini])
 
   useEffect(() => {
     paintTheme(theme)
@@ -562,8 +557,6 @@ export default function App(): React.JSX.Element {
 
   const closePalette = useCallback((): void => setPaletteOpen(false), [])
 
-  const toggleRail = useCallback((): void => setRailMini((prev) => !prev), [])
-
   const toggleSettings = useCallback((): void => {
     window.aft.setSettings(!settingsOpen)
   }, [settingsOpen])
@@ -758,7 +751,7 @@ export default function App(): React.JSX.Element {
         group: 'Paneller',
         label: 'Yardımcı paneli aç veya kapat',
         glyph: 'terminal',
-        hint: 'Ctrl K',
+        hint: 'Ctrl+K',
         keywords: 'terminal panel konsol ajan log'
       },
       {
@@ -787,7 +780,7 @@ export default function App(): React.JSX.Element {
         group: 'Tarayıcı',
         label: 'Adres çubuğuna git',
         glyph: 'globe',
-        hint: 'Ctrl L',
+        hint: 'Ctrl+L',
         keywords: 'adres url git'
       },
       {
@@ -877,13 +870,13 @@ export default function App(): React.JSX.Element {
   )
 
   const status = useMemo(() => {
-    if (recording) return { label: 'kayıtta', tone: 'rec' }
-    if (playing) return { label: 'koşumda', tone: 'run' }
-    if (state.loading) return { label: 'yükleniyor', tone: 'busy' }
-    return { label: 'hazır', tone: 'idle' }
+    if (recording) return { label: 'Kayıtta', tone: 'rec' }
+    if (playing) return { label: 'Koşumda', tone: 'run' }
+    if (state.loading) return { label: 'Yükleniyor', tone: 'busy' }
+    return { label: 'Hazır', tone: 'idle' }
   }, [playing, recording, state.loading])
   return (
-    <div className={'shell' + (drag ? ' drag-' + drag : '') + (railMini ? ' rail-mini' : '')}>
+    <div className={'shell' + (drag ? ' drag-' + drag : '')}>
       <header className="titlebar">
         <div className="title-brand">
           <Brand />
@@ -895,7 +888,7 @@ export default function App(): React.JSX.Element {
         <button className="cmd-trigger" onClick={openPalette} type="button">
           <Glyph name="search" size={13} />
           <span className="cmd-text">İşlem ara veya çalıştır</span>
-          <span className="cmd-key">Ctrl P</span>
+          <span className="cmd-key">Ctrl+P</span>
         </button>
 
         <div className="title-drag" onDoubleClick={maximizeWindow} />
@@ -913,8 +906,6 @@ export default function App(): React.JSX.Element {
       </header>
 
       <aside className="sidebar">
-        <span className="rail-label">Çalışma alanı</span>
-
         <nav className="rail-group" aria-label="Ana gezinme">
           {NAV.map((item) => {
             const on = item.suite ? Boolean(dock) : item.id === page && !item.suite
@@ -923,12 +914,12 @@ export default function App(): React.JSX.Element {
                 key={item.label}
                 className={'nav-item' + (on ? ' sel' : '')}
                 title={item.label}
+                aria-label={item.label}
                 aria-pressed={on}
                 onClick={() => pick(item)}
                 type="button"
               >
-                <Glyph name={item.glyph} size={16} />
-                <span className="nav-text">{item.label}</span>
+                <Glyph name={item.glyph} size={NAV_ICON} />
                 {item.suite && recording ? <span className="nav-dot rec" /> : null}
                 {item.suite && !recording && playing ? <span className="nav-dot run" /> : null}
               </button>
@@ -936,64 +927,55 @@ export default function App(): React.JSX.Element {
           })}
         </nav>
 
-        <span className="rail-gap" />
-
-        <span className="rail-label">Araçlar</span>
+        <span className="rail-split" />
 
         <nav className="rail-group" aria-label="Yardımcı araçlar">
           <button
             className={'nav-item' + (listOpen && page === 'browser' ? ' sel' : '')}
             title="Öğeler"
+            aria-label="Öğeler"
             aria-pressed={listOpen && page === 'browser'}
             onClick={toggleList}
             type="button"
           >
-            <Glyph name="grid" size={16} />
-            <span className="nav-text">Öğeler</span>
+            <Glyph name="grid" size={NAV_ICON} />
           </button>
           <button
             className={'nav-item' + (devtoolsOpen && page === 'browser' ? ' sel' : '')}
-            title="Sayfayı incele F12"
+            title="Sayfayı incele (F12)"
+            aria-label="Sayfayı incele"
             aria-pressed={devtoolsOpen && page === 'browser'}
             onClick={toggleDevtools}
             type="button"
           >
-            <Glyph name="inspect" size={16} />
-            <span className="nav-text">İncele</span>
+            <Glyph name="inspect" size={NAV_ICON} />
           </button>
           <button
             className={'nav-item' + (terminalOpen ? ' sel' : '')}
-            title="Yardımcı panel Ctrl+K"
+            title="Yardımcı panel (Ctrl+K)"
+            aria-label="Yardımcı panel"
             aria-pressed={terminalOpen}
             onClick={toggleDrawer}
             type="button"
           >
-            <Glyph name="terminal" size={16} />
-            <span className="nav-text">Panel</span>
+            <Glyph name="terminal" size={NAV_ICON} />
           </button>
+        </nav>
+
+        <span className="rail-gap" />
+
+        <nav className="rail-group" aria-label="Ayarlar">
           <button
             className={'nav-item' + (settingsOpen ? ' sel' : '')}
             title="Ayarlar"
+            aria-label="Ayarlar"
             aria-pressed={settingsOpen}
             onClick={toggleSettings}
             type="button"
           >
-            <Glyph name="settings" size={16} />
-            <span className="nav-text">Ayarlar</span>
+            <Glyph name="settings" size={NAV_ICON} />
           </button>
         </nav>
-
-        <div className="rail-foot">
-          <button
-            className="ghost-btn"
-            title={railMini ? 'Kenar çubuğunu genişlet' : 'Kenar çubuğunu daralt'}
-            aria-label={railMini ? 'Kenar çubuğunu genişlet' : 'Kenar çubuğunu daralt'}
-            onClick={toggleRail}
-            type="button"
-          >
-            <Glyph name={railMini ? 'expand' : 'collapse'} size={15} />
-          </button>
-        </div>
       </aside>
 
       <main className="stagearea" ref={spaceRef}>
@@ -1074,7 +1056,7 @@ export default function App(): React.JSX.Element {
         <span className="status-sep" />
         <span className="status-item">{term.lastMs ? formatMs(term.lastMs) : '—'}</span>
         <span className="status-sep" />
-        <span className="status-item">görüş {state.vision ? 'açık' : 'kapalı'}</span>
+        <span className="status-item">Görüş {state.vision ? 'açık' : 'kapalı'}</span>
         <span className="status-push" />
         <span className="status-item dim">{state.title}</span>
       </footer>

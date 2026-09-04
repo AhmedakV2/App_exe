@@ -135,9 +135,9 @@ export default memo(function CommandPalette({
 
         <footer className="cmdk-foot">
           <span className="cmd-key">↑↓</span>
-          gez
+          Gez
           <span className="cmd-key">↵</span>
-          çalıştır
+          Çalıştır
           <span className="cmdk-push" />
           {rows.length} işlem
         </footer>

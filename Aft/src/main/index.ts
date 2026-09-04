@@ -30,7 +30,7 @@ import type { ScanLevel } from './discovery'
 import { HOME_URL, isHomeUrl, mountHome, registerHomeScheme, setHomeTheme } from './home'
 
 const FRAME = 40
-const STAGE_RADIUS = 8
+const STAGE_RADIUS = 14
 const FRAME_COLOR = '#101114'
 const AGENT_PARTITION = 'persist:aft-agent'
 const DRAG_TICK = 16

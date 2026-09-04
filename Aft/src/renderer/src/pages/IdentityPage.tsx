@@ -183,8 +183,8 @@ export default function IdentityPage({
             percent(result.data.resolution.confidence),
           [
             result.data.resolution.message,
-            result.data.healed ? 'descriptor onarıldı' : '',
-            'sıra ' + result.data.ordinal
+            result.data.healed ? 'Descriptor onarıldı' : '',
+            'Sıra ' + result.data.ordinal
           ].filter(Boolean)
         )
       } catch (error) {
@@ -261,8 +261,8 @@ export default function IdentityPage({
       setTab('projection')
       say('ok', 'Projeksiyon: ' + result.data.projection.elements.length + ' eleman', [
         'jeton ~' + result.data.projection.estimatedTokens,
-        'kör nokta ' + result.data.projection.blindSpots.length,
-        result.data.projection.truncated ? 'liste kırpıldı' : 'liste tam'
+        'Kör nokta ' + result.data.projection.blindSpots.length,
+        result.data.projection.truncated ? 'Liste kırpıldı' : 'Liste tam'
       ])
     } catch (error) {
       say('err', 'Köprü hatası: ' + (error as Error).message)
@@ -352,26 +352,26 @@ export default function IdentityPage({
       />
 
       <div className="metric-row wide">
-        <Metric label="koşum" value={summary?.runs ?? 0} />
-        <Metric label="adım" value={summary?.steps ?? 0} />
-        <Metric label="kesin eşleşme" value={summary?.resolved ?? 0} tone="ok" />
+        <Metric label="Koşum" value={summary?.runs ?? 0} />
+        <Metric label="Adım" value={summary?.steps ?? 0} />
+        <Metric label="Kesin eşleşme" value={summary?.resolved ?? 0} tone="ok" />
         <Metric
-          label="düşük güven"
+          label="Düşük güven"
           value={summary?.low ?? 0}
           tone={summary?.low ? 'warn' : 'flat'}
         />
         <Metric
-          label="bulunamayan"
+          label="Bulunamayan"
           value={summary?.missing ?? 0}
           tone={summary?.missing ? 'bad' : 'flat'}
         />
         <Metric
-          label="onarılan"
+          label="Onarılan"
           value={summary?.healed ?? 0}
           tone={summary?.healed ? 'accent' : 'flat'}
         />
-        <Metric label="ortalama güven" value={percent(summary?.meanConfidence ?? 0)} />
-        <Metric label="son koşum" value={formatShortDate(summary?.lastRunAt ?? 0)} />
+        <Metric label="Ortalama güven" value={percent(summary?.meanConfidence ?? 0)} />
+        <Metric label="Son koşum" value={formatShortDate(summary?.lastRunAt ?? 0)} />
       </div>
 
       <div className="page-body cols-2">
@@ -410,12 +410,12 @@ export default function IdentityPage({
                 <div className="table-scroll">
                   <div className="table wide">
                     <div className="tr th">
-                      <span className="td grow">ad</span>
-                      <span className="td tight">etiket</span>
-                      <span className="td tight">rol</span>
-                      <span className="td grow">adres</span>
-                      <span className="td num">kalite</span>
-                      <span className="td date">tarih</span>
+                      <span className="td grow">Ad</span>
+                      <span className="td tight">Etiket</span>
+                      <span className="td tight">Rol</span>
+                      <span className="td grow">Adres</span>
+                      <span className="td num">Kalite</span>
+                      <span className="td date">Tarih</span>
                       <span className="td act" />
                     </div>
                     {rows.map((entry) => (
@@ -468,14 +468,14 @@ export default function IdentityPage({
               <div className="table-scroll">
                 <div className="table wide">
                   <div className="tr th">
-                    <span className="td grow">adım</span>
-                    <span className="td num">deneme</span>
-                    <span className="td num">kesin</span>
-                    <span className="td num">düşük</span>
-                    <span className="td num">yok</span>
-                    <span className="td num">onarım</span>
-                    <span className="td wide">güven</span>
-                    <span className="td date">son</span>
+                    <span className="td grow">Adım</span>
+                    <span className="td num">Deneme</span>
+                    <span className="td num">Kesin</span>
+                    <span className="td num">Düşük</span>
+                    <span className="td num">Yok</span>
+                    <span className="td num">Onarım</span>
+                    <span className="td wide">Güven</span>
+                    <span className="td date">Son</span>
                   </div>
                   {fragile.map((entry) => (
                     <div key={entry.descriptorId} className="tr">
@@ -566,11 +566,11 @@ export default function IdentityPage({
               <div className="table-scroll">
                 <div className="table wide">
                   <div className="tr th">
-                    <span className="td grow">strateji</span>
-                    <span className="td num">deneme</span>
-                    <span className="td num">tutan</span>
-                    <span className="td wide">başarı</span>
-                    <span className="td date">son</span>
+                    <span className="td grow">Strateji</span>
+                    <span className="td num">Deneme</span>
+                    <span className="td num">Tutan</span>
+                    <span className="td wide">Başarı</span>
+                    <span className="td date">Son</span>
                   </div>
                   {strategyRows.map(({ kind, stat }) => (
                     <div key={kind} className="tr">
@@ -602,16 +602,16 @@ export default function IdentityPage({
             projection ? (
               <>
                 <div className="metric-row">
-                  <Metric label="eleman" value={projection.projection.elements.length} />
-                  <Metric label="jeton" value={projection.projection.estimatedTokens} />
+                  <Metric label="Eleman" value={projection.projection.elements.length} />
+                  <Metric label="Jeton" value={projection.projection.estimatedTokens} />
                   <Metric
-                    label="kör nokta"
+                    label="Kör nokta"
                     value={projection.projection.blindSpots.length}
                     tone={projection.projection.blindSpots.length ? 'warn' : 'flat'}
                   />
-                  <Metric label="gizli" value={projection.projection.outside.hidden} />
+                  <Metric label="Gizli" value={projection.projection.outside.hidden} />
                   <Metric
-                    label="kırpıldı"
+                    label="Kırpıldı"
                     value={projection.projection.truncated ? 'evet' : 'hayır'}
                     tone={projection.projection.truncated ? 'warn' : 'flat'}
                   />
@@ -622,10 +622,10 @@ export default function IdentityPage({
                     <div className="table wide">
                       <div className="tr th">
                         <span className="td no">#</span>
-                        <span className="td tight">etiket</span>
-                        <span className="td tight">rol</span>
-                        <span className="td grow">ad</span>
-                        <span className="td grow mono">ref</span>
+                        <span className="td tight">Etiket</span>
+                        <span className="td tight">Rol</span>
+                        <span className="td grow">Ad</span>
+                        <span className="td grow mono">Ref</span>
                       </div>
                       {projection.projection.elements.slice(0, 300).map((entry) => (
                         <div key={entry.ref} className="tr">
@@ -651,14 +651,14 @@ export default function IdentityPage({
             validation ? (
               <>
                 <div className="metric-row">
-                  <Metric label="düğüm" value={validation.checked} />
+                  <Metric label="Düğüm" value={validation.checked} />
                   <Metric
-                    label="hata"
+                    label="Hata"
                     value={validation.errors.length}
                     tone={validation.errors.length ? 'bad' : 'ok'}
                   />
                   <Metric
-                    label="uyarı"
+                    label="Uyarı"
                     value={validation.warnings.length}
                     tone={validation.warnings.length ? 'warn' : 'flat'}
                   />
@@ -694,23 +694,23 @@ export default function IdentityPage({
           {current ? (
             <>
               <div className="kv">
-                <span className="kv-key">ad</span>
+                <span className="kv-key">Ad</span>
                 <span className="kv-val">{current.name || '—'}</span>
-                <span className="kv-key">kimlik</span>
+                <span className="kv-key">Kimlik</span>
                 <span className="kv-val mono">{current.id}</span>
-                <span className="kv-key">etiket</span>
+                <span className="kv-key">Etiket</span>
                 <span className="kv-val">{current.tag}</span>
-                <span className="kv-key">rol</span>
+                <span className="kv-key">Rol</span>
                 <span className="kv-val">{current.role || '—'}</span>
-                <span className="kv-key">adres kalıbı</span>
+                <span className="kv-key">Adres kalıbı</span>
                 <span className="kv-val mono">{current.urlPattern}</span>
-                <span className="kv-key">kalite</span>
+                <span className="kv-key">Kalite</span>
                 <span className="kv-val">
                   {current.tier} · {percent(current.score)}
                 </span>
-                <span className="kv-key">yakalama</span>
+                <span className="kv-key">Yakalama</span>
                 <span className="kv-val">{formatDate(current.capturedAt)}</span>
-                <span className="kv-key">kapsam</span>
+                <span className="kv-key">Kapsam</span>
                 <span className="kv-val mono">{scope || '—'}</span>
               </div>
 
@@ -736,13 +736,13 @@ export default function IdentityPage({
                   <div className="card-split">Çözümleme</div>
                   <div className="metric-row">
                     <Metric
-                      label="durum"
+                      label="Durum"
                       value={resolved.resolution.state}
                       tone={STATE_TONE[resolved.resolution.state] ?? 'flat'}
                     />
-                    <Metric label="güven" value={percent(resolved.resolution.confidence)} />
-                    <Metric label="sıra" value={resolved.ordinal} />
-                    <Metric label="süre" value={formatMs(resolved.resolution.durationMs)} />
+                    <Metric label="Güven" value={percent(resolved.resolution.confidence)} />
+                    <Metric label="Sıra" value={resolved.ordinal} />
+                    <Metric label="Süre" value={formatMs(resolved.resolution.durationMs)} />
                   </div>
 
                   <div className="rows">
@@ -762,7 +762,7 @@ export default function IdentityPage({
                         <Pill tone={DECISION_TONE[resolved.proposal.decision] ?? 'flat'}>
                           {resolved.proposal.decision}
                         </Pill>
-                        <span className="approval-title">onarım önerisi</span>
+                        <span className="approval-title">Onarım önerisi</span>
                         <span className="approval-conf">
                           {percent(resolved.proposal.confidence)}
                         </span>
@@ -777,13 +777,13 @@ export default function IdentityPage({
                 <>
                   <div className="card-split">Son tarama</div>
                   <div className="kv">
-                    <span className="kv-key">adres</span>
+                    <span className="kv-key">Adres</span>
                     <span className="kv-val mono">{shortUrl(scan.url) || scan.url}</span>
-                    <span className="kv-key">başlık</span>
+                    <span className="kv-key">Başlık</span>
                     <span className="kv-val">{scan.title || '—'}</span>
-                    <span className="kv-key">eleman</span>
+                    <span className="kv-key">Eleman</span>
                     <span className="kv-val">{scan.elements}</span>
-                    <span className="kv-key">zaman</span>
+                    <span className="kv-key">Zaman</span>
                     <span className="kv-val">{formatDate(scan.capturedAt)}</span>
                   </div>
                 </>
