@@ -154,7 +154,9 @@ pencere blur'u veya `mouseUp` ile devreye girer.
 **Kısayollar** — `bindShortcuts(wc)`: `F11` tam ekran, `F12` inceleme, `Ctrl+K` / `Alt+F12`
 terminal, `Ctrl+P` komut paleti, `Ctrl+L` adres çubuğu odağı, `Ctrl+H` kayıtta imleç
 adımlarını açar/kapatır. Hem uygulama arayüzüne hem de kaydedilen sayfaya bağlandığı için
-odak nerede olursa olsun çalışır.
+odak nerede olursa olsun çalışır. Senaryolar sayfasında `Del` seçili adımı, senaryoyu ya da
+klasörü siler; `Ctrl+C` / `Ctrl+V` yalnızca adımlar için kopyala yapıştır yapar. Kütüphane
+ağacındaki kapalı klasörler `localStorage`'da tutulur, sayfa yeniden açıldığında korunur.
 
 **Olay bağlama** — `bindPageFocus()`, `bindWindowEvents()`, `bindTargetEvents()`.
 Sonuncusu yeni pencere açma isteklerini engelleyip aynı görünümde yükler

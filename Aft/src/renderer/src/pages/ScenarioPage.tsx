@@ -104,9 +104,31 @@ const ELEMENT_ASSERTIONS: ReadonlySet<string> = new Set([
   'attribute-equals'
 ])
 
+let seq = 0
+
 function uid(prefix: string): string {
-  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+  seq += 1
+  return (
+    prefix + Date.now().toString(36) + seq.toString(36) + Math.random().toString(36).slice(2, 6)
+  )
 }
+
+function renewIds(step: ScenarioStep): ScenarioStep {
+  return { ...step, id: uid('st-'), steps: step.steps.map(renewIds) }
+}
+
+function cloneStep(step: ScenarioStep): ScenarioStep {
+  return renewIds(JSON.parse(JSON.stringify(step)) as ScenarioStep)
+}
+
+function typing(node: EventTarget | null): boolean {
+  if (!(node instanceof HTMLElement)) return false
+  if (node.isContentEditable) return true
+  const tag = node.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}
+
+let stepClipboard: ScenarioStep | null = null
 
 function blankTarget(kind: TargetKind): StepTarget {
   return {
@@ -486,6 +508,8 @@ export default function ScenarioPage({
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [ask, setAsk] = useState<Ask | null>(null)
   const [defaultsOpen, setDefaultsOpen] = useState(false)
+  const [zone, setZone] = useState<'folder' | 'scenario' | 'step'>('scenario')
+  const [clip, setClip] = useState<ScenarioStep | null>(stepClipboard)
 
   const jsonRef = useRef<HTMLTextAreaElement | null>(null)
 
@@ -532,6 +556,7 @@ export default function ScenarioPage({
         setDraft(result.data.scenario)
         setReport(result.data.report)
         setStepId(result.data.scenario.steps[0]?.id ?? '')
+        setZone('scenario')
         setDirty(false)
       } catch (error) {
         onReport({ level: 'err', text: 'Köprü hatası: ' + (error as Error).message })
@@ -605,6 +630,7 @@ export default function ScenarioPage({
       return { ...prev, steps: placeStep(dropStep(prev.steps, dragId), targetId, moving, after) }
     })
     setStepId(dragId)
+    setZone('step')
     setDirty(true)
   }, [])
 
@@ -616,6 +642,7 @@ export default function ScenarioPage({
       setDraftPlace(target)
       setReport(null)
       setStepId(draftScenario.steps[0].id)
+      setZone('scenario')
       setView('steps')
       setDirty(true)
     },
@@ -635,8 +662,44 @@ export default function ScenarioPage({
     const created = blankStep(addKind, KIND_TITLES[addKind] ?? addKind)
     setDraft((prev) => (prev ? { ...prev, steps: prev.steps.concat(created) } : prev))
     setStepId(created.id)
+    setZone('step')
     setDirty(true)
   }, [addKind])
+
+  const selectStep = useCallback((id: string): void => {
+    setStepId(id)
+    setZone('step')
+  }, [])
+
+  const pickFolder = useCallback((id: string): void => {
+    setFolder(id)
+    setZone('folder')
+  }, [])
+
+  const copyStep = useCallback((): void => {
+    if (!step) return
+
+    stepClipboard = cloneStep(step)
+    setClip(stepClipboard)
+    onReport({ level: 'note', text: 'Adım kopyalandı: ' + step.title })
+  }, [onReport, step])
+
+  const pasteStep = useCallback((): void => {
+    if (!clip || !draft) return
+
+    const copy = cloneStep(clip)
+    setDraft((prev) => {
+      if (!prev) return prev
+      if (stepId && findStep(prev.steps, stepId)) {
+        return { ...prev, steps: placeStep(prev.steps, stepId, copy, true) }
+      }
+      return { ...prev, steps: prev.steps.concat(copy) }
+    })
+    setStepId(copy.id)
+    setZone('step')
+    setDirty(true)
+    onReport({ level: 'ok', text: 'Adım yapıştırıldı: ' + copy.title })
+  }, [clip, draft, onReport, stepId])
 
   const applyJson = useCallback((): void => {
     try {
@@ -803,6 +866,7 @@ export default function ScenarioPage({
   )
 
   const openMenu = useCallback((target: TreeTarget, x: number, y: number): void => {
+    if (target.kind !== 'root') setZone(target.kind === 'folder' ? 'folder' : 'scenario')
     setMenu({ target, x, y })
   }, [])
 
@@ -828,6 +892,24 @@ export default function ScenarioPage({
       danger: true
     })
   }, [])
+
+  const askFolderRemove = useCallback(
+    (id: string): void => {
+      const known = folders.find((item) => item.id === id)
+      if (!known) return
+
+      setAsk({
+        kind: 'folder-remove',
+        id: known.id,
+        title: known.kind === 'module' ? 'Modül silinsin mi?' : 'Proje silinsin mi?',
+        message: known.name + ' ve içindeki tüm senaryolar kalıcı olarak silinecek.',
+        value: null,
+        confirmLabel: 'Sil',
+        danger: true
+      })
+    },
+    [folders]
+  )
 
   const menuItems = useMemo((): MenuItem[] => {
     if (!menu) return []
@@ -913,19 +995,9 @@ export default function ScenarioPage({
         return
       }
 
-      if (id === 'remove') {
-        setAsk({
-          kind: 'folder-remove',
-          id: known.id,
-          title: known.kind === 'module' ? 'Modül silinsin mi?' : 'Proje silinsin mi?',
-          message: known.name + ' ve içindeki tüm senaryolar kalıcı olarak silinecek.',
-          value: null,
-          confirmLabel: 'Sil',
-          danger: true
-        })
-      }
+      if (id === 'remove') askFolderRemove(known.id)
     },
-    [askProject, askRemove, create, entries, folders, menu, onRun, open, selected]
+    [askFolderRemove, askProject, askRemove, create, entries, folders, menu, onRun, open, selected]
   )
 
   const activeFolder = useMemo(
@@ -934,6 +1006,69 @@ export default function ScenarioPage({
   )
 
   const locked = working || busy
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (locked || menu || ask || defaultsOpen) return
+      if (typing(event.target)) return
+
+      const onSteps = Boolean(draft) && view === 'steps'
+
+      if (event.key === 'Delete') {
+        if (zone === 'step') {
+          if (!onSteps || !step) return
+          event.preventDefault()
+          removeStep(step.id)
+          return
+        }
+        if (zone === 'scenario') {
+          if (!selected) return
+          event.preventDefault()
+          askRemove(selected, entries.find((item) => item.id === selected)?.title ?? selected)
+          return
+        }
+        if (!folder) return
+        event.preventDefault()
+        askFolderRemove(folder)
+        return
+      }
+
+      if (!event.ctrlKey && !event.metaKey) return
+      if (event.altKey || event.shiftKey || !onSteps) return
+
+      const key = event.key.toLowerCase()
+      if (key === 'c' && step) {
+        event.preventDefault()
+        copyStep()
+        return
+      }
+      if (key === 'v' && clip) {
+        event.preventDefault()
+        pasteStep()
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [
+    ask,
+    askFolderRemove,
+    askRemove,
+    clip,
+    copyStep,
+    defaultsOpen,
+    draft,
+    entries,
+    folder,
+    locked,
+    menu,
+    pasteStep,
+    removeStep,
+    selected,
+    step,
+    view,
+    zone
+  ])
 
   return (
     <div className="page">
@@ -1034,7 +1169,7 @@ export default function ScenarioPage({
             activeFolder={folder}
             disabled={locked}
             onOpen={(id) => void open(id)}
-            onPickFolder={setFolder}
+            onPickFolder={pickFolder}
             onMove={(id, target) => void moveScenario(id, target)}
             onMenu={openMenu}
           />
@@ -1129,7 +1264,7 @@ export default function ScenarioPage({
                   steps={steps}
                   selected={stepId}
                   disabled={locked}
-                  onSelect={setStepId}
+                  onSelect={selectStep}
                   onMove={dragStep}
                 />
 
@@ -1186,8 +1321,22 @@ export default function ScenarioPage({
                   small
                 />
                 <IconButton
+                  name="copy"
+                  title="Adımı kopyala (Ctrl+C)"
+                  onClick={copyStep}
+                  disabled={locked}
+                  small
+                />
+                <IconButton
+                  name="layers"
+                  title="Adımı yapıştır (Ctrl+V)"
+                  onClick={pasteStep}
+                  disabled={locked || !clip}
+                  small
+                />
+                <IconButton
                   name="trash"
-                  title="Sil"
+                  title="Adımı sil (Del)"
                   onClick={() => removeStep(step.id)}
                   disabled={locked}
                   small

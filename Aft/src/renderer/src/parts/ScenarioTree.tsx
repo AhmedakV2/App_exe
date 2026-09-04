@@ -12,6 +12,27 @@ type Row =
 
 const ROOT_ID = ''
 
+const CLOSED_KEY = 'aft.scenarios.closed'
+
+function readClosed(): string[] {
+  try {
+    const raw = window.localStorage.getItem(CLOSED_KEY)
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item): item is string => typeof item === 'string')
+  } catch {
+    return []
+  }
+}
+
+function storeClosed(ids: string[]): void {
+  try {
+    window.localStorage.setItem(CLOSED_KEY, JSON.stringify(ids))
+  } catch {
+    return
+  }
+}
+
 function byName(a: { name: string }, b: { name: string }): number {
   return a.name.localeCompare(b.name, 'tr')
 }
@@ -43,7 +64,7 @@ export default memo(function ScenarioTree({
   onMove: (scenarioId: string, folder: string) => void
   onMenu: (target: TreeTarget, x: number, y: number) => void
 }): React.JSX.Element {
-  const [closed, setClosed] = useState<string[]>([])
+  const [closed, setClosed] = useState<string[]>(readClosed)
   const [dragId, setDragId] = useState('')
   const [overId, setOverId] = useState<string | null>(null)
 
@@ -94,7 +115,11 @@ export default memo(function ScenarioTree({
   }, [closed, folders, matched, needle])
 
   const toggle = useCallback((id: string): void => {
-    setClosed((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : prev.concat(id)))
+    setClosed((prev) => {
+      const next = prev.includes(id) ? prev.filter((item) => item !== id) : prev.concat(id)
+      storeClosed(next)
+      return next
+    })
   }, [])
 
   const drop = useCallback(
