@@ -163,7 +163,7 @@ export const DEFAULT_RECORD: RecordOptions = {
   highlight: true,
   captureScroll: true,
   captureKeys: true,
-  captureHover: true,
+  captureHover: false,
   hoverDwellMs: 650,
   hoverMergeMs: 1200,
   mergeTypingMs: 1600,
