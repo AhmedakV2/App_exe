@@ -89,6 +89,10 @@ export function isPressableKey(name: string): boolean {
   return parseCombo(name) !== null
 }
 
+const HOVER_APPROACH_MS = 40
+
+const HOVER_APPROACH_PX = 24
+
 const CLICK_FN = `function(){ if (typeof this.click === 'function') this.click() }`
 
 const CLEAR_FN = `function(){
@@ -202,6 +206,13 @@ export class InputDispatcher {
 
   async move(point: Point): Promise<void> {
     await this.mouse('mouseMoved', point, 'none', 0)
+  }
+
+  async hover(point: Point, holdMs: number): Promise<void> {
+    await this.move(approachOf(point))
+    await delay(HOVER_APPROACH_MS)
+    await this.move(point)
+    if (holdMs > 0) await delay(holdMs)
   }
 
   async click(point: Point, button: 'left' | 'right' = 'left', clicks = 1): Promise<void> {
@@ -412,6 +423,13 @@ export class InputDispatcher {
       { objectId, functionDeclaration, arguments: args, returnByValue: true },
       sessionId
     )
+  }
+}
+
+function approachOf(point: Point): Point {
+  return {
+    x: Math.max(0, Math.round(point.x - HOVER_APPROACH_PX)),
+    y: Math.max(0, Math.round(point.y - HOVER_APPROACH_PX))
   }
 }
 

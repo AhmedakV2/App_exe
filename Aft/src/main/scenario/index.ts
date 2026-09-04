@@ -35,6 +35,7 @@ export {
 export {
   StepExecutor,
   absolute,
+  budgetOf,
   needsElements,
   withTimeout,
   type ConditionCheck,

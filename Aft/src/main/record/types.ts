@@ -58,6 +58,7 @@ export interface RawInteraction {
   optionLabel: string
   files: string[]
   deltaY: number
+  dwellMs: number
   scrollY: number
   detail: number
 }
@@ -72,6 +73,7 @@ export interface RecordIntent {
   optionValue: string
   files: string[]
   deltaY: number
+  waitMs: number
   needsElement: boolean
   optionalElement: boolean
   label: string
@@ -140,6 +142,8 @@ export interface RecordOptions {
   captureScroll: boolean
   captureKeys: boolean
   captureHover: boolean
+  hoverDwellMs: number
+  hoverMergeMs: number
   mergeTypingMs: number
   focusClickMs: number
   doubleClickMs: number
@@ -160,6 +164,8 @@ export const DEFAULT_RECORD: RecordOptions = {
   captureScroll: true,
   captureKeys: true,
   captureHover: true,
+  hoverDwellMs: 650,
+  hoverMergeMs: 1200,
   mergeTypingMs: 1600,
   focusClickMs: 2500,
   doubleClickMs: 700,
@@ -199,13 +205,17 @@ export interface HighlightMark {
 
 export type RawSink = (batch: RawInteraction[]) => void
 
+export interface RecordTuning {
+  hoverDwellMs: number
+}
+
 export interface RecordHost {
   prepare?(): Promise<void>
   scan(level: ScanLevel, force: boolean, profile?: ScanProfileName): Promise<ElementGraph>
   currentGraph(): ElementGraph | null
   url(): string
   title(): string
-  watch(sink: RawSink): Promise<void>
+  watch(sink: RawSink, tuning: RecordTuning): Promise<void>
   unwatch(): Promise<void>
   highlight(mark: HighlightMark): Promise<void>
   clearHighlight(): Promise<void>

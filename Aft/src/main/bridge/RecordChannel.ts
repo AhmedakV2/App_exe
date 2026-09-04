@@ -48,7 +48,10 @@ const EDITABLE_KINDS: ReadonlySet<string> = new Set([
   'navigate',
   'press-key',
   'upload',
-  'scroll'
+  'scroll',
+  'wait',
+  'hover',
+  'assert'
 ])
 
 const VALUE_LABELS: Record<string, string> = {
@@ -58,7 +61,10 @@ const VALUE_LABELS: Record<string, string> = {
   navigate: 'Adres',
   'press-key': 'Tus',
   upload: 'Dosya yolu',
-  scroll: 'Piksel'
+  scroll: 'Piksel',
+  wait: 'Bekleme (ms)',
+  hover: 'Imlec suresi (ms)',
+  assert: 'Beklenen'
 }
 
 export interface RecordChannelOptions {
@@ -293,7 +299,9 @@ function stepView(entry: RecordedStep): RecordStepView {
     assertions: entry.assertions.slice(),
     value: valueOf(entry),
     valueLabel: VALUE_LABELS[entry.kind] ?? '',
-    editable: EDITABLE_KINDS.has(entry.kind),
+    editable:
+      EDITABLE_KINDS.has(entry.kind) && (entry.kind !== 'assert' || Boolean(step.assertion)),
+    waitMs: step.waitMs,
     timeoutMs: step.timeoutMs,
     continueOnFailure: step.continueOnFailure,
     url: entry.url,
@@ -308,8 +316,10 @@ function valueOf(entry: RecordedStep): string {
   if (entry.kind === 'select-option') return step.optionValue
   if (entry.kind === 'navigate') return step.url
   if (entry.kind === 'press-key') return step.key
-  if (entry.kind === 'upload') return step.files.join('\n')
+  if (entry.kind === 'upload') return step.files.join(', ')
   if (entry.kind === 'scroll') return String(step.deltaY)
+  if (entry.kind === 'wait' || entry.kind === 'hover') return String(step.waitMs)
+  if (entry.kind === 'assert') return step.assertion?.expected ?? ''
   return ''
 }
 

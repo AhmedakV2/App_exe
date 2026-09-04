@@ -22,7 +22,13 @@ const STATUS_LABELS: Record<string, string> = {
   stopped: 'durduruldu'
 }
 
-const WAIT_PRESETS: number[] = [500, 1000, 3000]
+const WAIT_PRESETS: number[] = [500, 1000, 3000, 5000]
+
+const NUMERIC_KINDS: ReadonlySet<string> = new Set(['scroll', 'wait', 'hover'])
+
+const MIN_WAIT_MS = 100
+
+const MAX_WAIT_MS = 300000
 
 function levelClass(level: string): string {
   if (level === 'strong') return 'ok'
@@ -85,6 +91,18 @@ const StepRow = memo(function StepRow({
       if (next !== step.value) onValue(step.id, next)
     },
     [onValue, step.id, step.value]
+  )
+
+  const commitWait = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>): void => {
+      if (event.key !== 'Enter') return
+      const parsed = Number(event.currentTarget.value)
+      if (!Number.isFinite(parsed)) return
+      const wait = Math.min(MAX_WAIT_MS, Math.max(MIN_WAIT_MS, Math.round(parsed)))
+      onWait(step.id, wait)
+      event.currentTarget.blur()
+    },
+    [onWait, step.id]
   )
 
   return (
@@ -172,6 +190,7 @@ const StepRow = memo(function StepRow({
               <span>{step.valueLabel}</span>
               <input
                 key={'value:' + step.value}
+                type={NUMERIC_KINDS.has(step.kind) ? 'number' : 'text'}
                 defaultValue={step.value}
                 onBlur={commitValue}
                 onKeyDown={blurOnEnter}
@@ -182,7 +201,7 @@ const StepRow = memo(function StepRow({
           ) : null}
 
           <div className="rec-block">
-            <span className="rec-block-label">Bekleme</span>
+            <span className="rec-block-label">Sonrasına bekleme ekle</span>
             <div className="rec-options">
               {WAIT_PRESETS.map((preset) => (
                 <button
@@ -197,6 +216,17 @@ const StepRow = memo(function StepRow({
                 </button>
               ))}
             </div>
+            <label className="rec-field">
+              <span>Özel süre (ms)</span>
+              <input
+                type="number"
+                min={MIN_WAIT_MS}
+                max={MAX_WAIT_MS}
+                defaultValue={1000}
+                onKeyDown={commitWait}
+                disabled={busy}
+              />
+            </label>
           </div>
 
           {step.assertions.length ? (
@@ -546,7 +576,7 @@ export default function RecordPanel({
         />
         <IconButton
           name="target"
-          title="İmleç adımı kısayolu Ctrl+Shift+M"
+          title="İmleç bekletmesini adım olarak yakala"
           onClick={toggleHover}
           disabled={busy || !live}
           active={Boolean(view?.options.captureHover)}
@@ -578,7 +608,10 @@ export default function RecordPanel({
           ) : null}
           {view?.baseUrl ? <span className="dock-meta">{shortUrl(view.baseUrl)}</span> : null}
           {live && view?.options.captureHover ? (
-            <span className="dock-meta">imleç adımı için sayfada Ctrl + Shift + M</span>
+            <span className="dock-meta">
+              imleç {view.options.hoverDwellMs} ms beklerse adım açılır · elle yakalama Ctrl + Shift
+              + M
+            </span>
           ) : null}
         </div>
       ) : null}

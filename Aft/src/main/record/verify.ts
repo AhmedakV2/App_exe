@@ -19,6 +19,8 @@ const VIEWPORT = { width: 1280, height: 900 }
 
 const SETTLE_MS = 420
 
+const DWELL_MS = 1400
+
 interface Check {
   name: string
   ok: boolean
@@ -151,6 +153,8 @@ async function main(): Promise<number> {
     await delay(160)
     await controller.dispatch({ kind: 'scroll', ordinal: liste, deltaY: 320 })
     await delay(320)
+    await controller.dispatch({ kind: 'hover', ordinal: golge })
+    await delay(DWELL_MS)
     await controller.dispatch({ kind: 'click', ordinal: gonder })
     await delay(SETTLE_MS)
 
@@ -190,6 +194,18 @@ async function main(): Promise<number> {
       'adres degisimi adim olarak yazilmadi',
       !session.steps.some((entry) => entry.kind === 'navigate'),
       'adres adimi=' + session.steps.filter((entry) => entry.kind === 'navigate').length
+    )
+
+    const imlecAdimi = session.steps.find((entry) => entry.kind === 'hover')
+    expect(
+      'imlec bekletmesi adim olarak kaydedildi',
+      Boolean(imlecAdimi?.step.target),
+      imlecAdimi ? imlecAdimi.step.title : 'imlec adimi yok'
+    )
+    expect(
+      'imlec adiminda bekleme suresi tutuldu',
+      (imlecAdimi?.step.waitMs ?? 0) > 0,
+      'sure=' + (imlecAdimi?.step.waitMs ?? 0) + ' ms'
     )
 
     const kaydirmaAdimi = session.steps.find((entry) => entry.kind === 'scroll')

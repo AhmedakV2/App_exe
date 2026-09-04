@@ -89,6 +89,8 @@ const ELEMENT_KINDS: ReadonlySet<string> = new Set([
   'upload'
 ])
 
+const TARGETLESS_KINDS: ReadonlySet<string> = new Set(['navigate', 'wait', 'refresh', 'assert'])
+
 const ELEMENT_ASSERTIONS: ReadonlySet<string> = new Set([
   'element-exists',
   'element-absent',
@@ -146,6 +148,7 @@ function blankStep(kind: StepKind, title: string): ScenarioStep {
     deltaY: 0,
     optionValue: '',
     files: [],
+    waitMs: kind === 'wait' ? 1000 : 0,
     timeoutMs: DEFAULT_DEFAULTS.stepTimeoutMs,
     retries: DEFAULT_DEFAULTS.retries,
     scanLevel: null,
@@ -240,6 +243,8 @@ function placeStep(
   )
 }
 
+const NUMERIC_KINDS: ReadonlySet<string> = new Set(['scroll', 'wait', 'hover'])
+
 function valueLabel(kind: StepKind): string {
   if (kind === 'type' || kind === 'clear-type') return 'Metin'
   if (kind === 'press-key') return 'Tuş'
@@ -247,6 +252,8 @@ function valueLabel(kind: StepKind): string {
   if (kind === 'select-option') return 'Seçenek'
   if (kind === 'scroll') return 'Kaydırma (piksel)'
   if (kind === 'upload') return 'Dosya yolları (virgülle)'
+  if (kind === 'wait') return 'Bekleme (ms)'
+  if (kind === 'hover') return 'İmleç süresi (ms)'
   return ''
 }
 
@@ -256,6 +263,7 @@ function valueOf(step: ScenarioStep): string {
   if (step.kind === 'select-option') return step.optionValue
   if (step.kind === 'scroll') return String(step.deltaY)
   if (step.kind === 'upload') return step.files.join(', ')
+  if (step.kind === 'wait' || step.kind === 'hover') return String(step.waitMs)
   return step.text
 }
 
@@ -263,7 +271,8 @@ function patchValue(kind: StepKind, value: string): Partial<ScenarioStep> {
   if (kind === 'press-key') return { key: value }
   if (kind === 'navigate') return { url: value }
   if (kind === 'select-option') return { optionValue: value }
-  if (kind === 'scroll') return { deltaY: Number(value) || 0 }
+  if (kind === 'scroll') return { deltaY: intOf(value, 0) }
+  if (kind === 'wait' || kind === 'hover') return { waitMs: Math.max(0, intOf(value, 0)) }
   if (kind === 'upload') {
     return {
       files: value
@@ -273,6 +282,11 @@ function patchValue(kind: StepKind, value: string): Partial<ScenarioStep> {
     }
   }
   return { text: value }
+}
+
+function intOf(value: string, fallback: number): number {
+  const parsed = Number(value.trim())
+  return Number.isFinite(parsed) ? Math.round(parsed) : fallback
 }
 
 function TargetEditor({
@@ -1190,9 +1204,12 @@ export default function ScenarioPage({
                       const next = event.target.value as StepKind
                       patchStep(step.id, {
                         kind: next,
+                        waitMs: next === 'wait' && step.waitMs <= 0 ? 1000 : step.waitMs,
                         target: ELEMENT_KINDS.has(next)
                           ? (step.target ?? blankTarget('query'))
-                          : step.target,
+                          : TARGETLESS_KINDS.has(next)
+                            ? null
+                            : step.target,
                         assertion:
                           next === 'assert'
                             ? (step.assertion ?? {
@@ -1227,6 +1244,7 @@ export default function ScenarioPage({
               {valueLabel(step.kind) ? (
                 <Field label={valueLabel(step.kind)}>
                   <input
+                    type={NUMERIC_KINDS.has(step.kind) ? 'number' : 'text'}
                     value={valueOf(step)}
                     onChange={(event) =>
                       patchStep(step.id, patchValue(step.kind, event.target.value))
@@ -1299,7 +1317,9 @@ export default function ScenarioPage({
                         type="number"
                         value={step.assertion.count}
                         onChange={(event) =>
-                          patchAssertion(step.id, { count: Number(event.target.value) || 0 })
+                          patchAssertion(step.id, {
+                            count: Math.max(0, intOf(event.target.value, 0))
+                          })
                         }
                       />
                     </Field>
@@ -1328,7 +1348,7 @@ export default function ScenarioPage({
                     type="number"
                     value={step.timeoutMs}
                     onChange={(event) =>
-                      patchStep(step.id, { timeoutMs: Number(event.target.value) || 0 })
+                      patchStep(step.id, { timeoutMs: Math.max(0, intOf(event.target.value, 0)) })
                     }
                   />
                 </Field>
@@ -1337,7 +1357,7 @@ export default function ScenarioPage({
                     type="number"
                     value={step.retries}
                     onChange={(event) =>
-                      patchStep(step.id, { retries: Number(event.target.value) || 0 })
+                      patchStep(step.id, { retries: Math.max(0, intOf(event.target.value, 0)) })
                     }
                   />
                 </Field>

@@ -479,7 +479,8 @@ sunulacak hedef seçeneklerini üretir, `blocked()` / `degraded()` / `plain()` t
 nesneleri döner. `QUERY_SCORES` sorgu türlerine puan verir (test-id en yüksek).
 
 **`StepFactory.ts`** — Adım nesnesi üretimi. `stepId()`, `descriptorTarget()`,
-`steadyTarget()`, `build()` (ana adım), `waitStep()`, `assertStep()`, `assertion()`,
+`steadyTarget()`, `build()` (ana adım), `waitStep()` (`waitMs` süresini yazar),
+`waitTitle()`, `hoverTitle()`, `assertStep()`, `assertion()`,
 `assertionOptions()`, `scrollTitle()`. `KIND_LABELS` ve `ASSERTION_LABELS` Türkçe adım
 başlıklarını üretir.
 
@@ -839,13 +840,13 @@ değişkenlerini `document.documentElement` üzerine yazar, `readTheme()`/`store
 | `rclick` | `rclick <no>` | Sağ tıklar |
 | `type` | `type <no> <metin>` | Alana metin yazar |
 | `clear` | `clear <no>` | Alanı temizler |
-| `move` | `move <no>` | İmleci üzerine taşır |
+| `move` | `move <no> [ms]` | İmleci üzerine taşır, verilen süre bekletir |
 | `scroll` | `scroll <piksel>` | Sayfayı kaydırır |
 | `snap` | `snap` | Yeniden tarar |
 | `press` | `press [no] <tuş>` | Tuşa basar |
 | `sel` | `sel <no> <değer>` | Açılır listeden seçer |
 | `upload` | `upload <no> <dosya...>` | Dosya yükler |
-| `wait` | `wait` | Sayfanın durulmasını bekler |
+| `wait` | `wait [ms]` | Verilen süre bekler, sayfanın durulmasını gözler |
 | `r` | `r` | Sayfayı yeniler |
 
 Ek olarak iki yerleşik komut: `a` (komut listesi) ve `c` (terminali temizle).
