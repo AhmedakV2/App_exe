@@ -177,18 +177,18 @@ export default function DataPage({
       />
 
       <div className="metric-row wide">
-        <Metric label="senaryo" value={stats?.scenarios ?? 0} />
-        <Metric label="koşum" value={stats?.runs ?? 0} />
-        <Metric label="adım" value={stats?.steps ?? 0} />
-        <Metric label="bağlam" value={stats?.contexts ?? 0} />
-        <Metric label="kuyruk" value={stats?.outbox ?? 0} tone={stats?.outbox ? 'warn' : 'flat'} />
+        <Metric label="Senaryo" value={stats?.scenarios ?? 0} />
+        <Metric label="Koşum" value={stats?.runs ?? 0} />
+        <Metric label="Adım" value={stats?.steps ?? 0} />
+        <Metric label="Bağlam" value={stats?.contexts ?? 0} />
+        <Metric label="Kuyruk" value={stats?.outbox ?? 0} tone={stats?.outbox ? 'warn' : 'flat'} />
         <Metric
-          label="bekleyen"
+          label="Bekleyen"
           value={outbox?.pending ?? 0}
           tone={outbox?.pending ? 'warn' : 'flat'}
         />
-        <Metric label="gönderilen" value={outbox?.sent ?? 0} tone="ok" />
-        <Metric label="hatalı" value={outbox?.failed ?? 0} tone={outbox?.failed ? 'bad' : 'flat'} />
+        <Metric label="Gönderilen" value={outbox?.sent ?? 0} tone="ok" />
+        <Metric label="Hatalı" value={outbox?.failed ?? 0} tone={outbox?.failed ? 'bad' : 'flat'} />
       </div>
 
       <div className="page-body cols-2">
@@ -197,10 +197,10 @@ export default function DataPage({
             <div className="table-scroll">
               <div className="table wide">
                 <div className="tr th">
-                  <span className="td grow">senaryo</span>
-                  <span className="td">adım</span>
-                  <span className="td">şema</span>
-                  <span className="td">güncelleme</span>
+                  <span className="td grow">Senaryo</span>
+                  <span className="td">Adım</span>
+                  <span className="td">Şema</span>
+                  <span className="td">Güncelleme</span>
                 </div>
                 {scenarios.map((entry) => (
                   <div key={entry.id} className="tr">
@@ -223,17 +223,17 @@ export default function DataPage({
 
         <Card label="Depo" scroll>
           <div className="kv">
-            <span className="kv-key">dosya</span>
+            <span className="kv-key">Dosya</span>
             <span className="kv-val mono">{stats?.filePath ?? '—'}</span>
-            <span className="kv-key">boyut</span>
+            <span className="kv-key">Boyut</span>
             <span className="kv-val">{formatBytes(stats?.bytes ?? 0)}</span>
-            <span className="kv-key">şema sürümü</span>
+            <span className="kv-key">Şema sürümü</span>
             <span className="kv-val mono">{stats?.userVersion ?? '—'}</span>
-            <span className="kv-key">günlük kipi</span>
+            <span className="kv-key">Günlük kipi</span>
             <span className="kv-val mono">{stats?.journalMode ?? '—'}</span>
-            <span className="kv-key">en eski bekleyen</span>
+            <span className="kv-key">En eski bekleyen</span>
             <span className="kv-val">{formatShortDate(outbox?.oldestPendingAt ?? 0)}</span>
-            <span className="kv-key">gönderim hedefi</span>
+            <span className="kv-key">Gönderim hedefi</span>
             <span className="kv-val mono">data/outbox</span>
           </div>
 

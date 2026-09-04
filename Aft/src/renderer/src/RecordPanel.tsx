@@ -10,16 +10,16 @@ type ReportLevel = 'ok' | 'err' | 'note'
 export type RecordReport = { level: ReportLevel; text: string; detail?: string[] }
 
 const LEVEL_LABELS: Record<string, string> = {
-  strong: 'güçlü kimlik',
-  weak: 'zayıf kimlik',
-  blocked: 'çözülemedi'
+  strong: 'Güçlü kimlik',
+  weak: 'Zayıf kimlik',
+  blocked: 'Çözülemedi'
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  idle: 'kayıt yok',
-  recording: 'kayıtta',
-  paused: 'duraklatıldı',
-  stopped: 'durduruldu'
+  idle: 'Kayıt yok',
+  recording: 'Kayıtta',
+  paused: 'Duraklatıldı',
+  stopped: 'Durduruldu'
 }
 
 const WAIT_PRESETS: number[] = [500, 1000, 3000, 5000]
@@ -128,7 +128,7 @@ const StepRow = memo(function StepRow({
             {step.targetKind === 'none' ? null : <span className="rec-tag">{step.targetKind}</span>}
             {step.frameDepth ? <span className="rec-tag">çerçeve {step.frameDepth}</span> : null}
             {step.shadowDepth ? <span className="rec-tag">shadow {step.shadowDepth}</span> : null}
-            {step.ambiguous ? <span className="rec-tag warn">belirsiz</span> : null}
+            {step.ambiguous ? <span className="rec-tag warn">Belirsiz</span> : null}
           </div>
 
           {step.targetLabel ? <div className="rec-target">hedef: {step.targetLabel}</div> : null}
@@ -444,8 +444,8 @@ export default function RecordPanel({
         level: 'ok',
         text: 'Senaryo kaydedildi: ' + result.data.scenario.title,
         detail: [
-          'adım ' + result.data.scenario.steps.length,
-          'uyarı ' + result.data.report.warnings.length,
+          'Adım ' + result.data.scenario.steps.length,
+          'Uyarı ' + result.data.report.warnings.length,
           'dosya ' + result.data.file
         ]
       })
@@ -524,11 +524,11 @@ export default function RecordPanel({
   const summary = useMemo(() => {
     if (!counters) return []
     return [
-      { label: 'adım', value: steps.length },
-      { label: 'elenen', value: counters.suppressed },
-      { label: 'birleşen', value: counters.merged },
-      { label: 'zayıf', value: counters.weak },
-      { label: 'tarama', value: counters.scans }
+      { label: 'Adım', value: steps.length },
+      { label: 'Elenen', value: counters.suppressed },
+      { label: 'Birleşen', value: counters.merged },
+      { label: 'Zayıf', value: counters.weak },
+      { label: 'Tarama', value: counters.scans }
     ]
   }, [counters, steps.length])
 
@@ -576,7 +576,7 @@ export default function RecordPanel({
         />
         <IconButton
           name="target"
-          title="İmleç adımları · Ctrl + H"
+          title="İmleç adımları (Ctrl+H)"
           onClick={toggleHover}
           disabled={busy || !live}
           active={Boolean(view?.options.captureHover)}
@@ -610,10 +610,10 @@ export default function RecordPanel({
           {live ? (
             <span className="dock-meta">
               {view?.options.captureHover
-                ? 'imleç ' +
+                ? 'İmleç ' +
                   view.options.hoverDwellMs +
-                  ' ms beklerse adım açılır · Ctrl + H ile kapat'
-                : 'imleç adımları kapalı · Ctrl + H ile aç'}
+                  ' ms beklerse adım açılır · Ctrl+H ile kapatın'
+                : 'İmleç adımları kapalı · Ctrl+H ile açın'}
             </span>
           ) : null}
         </div>

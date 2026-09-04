@@ -37,24 +37,24 @@ function readOutcome(result: ExecuteResult): Extra {
   const detail: string[] = []
   let facts: Fact[] | undefined
 
-  if (!result.ok && outcome.code) detail.push('kod: ' + outcome.code)
-  if (result.ok && outcome.mode === 'direct-call') detail.push('yol: doğrudan çağrı')
+  if (!result.ok && outcome.code) detail.push('Kod: ' + outcome.code)
+  if (result.ok && outcome.mode === 'direct-call') detail.push('Yol: doğrudan çağrı')
 
   const report = outcome.actionability
   if (!result.ok && report) {
     facts = [
-      { label: 'görünür', ok: report.visible },
-      { label: 'etkin', ok: report.enabled },
-      { label: 'kararlı', ok: report.stable },
-      { label: 'üstü açık', ok: report.unobstructed }
+      { label: 'Görünür', ok: report.visible },
+      { label: 'Etkin', ok: report.enabled },
+      { label: 'Kararlı', ok: report.stable },
+      { label: 'Üstü açık', ok: report.unobstructed }
     ]
-    if (report.reason) detail.push('hazırlık: ' + report.reason)
+    if (report.reason) detail.push('Hazırlık: ' + report.reason)
   }
 
   for (const dialog of outcome.dialogs)
-    detail.push('diyalog: ' + dialog.type + ' · ' + dialog.policy)
+    detail.push('Diyalog: ' + dialog.type + ' · ' + dialog.policy)
   for (const download of outcome.downloads)
-    detail.push('indirme: ' + download.fileName + ' · ' + download.state)
+    detail.push('İndirme: ' + download.fileName + ' · ' + download.state)
 
   return { detail: detail.length ? detail : undefined, facts }
 }

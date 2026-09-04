@@ -132,12 +132,12 @@ const ContextView = memo(function ContextView({
           ))}
           {resolution.candidates.length ? (
             <div className="play-trace-row">
-              <span className="play-trace-kind">adaylar</span>
+              <span className="play-trace-kind">Adaylar</span>
               <span className="play-trace-detail">
                 {resolution.candidates
                   .slice(0, 4)
                   .map(
-                    (entry) => 'sıra ' + entry.ordinal + ' (%' + Math.round(entry.score * 100) + ')'
+                    (entry) => 'Sıra ' + entry.ordinal + ' (%' + Math.round(entry.score * 100) + ')'
                   )
                   .join(', ')}
               </span>
@@ -392,9 +392,9 @@ export default function PlaybackPanel({
           ': ' +
           payload.run.scenarioTitle,
         detail: [
-          'geçen ' + payload.run.metrics.passed + ' / ' + payload.run.metrics.steps,
+          'Geçen ' + payload.run.metrics.passed + ' / ' + payload.run.metrics.steps,
           'tarama ' + payload.run.metrics.scans,
-          'süre ' + formatMs(payload.run.metrics.totalMs),
+          'Süre ' + formatMs(payload.run.metrics.totalMs),
           ...payload.run.failures.slice(0, 3)
         ]
       })
@@ -545,7 +545,7 @@ export default function PlaybackPanel({
             <span className="play-tag">seviye {detail.scenario.defaults.scanLevel}</span>
             <span className="play-tag">{detail.scenario.defaults.retries} deneme</span>
             {report?.ok ? (
-              <span className="play-tag ok">doğrulandı</span>
+              <span className="play-tag ok">Doğrulandı</span>
             ) : (
               <span className="play-tag bad">{report?.errors.length ?? 0} hata</span>
             )}

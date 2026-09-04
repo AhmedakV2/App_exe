@@ -13,11 +13,11 @@ const LEVELS = [
 ]
 
 const SPOT_LABELS: Record<string, string> = {
-  canvas: 'canvas',
-  media: 'medya',
-  'restricted-frame': 'kısıtlı çerçeve',
-  'virtual-list': 'sanal liste',
-  'collapsed-region': 'kapalı bölge'
+  canvas: 'Canvas',
+  media: 'Medya',
+  'restricted-frame': 'Kısıtlı çerçeve',
+  'virtual-list': 'Sanal liste',
+  'collapsed-region': 'Kapalı bölge'
 }
 
 export default function CoveragePage({
@@ -69,8 +69,8 @@ export default function CoveragePage({
           report ? (
             <>
               <Pill>{shortUrl(report.url)}</Pill>
-              {coverage?.reused ? <Pill tone="accent">yeniden kullanıldı</Pill> : null}
-              {coverage?.quietTimedOut ? <Pill tone="warn">kararlılık aşıldı</Pill> : null}
+              {coverage?.reused ? <Pill tone="accent">Yeniden kullanıldı</Pill> : null}
+              {coverage?.quietTimedOut ? <Pill tone="warn">Kararlılık aşıldı</Pill> : null}
               {coverage?.framesFailed ? (
                 <Pill tone="bad">{coverage.framesFailed} çerçeve</Pill>
               ) : null}
@@ -101,19 +101,19 @@ export default function CoveragePage({
 
       {coverage ? (
         <div className="metric-row wide">
-          <Metric label="düğüm" value={coverage.nodes} />
-          <Metric label="eleman" value={coverage.elements} />
-          <Metric label="etkileşilebilir" value={coverage.interactive} tone="accent" />
-          <Metric label="görünen alan" value={coverage.inViewport} />
-          <Metric label="shadow kök" value={coverage.shadowRoots} />
-          <Metric label="çerçeve" value={coverage.frames} />
+          <Metric label="Düğüm" value={coverage.nodes} />
+          <Metric label="Eleman" value={coverage.elements} />
+          <Metric label="Etkileşilebilir" value={coverage.interactive} tone="accent" />
+          <Metric label="Görünen alan" value={coverage.inViewport} />
+          <Metric label="Shadow kök" value={coverage.shadowRoots} />
+          <Metric label="Çerçeve" value={coverage.frames} />
           <Metric
-            label="kör nokta"
+            label="Kör nokta"
             value={coverage.blindSpots}
             tone={coverage.blindSpots ? 'warn' : 'flat'}
           />
-          <Metric label="geçiş" value={coverage.passes} />
-          <Metric label="süre" value={formatMs(coverage.durationMs)} />
+          <Metric label="Geçiş" value={coverage.passes} />
+          <Metric label="Süre" value={formatMs(coverage.durationMs)} />
         </div>
       ) : null}
 
@@ -123,9 +123,9 @@ export default function CoveragePage({
             <div className="table-scroll">
               <div className="table wide">
                 <div className="tr th">
-                  <span className="td">tür</span>
-                  <span className="td grow">ayrıntı</span>
-                  <span className="td">çerçeve</span>
+                  <span className="td">Tür</span>
+                  <span className="td grow">Ayrıntı</span>
+                  <span className="td">Çerçeve</span>
                 </div>
                 {report.blindSpots.map((spot, index) => (
                   <div key={index} className="tr">
@@ -152,9 +152,9 @@ export default function CoveragePage({
             <div className="table-scroll">
               <div className="table wide">
                 <div className="tr th">
-                  <span className="td">derinlik</span>
-                  <span className="td grow">adres</span>
-                  <span className="td">durum</span>
+                  <span className="td">Derinlik</span>
+                  <span className="td grow">Adres</span>
+                  <span className="td">Durum</span>
                 </div>
                 {report.frames.map((frame) => (
                   <div key={frame.id} className="tr">
@@ -162,7 +162,7 @@ export default function CoveragePage({
                     <span className="td grow mono">{shortUrl(frame.url) || '—'}</span>
                     <span className="td">
                       <Pill tone={frame.failed ? 'bad' : 'ok'}>
-                        {frame.failed ? 'bağlanamadı' : 'bağlı'}
+                        {frame.failed ? 'Bağlanamadı' : 'Bağlı'}
                       </Pill>
                     </span>
                   </div>
@@ -181,18 +181,18 @@ export default function CoveragePage({
 
       {report ? (
         <div className="kv wide">
-          <span className="kv-key">şema</span>
+          <span className="kv-key">Şema</span>
           <span className="kv-val mono">{coverage?.version}</span>
-          <span className="kv-key">görünüm</span>
+          <span className="kv-key">Görünüm</span>
           <span className="kv-val mono">
             {report.viewport.width} × {report.viewport.height} · {report.viewport.pageHeight}
           </span>
-          <span className="kv-key">engel kontrolü</span>
+          <span className="kv-key">Engel kontrolü</span>
           <span className="kv-val">
             {coverage?.occlusionChecked} /{' '}
             {(coverage?.occlusionChecked ?? 0) + (coverage?.occlusionSkipped ?? 0)}
           </span>
-          <span className="kv-key">dinleyici</span>
+          <span className="kv-key">Dinleyici</span>
           <span className="kv-val">
             {coverage?.listenersProbed} /{' '}
             {(coverage?.listenersProbed ?? 0) + (coverage?.listenersSkipped ?? 0)}

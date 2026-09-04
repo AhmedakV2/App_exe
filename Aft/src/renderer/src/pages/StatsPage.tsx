@@ -23,17 +23,17 @@ const VIEWS = [
 ]
 
 const RUN_SERIES: ChartSeries[] = [
-  { id: 'passed', label: 'başarılı', color: 'var(--ok)' },
-  { id: 'failed', label: 'başarısız', color: 'var(--bad)' }
+  { id: 'passed', label: 'Başarılı', color: 'var(--ok)' },
+  { id: 'failed', label: 'Başarısız', color: 'var(--bad)' }
 ]
 
-const SPAN_SERIES: ChartSeries[] = [{ id: 'runs', label: 'koşum', color: 'var(--accent)' }]
+const SPAN_SERIES: ChartSeries[] = [{ id: 'runs', label: 'Koşum', color: 'var(--accent)' }]
 
 const STATUS_META: { id: string; label: string; color: string }[] = [
-  { id: 'passed', label: 'başarılı', color: 'var(--ok)' },
-  { id: 'failed', label: 'başarısız', color: 'var(--bad)' },
-  { id: 'errored', label: 'hata', color: 'var(--warn)' },
-  { id: 'aborted', label: 'iptal', color: 'var(--faint)' }
+  { id: 'passed', label: 'Başarılı', color: 'var(--ok)' },
+  { id: 'failed', label: 'Başarısız', color: 'var(--bad)' },
+  { id: 'errored', label: 'Hata', color: 'var(--warn)' },
+  { id: 'aborted', label: 'İptal', color: 'var(--faint)' }
 ]
 
 const SPANS = [
@@ -290,11 +290,11 @@ export default function StatsPage({
         <div className={'stat-flow' + (busy ? ' busy' : '')}>
           <div className="stat-band">
             <div className="stat-hero">
-              <span className="hero-label">başarı oranı</span>
+              <span className="hero-label">Başarı oranı</span>
               <span className="hero-value">{percent(totals.rate)}</span>
               <div className="hero-foot">
                 {delta === null ? (
-                  <span className="hero-note">önceki dönem yok</span>
+                  <span className="hero-note">Önceki dönem yok</span>
                 ) : (
                   <>
                     <span className={'hero-delta ' + (delta >= 0 ? 'up' : 'down')}>
@@ -308,23 +308,23 @@ export default function StatsPage({
             </div>
 
             <div className="metric-row wide">
-              <Metric label="koşum" value={totals.runs} />
-              <Metric label="başarılı" value={totals.passed} tone="ok" />
+              <Metric label="Koşum" value={totals.runs} />
+              <Metric label="Başarılı" value={totals.passed} tone="ok" />
               <Metric
-                label="başarısız"
+                label="Başarısız"
                 value={totals.failed}
                 tone={totals.failed ? 'bad' : 'flat'}
               />
-              <Metric label="adım" value={totals.steps} />
+              <Metric label="Adım" value={totals.steps} />
               <Metric
-                label="kalan adım"
+                label="Kalan adım"
                 value={totals.failedSteps}
                 tone={totals.failedSteps ? 'warn' : 'flat'}
               />
-              <Metric label="ort. süre" value={formatMs(totals.meanMs)} />
-              <Metric label="ort. güven" value={percent(totals.meanConfidence)} tone="accent" />
+              <Metric label="Ort. süre" value={formatMs(totals.meanMs)} />
+              <Metric label="Ort. güven" value={percent(totals.meanConfidence)} tone="accent" />
               <Metric
-                label="onarım"
+                label="Onarım"
                 value={summary?.healed ?? 0}
                 tone={summary?.healed ? 'warn' : 'flat'}
               />
@@ -345,10 +345,10 @@ export default function StatsPage({
               ) : (
                 <div className="table scroll-y">
                   <div className="tr th">
-                    <span className="td grow">dönem</span>
-                    <span className="td num">geçen</span>
-                    <span className="td num">kalan</span>
-                    <span className="td num">oran</span>
+                    <span className="td grow">Dönem</span>
+                    <span className="td num">Geçen</span>
+                    <span className="td num">Kalan</span>
+                    <span className="td num">Oran</span>
                   </div>
                   {slots.map((slot) => (
                     <div key={slot.key} className="tr">
@@ -387,9 +387,9 @@ export default function StatsPage({
               ) : trend.length ? (
                 <div className="table scroll-y">
                   <div className="tr th">
-                    <span className="td grow">dönem</span>
-                    <span className="td">koşum</span>
-                    <span className="td num">oran</span>
+                    <span className="td grow">Dönem</span>
+                    <span className="td">Koşum</span>
+                    <span className="td num">Oran</span>
                   </div>
                   {trend.map((point) => (
                     <div key={point.key} className="tr">
