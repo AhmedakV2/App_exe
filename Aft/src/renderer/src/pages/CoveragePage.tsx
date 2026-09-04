@@ -120,49 +120,61 @@ export default function CoveragePage({
       <div className="page-body cols-2">
         <Card label="Erişilemeyen bölgeler" scroll grow>
           {report && report.blindSpots.length ? (
-            <div className="table">
-              <div className="tr th">
-                <span className="td">tür</span>
-                <span className="td grow">ayrıntı</span>
-                <span className="td">çerçeve</span>
-              </div>
-              {report.blindSpots.map((spot, index) => (
-                <div key={index} className="tr">
-                  <span className="td">
-                    <Pill tone="warn">{SPOT_LABELS[spot.kind] ?? spot.kind}</Pill>
-                  </span>
-                  <span className="td grow">{spot.detail}</span>
-                  <span className="td dim mono">{spot.frameId.slice(0, 10)}</span>
+            <div className="table-scroll">
+              <div className="table wide">
+                <div className="tr th">
+                  <span className="td">tür</span>
+                  <span className="td grow">ayrıntı</span>
+                  <span className="td">çerçeve</span>
                 </div>
-              ))}
+                {report.blindSpots.map((spot, index) => (
+                  <div key={index} className="tr">
+                    <span className="td">
+                      <Pill tone="warn">{SPOT_LABELS[spot.kind] ?? spot.kind}</Pill>
+                    </span>
+                    <span className="td grow">{spot.detail}</span>
+                    <span className="td dim mono">{spot.frameId.slice(0, 10)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
-            <Empty glyph="layers" text="Kör nokta yok" />
+            <Empty
+              glyph="layers"
+              text="Kör nokta bulunmadı"
+              hint="Seçilen seviyede sayfanın tamamı erişilebilir durumda ya da henüz tarama yapılmadı."
+            />
           )}
         </Card>
 
         <Card label="Çerçeveler" scroll>
           {report && report.frames.length ? (
-            <div className="table">
-              <div className="tr th">
-                <span className="td">derinlik</span>
-                <span className="td grow">adres</span>
-                <span className="td">durum</span>
-              </div>
-              {report.frames.map((frame) => (
-                <div key={frame.id} className="tr">
-                  <span className="td">{frame.depth}</span>
-                  <span className="td grow mono">{shortUrl(frame.url) || '—'}</span>
-                  <span className="td">
-                    <Pill tone={frame.failed ? 'bad' : 'ok'}>
-                      {frame.failed ? 'bağlanamadı' : 'bağlı'}
-                    </Pill>
-                  </span>
+            <div className="table-scroll">
+              <div className="table wide">
+                <div className="tr th">
+                  <span className="td">derinlik</span>
+                  <span className="td grow">adres</span>
+                  <span className="td">durum</span>
                 </div>
-              ))}
+                {report.frames.map((frame) => (
+                  <div key={frame.id} className="tr">
+                    <span className="td">{frame.depth}</span>
+                    <span className="td grow mono">{shortUrl(frame.url) || '—'}</span>
+                    <span className="td">
+                      <Pill tone={frame.failed ? 'bad' : 'ok'}>
+                        {frame.failed ? 'bağlanamadı' : 'bağlı'}
+                      </Pill>
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
-            <Empty glyph="globe" text="Çerçeve yok" />
+            <Empty
+              glyph="globe"
+              text="Çerçeve yok"
+              hint="Sayfada iç çerçeve bulunmuyor ya da henüz tarama yapılmadı."
+            />
           )}
         </Card>
       </div>

@@ -57,6 +57,7 @@ export interface RecordStepView {
   value: string
   valueLabel: string
   editable: boolean
+  waitMs: number
   timeoutMs: number
   continueOnFailure: boolean
   url: string

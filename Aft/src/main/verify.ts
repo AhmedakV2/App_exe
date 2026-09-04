@@ -7,6 +7,7 @@ import {
   mountIdentity,
   mountPlayback,
   mountRecord,
+  recordChannel,
   unmountIdentity,
   unmountPlayback,
   unmountRecord
@@ -151,6 +152,28 @@ async function main(): Promise<number> {
       'window.aftRecord.state()'
     )
     expect('adimlar yakalandi', live.data.steps.length >= 5, 'adim=' + live.data.steps.length)
+
+    step('imlec kisayolu')
+    const channel = recordChannel()
+    const turnedOff = channel ? channel.toggleHover() : true
+    const afterOff = await ask<{ ok: boolean; data: { options: { captureHover: boolean } } }>(
+      'window.aftRecord.state()'
+    )
+    expect(
+      'ctrl+h imlec adimlarini kapatti',
+      turnedOff === false && afterOff.data.options.captureHover === false,
+      'captureHover=' + String(afterOff.data.options.captureHover)
+    )
+
+    const turnedOn = channel ? channel.toggleHover() : false
+    const afterOn = await ask<{ ok: boolean; data: { options: { captureHover: boolean } } }>(
+      'window.aftRecord.state()'
+    )
+    expect(
+      'ctrl+h imlec adimlarini geri acti',
+      turnedOn === true && afterOn.data.options.captureHover === true,
+      'captureHover=' + String(afterOn.data.options.captureHover)
+    )
 
     step('kayit sonrasi duzenleme')
     const lastStep = live.data.steps[live.data.steps.length - 1]?.id ?? ''

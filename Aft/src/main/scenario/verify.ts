@@ -157,6 +157,25 @@ async function main(): Promise<number> {
       runs.every((run) => run.contexts.length === 0),
       'baglam paketi=' + first.contexts.length
     )
+    const waitStep = scenario.steps.find((entry) => entry.kind === 'wait')
+    const waitResult = waitStep
+      ? first.steps.find((entry) => entry.stepId === waitStep.id)
+      : undefined
+    expect(
+      'bekleme adimi suresi tanimli',
+      (waitStep?.waitMs ?? 0) > 0,
+      'sure=' + (waitStep?.waitMs ?? 0) + ' ms'
+    )
+    expect(
+      'bekleme adimi gercekten bekledi',
+      Boolean(waitStep) && Boolean(waitResult) && waitResult!.durationMs >= waitStep!.waitMs,
+      'olculen=' +
+        (waitResult?.durationMs ?? 0) +
+        ' ms / beklenen=' +
+        (waitStep?.waitMs ?? 0) +
+        ' ms'
+    )
+
     expect('kosum gunlugu', first.log.length > 0, 'kayit=' + first.log.length)
     expect(
       'strateji izi gunlukte',

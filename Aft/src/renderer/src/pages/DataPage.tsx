@@ -194,24 +194,30 @@ export default function DataPage({
       <div className="page-body cols-2">
         <Card label="Senaryo indeksi" scroll grow>
           {scenarios.length ? (
-            <div className="table">
-              <div className="tr th">
-                <span className="td grow">senaryo</span>
-                <span className="td">adım</span>
-                <span className="td">şema</span>
-                <span className="td">güncelleme</span>
-              </div>
-              {scenarios.map((entry) => (
-                <div key={entry.id} className="tr">
-                  <span className="td grow">{entry.title}</span>
-                  <span className="td">{entry.steps}</span>
-                  <span className="td dim mono">{entry.schemaVersion}</span>
-                  <span className="td dim">{formatShortDate(entry.updatedAt)}</span>
+            <div className="table-scroll">
+              <div className="table wide">
+                <div className="tr th">
+                  <span className="td grow">senaryo</span>
+                  <span className="td">adım</span>
+                  <span className="td">şema</span>
+                  <span className="td">güncelleme</span>
                 </div>
-              ))}
+                {scenarios.map((entry) => (
+                  <div key={entry.id} className="tr">
+                    <span className="td grow">{entry.title}</span>
+                    <span className="td">{entry.steps}</span>
+                    <span className="td dim mono">{entry.schemaVersion}</span>
+                    <span className="td dim">{formatShortDate(entry.updatedAt)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
-            <Empty glyph="library" text="Senaryo yok" />
+            <Empty
+              glyph="library"
+              text="İndekste senaryo yok"
+              hint="Senaryolar sekmesinden bir senaryo kaydettiğinizde burada listelenir."
+            />
           )}
         </Card>
 

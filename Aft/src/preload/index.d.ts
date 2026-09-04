@@ -36,6 +36,7 @@ declare global {
       onState: (fn: (state: BrowserState) => void) => () => void
       onFocusUrl: (fn: () => void) => () => void
       onFocusTerminal: (fn: () => void) => () => void
+      onOpenPalette: (fn: () => void) => () => void
       onPointer: (fn: (spot: PointerSpot) => void) => () => void
       onPrefs: (fn: (value: AppPrefs) => void) => () => void
       onPrefsPatch: (fn: (patch: Partial<AppPrefs>) => void) => () => void

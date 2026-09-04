@@ -65,11 +65,15 @@ export const ACTIONS: ActionEntry[] = [
   },
   {
     key: 'move',
-    usage: 'move <no>',
+    usage: 'move <no> [ms]',
     hint: 'İmleci öğenin üzerine taşır',
     build: (a) => {
       const index = num(a[0])
-      return index === null ? null : { action: 'mouse_move', index }
+      const waitMs = num(a[1])
+      if (index === null) return null
+      return waitMs === null
+        ? { action: 'mouse_move', index }
+        : { action: 'mouse_move', index, waitMs }
     }
   },
   {
@@ -121,9 +125,12 @@ export const ACTIONS: ActionEntry[] = [
   },
   {
     key: 'wait',
-    usage: 'wait',
-    hint: 'Sayfanın durulmasını bekler',
-    build: () => ({ action: 'wait' })
+    usage: 'wait [ms]',
+    hint: 'Verilen süre kadar bekler',
+    build: (a) => {
+      const waitMs = num(a[0])
+      return waitMs === null ? { action: 'wait' } : { action: 'wait', waitMs }
+    }
   },
   {
     key: 'r',

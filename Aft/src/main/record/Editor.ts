@@ -1,7 +1,8 @@
+import { MAX_HOVER_HOLD_MS, isPressableKey } from '../action'
 import { digest } from '../model'
 import { ELEMENT_ASSERTION_KINDS } from '../scenario'
 import type { StepTarget } from '../scenario'
-import { assertStep, assertion, waitStep } from './StepFactory'
+import { assertStep, assertion, hoverTitle, scrollTitle, waitStep, waitTitle } from './StepFactory'
 import { optionTarget, plain } from './Quality'
 import type { EditRequest, RecordSession, RecordedStep } from './types'
 
@@ -89,16 +90,93 @@ function retext(session: RecordSession, id: string, value: string): EditOutcome 
   const step = find(session, id)
   if (!step) return missing(id)
 
-  if (step.kind === 'clear-type' || step.kind === 'type') step.step.text = value
-  else if (step.kind === 'select-option') step.step.optionValue = value
-  else if (step.kind === 'navigate') step.step.url = value
-  else if (step.kind === 'press-key') step.step.key = value
-  else if (step.kind === 'upload') step.step.files = value.split('\n').filter(Boolean)
-  else if (step.kind === 'scroll') step.step.deltaY = Number(value) || 0
-  else return { ok: false, message: 'Bu adimin degeri duzenlenemez', stepId: id }
+  const target = step.step
+  const label = target.target?.label ?? ''
+
+  if (step.kind === 'type' || step.kind === 'clear-type') {
+    if (step.kind === 'type' && !value) {
+      return { ok: false, message: 'Yazilacak metin bos olamaz', stepId: id }
+    }
+    target.text = value
+    target.title = rewriteValue(target.title, value)
+  } else if (step.kind === 'select-option') {
+    const option = value.trim()
+    if (!option) return { ok: false, message: 'Secenek degeri bos olamaz', stepId: id }
+    target.optionValue = option
+    target.title = rewriteValue(target.title, option)
+  } else if (step.kind === 'navigate') {
+    const url = value.trim()
+    if (!url) return { ok: false, message: 'Adres bos olamaz', stepId: id }
+    target.url = url
+    target.title = 'Adres: ' + url
+  } else if (step.kind === 'press-key') {
+    const key = value.trim()
+    if (!key) return { ok: false, message: 'Tus degeri bos olamaz', stepId: id }
+    if (!isPressableKey(key)) return { ok: false, message: 'Bilinmeyen tus: ' + key, stepId: id }
+    target.key = key
+    target.title = 'Tusa bas: ' + key + (label ? ' (' + label + ')' : '')
+  } else if (step.kind === 'upload') {
+    const files = splitPaths(value)
+    if (!files.length) return { ok: false, message: 'Dosya listesi bos olamaz', stepId: id }
+    target.files = files
+    target.title = 'Dosya yukle: ' + (label || 'alan') + ' = ' + files.join(', ')
+  } else if (step.kind === 'scroll') {
+    const delta = integerOf(value)
+    if (delta === null) return { ok: false, message: 'Kaydirma sayisal olmali', stepId: id }
+    target.deltaY = delta
+    target.title = scrollTitle(delta, label)
+  } else if (step.kind === 'wait') {
+    const wait = integerOf(value)
+    if (wait === null || wait < MIN_WAIT_MS || wait > MAX_WAIT_MS) {
+      return {
+        ok: false,
+        message: 'Bekleme ' + MIN_WAIT_MS + '-' + MAX_WAIT_MS + ' ms olmali',
+        stepId: id
+      }
+    }
+    target.waitMs = wait
+    target.title = waitTitle(wait)
+  } else if (step.kind === 'hover') {
+    const hold = integerOf(value)
+    if (hold === null || hold < 0 || hold > MAX_HOVER_HOLD_MS) {
+      return {
+        ok: false,
+        message: 'Imlec suresi 0-' + MAX_HOVER_HOLD_MS + ' ms olmali',
+        stepId: id
+      }
+    }
+    target.waitMs = hold
+    target.title = hoverTitle(label, hold)
+  } else if (step.kind === 'assert' && target.assertion) {
+    target.assertion.expected = value
+  } else {
+    return { ok: false, message: 'Bu adimin degeri duzenlenemez', stepId: id }
+  }
 
   session.updatedAt = Date.now()
   return { ok: true, message: 'Adim degeri guncellendi', stepId: id }
+}
+
+function splitPaths(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
+function integerOf(value: string): number | null {
+  const text = value.trim()
+  if (!text) return null
+  const parsed = Number(text)
+  return Number.isFinite(parsed) ? Math.round(parsed) : null
+}
+
+function rewriteValue(title: string, value: string): string {
+  const at = title.indexOf(' = ')
+  if (at < 0) return title
+  const clean = value.replace(/\s+/g, ' ').trim()
+  const clipped = clean.length > 48 ? clean.slice(0, 48) + '…' : clean
+  return title.slice(0, at) + ' = "' + clipped + '"'
 }
 
 function retarget(session: RecordSession, id: string, optionId: string): EditOutcome {
@@ -170,9 +248,8 @@ function retime(session: RecordSession, id: string, timeoutMs: number): EditOutc
   if (!step) return missing(id)
 
   step.step.timeoutMs = Math.min(MAX_WAIT_MS, Math.max(0, Math.round(timeoutMs)))
-  if (step.kind === 'wait') step.step.title = 'Bekle: ' + step.step.timeoutMs + ' ms'
   session.updatedAt = Date.now()
-  return { ok: true, message: 'Sure guncellendi', stepId: id }
+  return { ok: true, message: 'Zaman asimi guncellendi', stepId: id }
 }
 
 function tolerate(session: RecordSession, id: string, flag: boolean): EditOutcome {

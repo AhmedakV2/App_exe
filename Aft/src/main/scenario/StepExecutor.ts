@@ -11,9 +11,12 @@ import type {
   PlaybackOptions,
   Scenario,
   ScenarioStep,
+  StepKind,
   StepResult,
   StepTarget
 } from './types'
+
+const HOLD_KINDS: ReadonlySet<StepKind> = new Set<StepKind>(['wait', 'hover'])
 
 export interface ExecutionContext {
   runId: string
@@ -173,7 +176,7 @@ export class StepExecutor {
     result: StepResult
   ): Promise<StepAttempt> {
     const actionAt = Date.now()
-    const outcome = await this.dispatch(this.request(step, ctx, null), step.timeoutMs)
+    const outcome = await this.dispatch(this.request(step, ctx, null), budgetOf(step))
     result.phases.actionMs += Date.now() - actionAt
 
     result.outcome = outcome
@@ -251,7 +254,7 @@ export class StepExecutor {
     const actionAt = Date.now()
     const outcome = await this.dispatch(
       this.request(step, ctx, resolution.element.identity),
-      step.timeoutMs
+      budgetOf(step)
     )
     result.phases.actionMs += Date.now() - actionAt
 
@@ -292,7 +295,8 @@ export class StepExecutor {
       deltaY: step.kind === 'scroll' ? step.deltaY : undefined,
       optionValue: step.kind === 'select-option' ? step.optionValue : undefined,
       files: step.files.length ? step.files.slice() : undefined,
-      timeoutMs: step.timeoutMs,
+      waitMs: HOLD_KINDS.has(step.kind) && step.waitMs > 0 ? step.waitMs : undefined,
+      timeoutMs: budgetOf(step),
       mode: step.mode ?? ctx.options.inputMode ?? undefined
     }
   }
@@ -334,6 +338,11 @@ export class StepExecutor {
       return ''
     }
   }
+}
+
+export function budgetOf(step: ScenarioStep): number {
+  if (step.timeoutMs <= 0) return 0
+  return step.timeoutMs + (HOLD_KINDS.has(step.kind) ? Math.max(0, step.waitMs) : 0)
 }
 
 export function profileFor(target: StepTarget | null, force: boolean): ScanProfileName {

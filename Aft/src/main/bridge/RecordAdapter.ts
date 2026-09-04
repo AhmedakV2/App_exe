@@ -2,7 +2,7 @@ import type { WebContents } from 'electron'
 import type { BrowserController } from '../browser/BrowserController'
 import { InteractionWatcher } from '../browser/InteractionWatcher'
 import type { ElementGraph, ScanLevel, ScanProfileName } from '../discovery'
-import type { HighlightMark, RawInteraction, RawSink, RecordHost } from '../record'
+import type { HighlightMark, RawInteraction, RawSink, RecordHost, RecordTuning } from '../record'
 
 export class RecordAdapter implements RecordHost {
   private readonly watcher: InteractionWatcher
@@ -41,10 +41,10 @@ export class RecordAdapter implements RecordHost {
     return this.controller.title()
   }
 
-  async watch(sink: RawSink): Promise<void> {
+  async watch(sink: RawSink, tuning: RecordTuning): Promise<void> {
     this.sink = sink
     this.bindNavigation()
-    await this.watcher.start(sink)
+    await this.watcher.start(sink, { hoverDwellMs: tuning.hoverDwellMs })
   }
 
   async unwatch(): Promise<void> {
@@ -94,6 +94,7 @@ export class RecordAdapter implements RecordHost {
       optionLabel: '',
       files: [],
       deltaY: 0,
+      dwellMs: 0,
       scrollY: 0,
       detail: 0
     }

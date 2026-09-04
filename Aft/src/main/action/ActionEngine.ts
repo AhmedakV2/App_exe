@@ -9,6 +9,8 @@ import { NavigationWaiter } from './NavigationWaiter'
 import { ActionError, classify } from './errors'
 import {
   DEFAULT_ACTION,
+  MAX_HOVER_HOLD_MS,
+  MAX_WAIT_MS,
   NAVIGATION_GRACE,
   type ActionOptions,
   type ActionOutcome,
@@ -108,11 +110,20 @@ export class ActionEngine {
         return this.done(request, null, null, null, navigation, started, 'Navigasyon tamam')
       }
       if (request.kind === 'wait') {
+        const pause = waitFor(request)
         const navigation = await this.navigation.observe(
-          async () => undefined,
-          this.navigationFor(request, deadline)
+          () => delay(pause),
+          this.navigationFor(request, deadline, pause)
         )
-        return this.done(request, null, null, null, navigation, started, 'Bekleme tamam')
+        return this.done(
+          request,
+          null,
+          null,
+          null,
+          navigation,
+          started,
+          'Bekleme tamam: ' + pause + ' ms'
+        )
       }
       if (request.kind === 'refresh') {
         const navigation = await this.refresh(deadline)
@@ -169,7 +180,8 @@ export class ActionEngine {
 
   private navigationFor(
     request: ActionRequest,
-    deadline: number
+    deadline: number,
+    reservedMs = 0
   ): Partial<ActionOptions['navigation']> {
     const base = this.settings.navigation
     const grace = NAVIGATION_GRACE[request.kind]
@@ -179,7 +191,7 @@ export class ActionEngine {
     }
     if (!deadline) return options
 
-    const left = Math.max(0, deadline - Date.now())
+    const left = Math.max(0, deadline - Date.now() - reservedMs)
     return {
       ...options,
       inDocumentGraceMs: Math.min(options.inDocumentGraceMs, left),
@@ -203,6 +215,7 @@ export class ActionEngine {
     deadline: number
   ): Promise<{ mode: InputMode; navigation: NavigationReport; message: string }> {
     const preferred: InputMode = request.mode ?? 'real-input'
+    const reserved = request.kind === 'hover' ? hoverFor(request, this.settings.hoverHoldMs) : 0
     const objectId = await this.objectOf(node)
 
     const run = async (): Promise<{ mode: InputMode; message: string }> => {
@@ -213,10 +226,12 @@ export class ActionEngine {
           return this.doubleClick(point, objectId, node, preferred)
         case 'right-click':
           return this.clickLike(point, objectId, node, preferred, 'right', 1)
-        case 'hover':
+        case 'hover': {
           if (!point) throw new ActionError('element-not-ready', 'nokta hesaplanamadi')
-          await this.input.move(point)
-          return { mode: 'real-input', message: 'Isaretlendi' }
+          const hold = hoverFor(request, this.settings.hoverHoldMs)
+          await this.input.hover(point, hold)
+          return { mode: 'real-input', message: 'Isaretlendi: ' + hold + ' ms' }
+        }
         case 'type':
           return this.type(request, objectId, node, point, preferred, false)
         case 'clear-type':
@@ -244,7 +259,7 @@ export class ActionEngine {
           mode = result.mode
           message = result.message
         },
-        this.navigationFor(request, deadline)
+        this.navigationFor(request, deadline, reserved)
       )
 
       return { mode, navigation, message }
@@ -575,6 +590,18 @@ export class ActionEngine {
       durationMs: Date.now() - started
     }
   }
+}
+
+function waitFor(request: ActionRequest): number {
+  const raw = Number(request.waitMs ?? 0)
+  if (!Number.isFinite(raw) || raw <= 0) return 0
+  return Math.min(MAX_WAIT_MS, Math.round(raw))
+}
+
+function hoverFor(request: ActionRequest, fallback: number): number {
+  const raw = Number(request.waitMs ?? 0)
+  const value = Number.isFinite(raw) && raw > 0 ? Math.round(raw) : fallback
+  return Math.min(MAX_HOVER_HOLD_MS, Math.max(0, value))
 }
 
 function targeted(request: ActionRequest): boolean {

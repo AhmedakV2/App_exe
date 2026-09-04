@@ -8,6 +8,7 @@ import {
   mountIdentity,
   mountPlayback,
   mountRecord,
+  recordChannel,
   unmountData,
   unmountIdentity,
   unmountPlayback,
@@ -30,7 +31,7 @@ import { HOME_URL, isHomeUrl, mountHome, registerHomeScheme, setHomeTheme } from
 
 const FRAME = 40
 const STAGE_RADIUS = 8
-const FRAME_COLOR = '#1e1f22'
+const FRAME_COLOR = '#101114'
 const AGENT_PARTITION = 'persist:aft-agent'
 const DRAG_TICK = 16
 const DRAG_MAX_MS = 30000
@@ -313,6 +314,13 @@ function focusTerminal(): void {
   chatView.webContents.send('aft:focus-terminal')
 }
 
+function openPalette(): void {
+  if (!chatView || chatView.webContents.isDestroyed()) return
+  pageHold = false
+  chatView.webContents.focus()
+  chatView.webContents.send('aft:open-palette')
+}
+
 function focusTerminalOnLoad(): void {
   if (pageHold) return
   focusTerminal()
@@ -589,6 +597,12 @@ function windowAction(action: WindowAction): void {
   pushState()
 }
 
+function toggleHoverCapture(): void {
+  const channel = recordChannel()
+  if (!channel || !channel.session()) return
+  channel.toggleHover()
+}
+
 function bindShortcuts(wc: WebContents): void {
   wc.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return
@@ -617,6 +631,18 @@ function bindShortcuts(wc: WebContents): void {
     if (key === 'k') {
       event.preventDefault()
       setTerminal(!terminalOpen, true)
+      return
+    }
+
+    if (key === 'p') {
+      event.preventDefault()
+      openPalette()
+      return
+    }
+
+    if (key === 'h') {
+      event.preventDefault()
+      toggleHoverCapture()
       return
     }
 

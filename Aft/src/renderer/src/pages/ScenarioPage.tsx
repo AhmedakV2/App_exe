@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ScenarioEntry } from '../../../main/scenario/ScenarioStore'
+import type { ScenarioEntry, ScenarioFolder } from '../../../main/scenario/ScenarioStore'
 import type {
   Assertion,
   AssertionKind,
   QueryKind,
   Scenario,
+  ScenarioDefaults,
   ScenarioReport,
   ScenarioStep,
   StepKind,
@@ -18,11 +19,28 @@ import {
   SCENARIO_VERSION
 } from '../../../main/scenario/types'
 import { Glyph, IconButton } from '../icons'
-import { Card, Empty, Field, PageHead, Pill, Segmented, TextButton, Toggle } from '../ui'
-import { formatShortDate, percent, shortUrl } from '../format'
+import { Card, Empty, Field, Menu, PageHead, Pill, Segmented, TextButton, Toggle } from '../ui'
+import type { MenuItem } from '../ui'
+import { percent, shortUrl } from '../format'
+import ScenarioTree from '../parts/ScenarioTree'
+import type { TreeTarget } from '../parts/ScenarioTree'
+import StepTree from '../parts/StepTree'
+import DefaultsSheet from '../parts/DefaultsSheet'
+import PromptSheet from '../parts/PromptSheet'
 import type { Report } from '../report'
 
-const LEVELS = [0, 1, 2, 3]
+type Ask = {
+  kind: 'folder-add' | 'folder-rename' | 'folder-remove' | 'scenario-remove'
+  id: string
+  title: string
+  label?: string
+  message?: string
+  value: string | null
+  confirmLabel: string
+  danger?: boolean
+}
+
+type MenuState = { target: TreeTarget; x: number; y: number }
 
 const ADD_KINDS: StepKind[] = [
   'click',
@@ -71,6 +89,8 @@ const ELEMENT_KINDS: ReadonlySet<string> = new Set([
   'upload'
 ])
 
+const TARGETLESS_KINDS: ReadonlySet<string> = new Set(['navigate', 'wait', 'refresh', 'assert'])
+
 const ELEMENT_ASSERTIONS: ReadonlySet<string> = new Set([
   'element-exists',
   'element-absent',
@@ -84,9 +104,31 @@ const ELEMENT_ASSERTIONS: ReadonlySet<string> = new Set([
   'attribute-equals'
 ])
 
+let seq = 0
+
 function uid(prefix: string): string {
-  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+  seq += 1
+  return (
+    prefix + Date.now().toString(36) + seq.toString(36) + Math.random().toString(36).slice(2, 6)
+  )
 }
+
+function renewIds(step: ScenarioStep): ScenarioStep {
+  return { ...step, id: uid('st-'), steps: step.steps.map(renewIds) }
+}
+
+function cloneStep(step: ScenarioStep): ScenarioStep {
+  return renewIds(JSON.parse(JSON.stringify(step)) as ScenarioStep)
+}
+
+function typing(node: EventTarget | null): boolean {
+  if (!(node instanceof HTMLElement)) return false
+  if (node.isContentEditable) return true
+  const tag = node.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}
+
+let stepClipboard: ScenarioStep | null = null
 
 function blankTarget(kind: TargetKind): StepTarget {
   return {
@@ -128,6 +170,7 @@ function blankStep(kind: StepKind, title: string): ScenarioStep {
     deltaY: 0,
     optionValue: '',
     files: [],
+    waitMs: kind === 'wait' ? 1000 : 0,
     timeoutMs: DEFAULT_DEFAULTS.stepTimeoutMs,
     retries: DEFAULT_DEFAULTS.retries,
     scanLevel: null,
@@ -152,11 +195,6 @@ function blankScenario(baseUrl: string): Scenario {
     defaults: { ...DEFAULT_DEFAULTS },
     steps: [first]
   }
-}
-
-const KIND_TONE: Record<string, 'ok' | 'warn' | 'bad' | 'flat' | 'accent'> = {
-  assert: 'accent',
-  group: 'flat'
 }
 
 function mapSteps(steps: ScenarioStep[], fn: (step: ScenarioStep) => ScenarioStep): ScenarioStep[] {
@@ -197,6 +235,38 @@ function shiftStep(steps: ScenarioStep[], id: string, offset: number): ScenarioS
   )
 }
 
+function findStep(steps: ScenarioStep[], id: string): ScenarioStep | null {
+  for (const step of steps) {
+    if (step.id === id) return step
+    const nested = findStep(step.steps, id)
+    if (nested) return nested
+  }
+  return null
+}
+
+function holdsStep(step: ScenarioStep, id: string): boolean {
+  return step.id === id || step.steps.some((child) => holdsStep(child, id))
+}
+
+function placeStep(
+  steps: ScenarioStep[],
+  targetId: string,
+  item: ScenarioStep,
+  after: boolean
+): ScenarioStep[] {
+  const index = steps.findIndex((step) => step.id === targetId)
+  if (index >= 0) {
+    const next = steps.slice()
+    next.splice(index + (after ? 1 : 0), 0, item)
+    return next
+  }
+  return steps.map((step) =>
+    step.steps.length ? { ...step, steps: placeStep(step.steps, targetId, item, after) } : step
+  )
+}
+
+const NUMERIC_KINDS: ReadonlySet<string> = new Set(['scroll', 'wait', 'hover'])
+
 function valueLabel(kind: StepKind): string {
   if (kind === 'type' || kind === 'clear-type') return 'Metin'
   if (kind === 'press-key') return 'Tuş'
@@ -204,6 +274,8 @@ function valueLabel(kind: StepKind): string {
   if (kind === 'select-option') return 'Seçenek'
   if (kind === 'scroll') return 'Kaydırma (piksel)'
   if (kind === 'upload') return 'Dosya yolları (virgülle)'
+  if (kind === 'wait') return 'Bekleme (ms)'
+  if (kind === 'hover') return 'İmleç süresi (ms)'
   return ''
 }
 
@@ -213,6 +285,7 @@ function valueOf(step: ScenarioStep): string {
   if (step.kind === 'select-option') return step.optionValue
   if (step.kind === 'scroll') return String(step.deltaY)
   if (step.kind === 'upload') return step.files.join(', ')
+  if (step.kind === 'wait' || step.kind === 'hover') return String(step.waitMs)
   return step.text
 }
 
@@ -220,7 +293,8 @@ function patchValue(kind: StepKind, value: string): Partial<ScenarioStep> {
   if (kind === 'press-key') return { key: value }
   if (kind === 'navigate') return { url: value }
   if (kind === 'select-option') return { optionValue: value }
-  if (kind === 'scroll') return { deltaY: Number(value) || 0 }
+  if (kind === 'scroll') return { deltaY: intOf(value, 0) }
+  if (kind === 'wait' || kind === 'hover') return { waitMs: Math.max(0, intOf(value, 0)) }
   if (kind === 'upload') {
     return {
       files: value
@@ -230,6 +304,11 @@ function patchValue(kind: StepKind, value: string): Partial<ScenarioStep> {
     }
   }
   return { text: value }
+}
+
+function intOf(value: string, fallback: number): number {
+  const parsed = Number(value.trim())
+  return Number.isFinite(parsed) ? Math.round(parsed) : fallback
 }
 
 function TargetEditor({
@@ -397,6 +476,7 @@ function TargetEditor({
 
 export default function ScenarioPage({
   revision,
+  createSeed,
   busy,
   baseUrl,
   onReport,
@@ -404,6 +484,7 @@ export default function ScenarioPage({
   onChanged
 }: {
   revision: number
+  createSeed: number
   busy: boolean
   baseUrl: string
   onReport: (report: Report) => void
@@ -411,8 +492,10 @@ export default function ScenarioPage({
   onChanged: () => void
 }): React.JSX.Element {
   const [entries, setEntries] = useState<ScenarioEntry[]>([])
+  const [folders, setFolders] = useState<ScenarioFolder[]>([])
   const [selected, setSelected] = useState('')
   const [draft, setDraft] = useState<Scenario | null>(null)
+  const [draftPlace, setDraftPlace] = useState('')
   const [report, setReport] = useState<ScenarioReport | null>(null)
   const [stepId, setStepId] = useState('')
   const [filter, setFilter] = useState('')
@@ -420,14 +503,20 @@ export default function ScenarioPage({
   const [working, setWorking] = useState(false)
   const [addKind, setAddKind] = useState<StepKind>('click')
   const [view, setView] = useState<'steps' | 'json'>('steps')
+  const [folder, setFolder] = useState('')
+  const folderRef = useRef('')
+  const [menu, setMenu] = useState<MenuState | null>(null)
+  const [ask, setAsk] = useState<Ask | null>(null)
+  const [defaultsOpen, setDefaultsOpen] = useState(false)
+  const [zone, setZone] = useState<'folder' | 'scenario' | 'step'>('scenario')
+  const [clip, setClip] = useState<ScenarioStep | null>(stepClipboard)
 
   const jsonRef = useRef<HTMLTextAreaElement | null>(null)
 
-  const rows = useMemo(() => {
-    const text = filter.trim().toLowerCase()
-    if (!text) return entries
-    return entries.filter((entry) => entry.title.toLowerCase().includes(text))
-  }, [entries, filter])
+  const place = useMemo(() => {
+    if (!selected) return draftPlace
+    return entries.find((entry) => entry.id === selected)?.folder ?? draftPlace
+  }, [draftPlace, entries, selected])
 
   const steps = useMemo(() => (draft ? flatSteps(draft.steps) : []), [draft])
   const step = useMemo(
@@ -443,6 +532,7 @@ export default function ScenarioPage({
         return
       }
       setEntries(result.data.entries)
+      setFolders(result.data.folders)
     } catch (error) {
       onReport({ level: 'err', text: 'Köprü hatası: ' + (error as Error).message })
     }
@@ -466,6 +556,7 @@ export default function ScenarioPage({
         setDraft(result.data.scenario)
         setReport(result.data.report)
         setStepId(result.data.scenario.steps[0]?.id ?? '')
+        setZone('scenario')
         setDirty(false)
       } catch (error) {
         onReport({ level: 'err', text: 'Köprü hatası: ' + (error as Error).message })
@@ -478,6 +569,11 @@ export default function ScenarioPage({
 
   const patch = useCallback((change: Partial<Scenario>): void => {
     setDraft((prev) => (prev ? { ...prev, ...change } : prev))
+    setDirty(true)
+  }, [])
+
+  const patchDefaults = useCallback((change: Partial<ScenarioDefaults>): void => {
+    setDraft((prev) => (prev ? { ...prev, defaults: { ...prev.defaults, ...change } } : prev))
     setDirty(true)
   }, [])
 
@@ -523,21 +619,87 @@ export default function ScenarioPage({
     setDirty(true)
   }, [])
 
-  const create = useCallback((): void => {
-    const draftScenario = blankScenario(baseUrl)
-    setSelected('')
-    setDraft(draftScenario)
-    setReport(null)
-    setStepId(draftScenario.steps[0].id)
+  const dragStep = useCallback((dragId: string, targetId: string, after: boolean): void => {
+    setDraft((prev) => {
+      if (!prev) return prev
+
+      const moving = findStep(prev.steps, dragId)
+      const target = findStep(prev.steps, targetId)
+      if (!moving || !target || holdsStep(moving, targetId)) return prev
+
+      return { ...prev, steps: placeStep(dropStep(prev.steps, dragId), targetId, moving, after) }
+    })
+    setStepId(dragId)
+    setZone('step')
     setDirty(true)
-  }, [baseUrl])
+  }, [])
+
+  const create = useCallback(
+    (target: string): void => {
+      const draftScenario = blankScenario(baseUrl)
+      setSelected('')
+      setDraft(draftScenario)
+      setDraftPlace(target)
+      setReport(null)
+      setStepId(draftScenario.steps[0].id)
+      setZone('scenario')
+      setView('steps')
+      setDirty(true)
+    },
+    [baseUrl]
+  )
+
+  useEffect(() => {
+    folderRef.current = folder
+  }, [folder])
+
+  useEffect(() => {
+    if (!createSeed) return
+    create(folderRef.current)
+  }, [create, createSeed])
 
   const addStep = useCallback((): void => {
     const created = blankStep(addKind, KIND_TITLES[addKind] ?? addKind)
     setDraft((prev) => (prev ? { ...prev, steps: prev.steps.concat(created) } : prev))
     setStepId(created.id)
+    setZone('step')
     setDirty(true)
   }, [addKind])
+
+  const selectStep = useCallback((id: string): void => {
+    setStepId(id)
+    setZone('step')
+  }, [])
+
+  const pickFolder = useCallback((id: string): void => {
+    setFolder(id)
+    setZone('folder')
+  }, [])
+
+  const copyStep = useCallback((): void => {
+    if (!step) return
+
+    stepClipboard = cloneStep(step)
+    setClip(stepClipboard)
+    onReport({ level: 'note', text: 'Adım kopyalandı: ' + step.title })
+  }, [onReport, step])
+
+  const pasteStep = useCallback((): void => {
+    if (!clip || !draft) return
+
+    const copy = cloneStep(clip)
+    setDraft((prev) => {
+      if (!prev) return prev
+      if (stepId && findStep(prev.steps, stepId)) {
+        return { ...prev, steps: placeStep(prev.steps, stepId, copy, true) }
+      }
+      return { ...prev, steps: prev.steps.concat(copy) }
+    })
+    setStepId(copy.id)
+    setZone('step')
+    setDirty(true)
+    onReport({ level: 'ok', text: 'Adım yapıştırıldı: ' + copy.title })
+  }, [clip, draft, onReport, stepId])
 
   const applyJson = useCallback((): void => {
     try {
@@ -577,7 +739,7 @@ export default function ScenarioPage({
     if (!draft) return
     setWorking(true)
     try {
-      const result = await window.aftPlayback.save({ ...draft, updatedAt: Date.now() })
+      const result = await window.aftPlayback.save({ ...draft, updatedAt: Date.now() }, place)
       if (!result.ok || !result.data) {
         onReport({ level: 'err', text: 'Senaryo kaydedilemedi: ' + result.message })
         return
@@ -594,31 +756,319 @@ export default function ScenarioPage({
     } finally {
       setWorking(false)
     }
-  }, [draft, load, onChanged, onReport])
+  }, [draft, load, onChanged, onReport, place])
 
-  const remove = useCallback(async (): Promise<void> => {
-    if (!selected) return
-    setWorking(true)
-    try {
-      const result = await window.aftPlayback.remove(selected)
-      if (!result.ok) {
-        onReport({ level: 'err', text: 'Senaryo silinemedi: ' + result.message })
+  const remove = useCallback(
+    async (id: string): Promise<void> => {
+      if (!id) return
+      setWorking(true)
+      try {
+        const result = await window.aftPlayback.remove(id)
+        if (!result.ok) {
+          onReport({ level: 'err', text: 'Senaryo silinemedi: ' + result.message })
+          return
+        }
+        if (id === selected) {
+          setSelected('')
+          setDraft(null)
+          setReport(null)
+          setStepId('')
+          setDirty(false)
+        }
+        onReport({ level: 'note', text: 'Senaryo silindi' })
+        await load()
+        onChanged()
+      } finally {
+        setWorking(false)
+      }
+    },
+    [load, onChanged, onReport, selected]
+  )
+
+  const moveScenario = useCallback(
+    async (id: string, target: string): Promise<void> => {
+      setWorking(true)
+      try {
+        const result = await window.aftPlayback.move({ scenarioId: id, folder: target })
+        if (!result.ok) {
+          onReport({ level: 'err', text: 'Senaryo taşınamadı: ' + result.message })
+          return
+        }
+        await load()
+        onChanged()
+      } catch (error) {
+        onReport({ level: 'err', text: 'Köprü hatası: ' + (error as Error).message })
+      } finally {
+        setWorking(false)
+      }
+    },
+    [load, onChanged, onReport]
+  )
+
+  const runAsk = useCallback(
+    async (request: Ask, value: string): Promise<void> => {
+      setWorking(true)
+      try {
+        if (request.kind === 'folder-add') {
+          const result = await window.aftPlayback.folderAdd({ parentId: request.id, name: value })
+          if (!result.ok || !result.data) {
+            onReport({ level: 'err', text: 'Klasör açılamadı: ' + result.message })
+            return
+          }
+          setFolder(result.data.folder.id)
+          onReport({ level: 'ok', text: 'Klasör açıldı: ' + result.data.folder.name })
+        }
+
+        if (request.kind === 'folder-rename') {
+          const result = await window.aftPlayback.folderRename({ id: request.id, name: value })
+          if (!result.ok || !result.data) {
+            onReport({ level: 'err', text: 'Klasör adlandırılamadı: ' + result.message })
+            return
+          }
+          setFolder(result.data.folder.id)
+          onReport({ level: 'ok', text: 'Klasör adlandırıldı: ' + result.data.folder.name })
+        }
+
+        if (request.kind === 'folder-remove') {
+          const result = await window.aftPlayback.folderRemove(request.id)
+          if (!result.ok) {
+            onReport({ level: 'err', text: 'Klasör silinemedi: ' + result.message })
+            return
+          }
+          if (folder === request.id || folder.startsWith(request.id + '/')) setFolder('')
+          onReport({ level: 'note', text: 'Klasör silindi' })
+        }
+
+        await load()
+        onChanged()
+      } catch (error) {
+        onReport({ level: 'err', text: 'Köprü hatası: ' + (error as Error).message })
+      } finally {
+        setWorking(false)
+      }
+    },
+    [folder, load, onChanged, onReport]
+  )
+
+  const submitAsk = useCallback(
+    (value: string): void => {
+      const request = ask
+      setAsk(null)
+      if (!request) return
+
+      if (request.kind === 'scenario-remove') {
+        void remove(request.id)
         return
       }
-      setSelected('')
-      setDraft(null)
-      setReport(null)
-      setStepId('')
-      setDirty(false)
-      onReport({ level: 'note', text: 'Senaryo silindi' })
-      await load()
-      onChanged()
-    } finally {
-      setWorking(false)
+      void runAsk(request, value)
+    },
+    [ask, remove, runAsk]
+  )
+
+  const openMenu = useCallback((target: TreeTarget, x: number, y: number): void => {
+    if (target.kind !== 'root') setZone(target.kind === 'folder' ? 'folder' : 'scenario')
+    setMenu({ target, x, y })
+  }, [])
+
+  const askProject = useCallback((parentId: string): void => {
+    setAsk({
+      kind: 'folder-add',
+      id: parentId,
+      title: parentId ? 'Yeni modül' : 'Yeni proje',
+      label: parentId ? 'Modül adı' : 'Proje adı',
+      value: parentId ? 'Yeni modül' : 'Yeni proje',
+      confirmLabel: 'Oluştur'
+    })
+  }, [])
+
+  const askRemove = useCallback((id: string, title: string): void => {
+    setAsk({
+      kind: 'scenario-remove',
+      id,
+      title: 'Senaryo silinsin mi?',
+      message: title + ' kalıcı olarak silinecek.',
+      value: null,
+      confirmLabel: 'Sil',
+      danger: true
+    })
+  }, [])
+
+  const askFolderRemove = useCallback(
+    (id: string): void => {
+      const known = folders.find((item) => item.id === id)
+      if (!known) return
+
+      setAsk({
+        kind: 'folder-remove',
+        id: known.id,
+        title: known.kind === 'module' ? 'Modül silinsin mi?' : 'Proje silinsin mi?',
+        message: known.name + ' ve içindeki tüm senaryolar kalıcı olarak silinecek.',
+        value: null,
+        confirmLabel: 'Sil',
+        danger: true
+      })
+    },
+    [folders]
+  )
+
+  const menuItems = useMemo((): MenuItem[] => {
+    if (!menu) return []
+
+    if (menu.target.kind === 'scenario') {
+      return [
+        { id: 'open', label: 'Aç', glyph: 'file' },
+        { id: 'run', label: 'Çalıştır', glyph: 'play' },
+        { id: 'defaults', label: 'Varsayılan ayarlar', glyph: 'sliders', split: true },
+        { id: 'remove', label: 'Sil', glyph: 'trash', danger: true, split: true }
+      ]
     }
-  }, [load, onChanged, onReport, selected])
+
+    if (menu.target.kind === 'folder') {
+      const target = folders.find((item) => item.id === menu.target.id)
+      return [
+        { id: 'scenario-add', label: 'Yeni senaryo', glyph: 'plus' },
+        {
+          id: 'module-add',
+          label: 'Yeni modül',
+          glyph: 'module',
+          disabled: target?.kind !== 'project'
+        },
+        { id: 'rename', label: 'Yeniden adlandır', glyph: 'edit', split: true },
+        { id: 'remove', label: 'Sil', glyph: 'trash', danger: true }
+      ]
+    }
+
+    return [
+      { id: 'project-add', label: 'Yeni proje', glyph: 'folder' },
+      { id: 'scenario-add', label: 'Yeni senaryo', glyph: 'plus' }
+    ]
+  }, [folders, menu])
+
+  const pickMenu = useCallback(
+    (id: string): void => {
+      const target = menu?.target
+      setMenu(null)
+      if (!target) return
+
+      if (target.kind === 'scenario') {
+        if (id === 'open') void open(target.id)
+        if (id === 'run') onRun(target.id)
+        if (id === 'defaults') {
+          if (target.id === selected) setDefaultsOpen(true)
+          else void open(target.id).then(() => setDefaultsOpen(true))
+        }
+        if (id === 'remove') {
+          const entry = entries.find((item) => item.id === target.id)
+          askRemove(target.id, entry?.title ?? target.id)
+        }
+        return
+      }
+
+      if (id === 'project-add') {
+        askProject('')
+        return
+      }
+
+      if (id === 'module-add') {
+        askProject(target.id)
+        return
+      }
+
+      if (id === 'scenario-add') {
+        setFolder(target.id)
+        create(target.id)
+        return
+      }
+
+      const known = folders.find((item) => item.id === target.id)
+      if (!known) return
+
+      if (id === 'rename') {
+        setAsk({
+          kind: 'folder-rename',
+          id: known.id,
+          title: known.kind === 'module' ? 'Modülü adlandır' : 'Projeyi adlandır',
+          label: 'Ad',
+          value: known.name,
+          confirmLabel: 'Kaydet'
+        })
+        return
+      }
+
+      if (id === 'remove') askFolderRemove(known.id)
+    },
+    [askFolderRemove, askProject, askRemove, create, entries, folders, menu, onRun, open, selected]
+  )
+
+  const activeFolder = useMemo(
+    () => folders.find((item) => item.id === folder) ?? null,
+    [folder, folders]
+  )
 
   const locked = working || busy
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (locked || menu || ask || defaultsOpen) return
+      if (typing(event.target)) return
+
+      const onSteps = Boolean(draft) && view === 'steps'
+
+      if (event.key === 'Delete') {
+        if (zone === 'step') {
+          if (!onSteps || !step) return
+          event.preventDefault()
+          removeStep(step.id)
+          return
+        }
+        if (zone === 'scenario') {
+          if (!selected) return
+          event.preventDefault()
+          askRemove(selected, entries.find((item) => item.id === selected)?.title ?? selected)
+          return
+        }
+        if (!folder) return
+        event.preventDefault()
+        askFolderRemove(folder)
+        return
+      }
+
+      if (!event.ctrlKey && !event.metaKey) return
+      if (event.altKey || event.shiftKey || !onSteps) return
+
+      const key = event.key.toLowerCase()
+      if (key === 'c' && step) {
+        event.preventDefault()
+        copyStep()
+        return
+      }
+      if (key === 'v' && clip) {
+        event.preventDefault()
+        pasteStep()
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [
+    ask,
+    askFolderRemove,
+    askRemove,
+    clip,
+    copyStep,
+    defaultsOpen,
+    draft,
+    entries,
+    folder,
+    locked,
+    menu,
+    pasteStep,
+    removeStep,
+    selected,
+    step,
+    view,
+    zone
+  ])
 
   return (
     <div className="page">
@@ -640,7 +1090,12 @@ export default function ScenarioPage({
         }
         actions={
           <>
-            <TextButton glyph="plus" label="Yeni" onClick={create} disabled={locked} />
+            <TextButton
+              glyph="plus"
+              label="Yeni"
+              onClick={() => create(folder)}
+              disabled={locked}
+            />
             <TextButton
               glyph="shield"
               label="Doğrula"
@@ -663,7 +1118,7 @@ export default function ScenarioPage({
             <TextButton
               glyph="trash"
               label="Sil"
-              onClick={() => void remove()}
+              onClick={() => askRemove(selected, draft?.title ?? selected)}
               disabled={!selected || locked}
               tone="danger"
             />
@@ -674,7 +1129,25 @@ export default function ScenarioPage({
       <div className="page-body cols-3">
         <Card
           label="Kütüphane"
-          actions={<IconButton name="reload" title="Yenile" onClick={() => void load()} small />}
+          actions={
+            <>
+              <IconButton
+                name="folder"
+                title="Yeni proje"
+                onClick={() => askProject('')}
+                disabled={locked}
+                small
+              />
+              <IconButton
+                name="module"
+                title="Yeni modül"
+                onClick={() => askProject(folder)}
+                disabled={locked || activeFolder?.kind !== 'project'}
+                small
+              />
+              <IconButton name="reload" title="Yenile" onClick={() => void load()} small />
+            </>
+          }
           scroll
         >
           <div className="search">
@@ -682,55 +1155,40 @@ export default function ScenarioPage({
             <input
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
-              placeholder="Filtre"
+              placeholder="Senaryo ara"
               spellCheck={false}
               aria-label="Senaryo filtresi"
             />
           </div>
 
-          {rows.length ? (
-            <div className="list">
-              {rows.map((entry) => (
-                <button
-                  key={entry.id}
-                  className={'list-row' + (entry.id === selected ? ' sel' : '')}
-                  onClick={() => void open(entry.id)}
-                  disabled={locked}
-                  type="button"
-                >
-                  <Glyph name="file" size={13} />
-                  <span className="list-title">{entry.title}</span>
-                  <span className="list-meta">{entry.steps}</span>
-                  <span className="list-meta">{formatShortDate(entry.updatedAt)}</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <Empty glyph="library" text="Senaryo yok" />
-          )}
+          <ScenarioTree
+            entries={entries}
+            folders={folders}
+            filter={filter}
+            selected={selected}
+            activeFolder={folder}
+            disabled={locked}
+            onOpen={(id) => void open(id)}
+            onPickFolder={pickFolder}
+            onMove={(id, target) => void moveScenario(id, target)}
+            onMenu={openMenu}
+          />
         </Card>
 
         <Card
           label={view === 'json' ? 'Senaryo JSON' : 'Adımlar'}
           scroll
           grow
-          actions={
+          lead={
             draft ? (
-              <>
-                <Segmented
-                  items={[
-                    { id: 'steps', label: 'Adımlar' },
-                    { id: 'json', label: 'JSON' }
-                  ]}
-                  value={view}
-                  onPick={(id) => setView(id as 'steps' | 'json')}
-                />
+              <span className="head-group">
                 {view === 'steps' ? (
                   <>
                     <select
                       className="picker slim"
                       value={addKind}
                       onChange={(event) => setAddKind(event.target.value as StepKind)}
+                      disabled={locked}
                       aria-label="Adım türü"
                     >
                       {ADD_KINDS.map((kind) => (
@@ -756,7 +1214,20 @@ export default function ScenarioPage({
                     tone="primary"
                   />
                 )}
-              </>
+              </span>
+            ) : null
+          }
+          actions={
+            draft ? (
+              <Segmented
+                items={[
+                  { id: 'steps', label: 'Adımlar' },
+                  { id: 'json', label: 'JSON' }
+                ]}
+                value={view}
+                onPick={(id) => setView(id as 'steps' | 'json')}
+                disabled={locked}
+              />
             ) : null
           }
         >
@@ -789,22 +1260,13 @@ export default function ScenarioPage({
                   </Field>
                 </div>
 
-                <div className="steps">
-                  {steps.map(({ step: item, depth }, index) => (
-                    <button
-                      key={item.id}
-                      className={'step-row' + (item.id === stepId ? ' sel' : '')}
-                      style={{ paddingLeft: 10 + depth * 14 }}
-                      onClick={() => setStepId(item.id)}
-                      type="button"
-                    >
-                      <span className="step-no">{index + 1}</span>
-                      <span className="step-title">{item.title}</span>
-                      <Pill tone={KIND_TONE[item.kind] ?? 'flat'}>{item.kind}</Pill>
-                      {item.continueOnFailure ? <Glyph name="flag" size={12} /> : null}
-                    </button>
-                  ))}
-                </div>
+                <StepTree
+                  steps={steps}
+                  selected={stepId}
+                  disabled={locked}
+                  onSelect={selectStep}
+                  onMove={dragStep}
+                />
 
                 {report && report.errors.length ? (
                   <div className="issues">
@@ -819,11 +1281,28 @@ export default function ScenarioPage({
               </>
             )
           ) : (
-            <Empty glyph="file" text="Senaryo seçilmedi" />
+            <Empty
+              glyph="file"
+              text="Senaryo seçilmedi"
+              hint="Soldaki kütüphaneden bir senaryo açın ya da yeni bir senaryo oluşturun."
+            />
           )}
         </Card>
 
-        <Card label="Adım ayarı" scroll>
+        <Card
+          label="Adım ayarı"
+          actions={
+            draft ? (
+              <IconButton
+                name="sliders"
+                title="Senaryo varsayılanları"
+                onClick={() => setDefaultsOpen(true)}
+                small
+              />
+            ) : null
+          }
+          scroll
+        >
           {draft && step ? (
             <>
               <div className="step-actions">
@@ -842,8 +1321,22 @@ export default function ScenarioPage({
                   small
                 />
                 <IconButton
+                  name="copy"
+                  title="Adımı kopyala (Ctrl+C)"
+                  onClick={copyStep}
+                  disabled={locked}
+                  small
+                />
+                <IconButton
+                  name="layers"
+                  title="Adımı yapıştır (Ctrl+V)"
+                  onClick={pasteStep}
+                  disabled={locked || !clip}
+                  small
+                />
+                <IconButton
                   name="trash"
-                  title="Sil"
+                  title="Adımı sil (Del)"
                   onClick={() => removeStep(step.id)}
                   disabled={locked}
                   small
@@ -860,9 +1353,12 @@ export default function ScenarioPage({
                       const next = event.target.value as StepKind
                       patchStep(step.id, {
                         kind: next,
+                        waitMs: next === 'wait' && step.waitMs <= 0 ? 1000 : step.waitMs,
                         target: ELEMENT_KINDS.has(next)
                           ? (step.target ?? blankTarget('query'))
-                          : step.target,
+                          : TARGETLESS_KINDS.has(next)
+                            ? null
+                            : step.target,
                         assertion:
                           next === 'assert'
                             ? (step.assertion ?? {
@@ -897,6 +1393,7 @@ export default function ScenarioPage({
               {valueLabel(step.kind) ? (
                 <Field label={valueLabel(step.kind)}>
                   <input
+                    type={NUMERIC_KINDS.has(step.kind) ? 'number' : 'text'}
                     value={valueOf(step)}
                     onChange={(event) =>
                       patchStep(step.id, patchValue(step.kind, event.target.value))
@@ -969,7 +1466,9 @@ export default function ScenarioPage({
                         type="number"
                         value={step.assertion.count}
                         onChange={(event) =>
-                          patchAssertion(step.id, { count: Number(event.target.value) || 0 })
+                          patchAssertion(step.id, {
+                            count: Math.max(0, intOf(event.target.value, 0))
+                          })
                         }
                       />
                     </Field>
@@ -998,7 +1497,7 @@ export default function ScenarioPage({
                     type="number"
                     value={step.timeoutMs}
                     onChange={(event) =>
-                      patchStep(step.id, { timeoutMs: Number(event.target.value) || 0 })
+                      patchStep(step.id, { timeoutMs: Math.max(0, intOf(event.target.value, 0)) })
                     }
                   />
                 </Field>
@@ -1007,7 +1506,7 @@ export default function ScenarioPage({
                     type="number"
                     value={step.retries}
                     onChange={(event) =>
-                      patchStep(step.id, { retries: Number(event.target.value) || 0 })
+                      patchStep(step.id, { retries: Math.max(0, intOf(event.target.value, 0)) })
                     }
                   />
                 </Field>
@@ -1024,55 +1523,6 @@ export default function ScenarioPage({
                 onChange={(next) => patchStep(step.id, { allowLowConfidence: next })}
               />
 
-              <div className="card-split">Senaryo varsayılanları</div>
-
-              <div className="grid-2">
-                <Field label="Tarama seviyesi">
-                  <select
-                    value={draft.defaults.scanLevel}
-                    onChange={(event) =>
-                      patch({
-                        defaults: {
-                          ...draft.defaults,
-                          scanLevel: Number(event.target.value) as 0 | 1 | 2 | 3
-                        }
-                      })
-                    }
-                  >
-                    {LEVELS.map((level) => (
-                      <option key={level} value={level}>
-                        {level}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Adım zaman aşımı">
-                  <input
-                    type="number"
-                    value={draft.defaults.stepTimeoutMs}
-                    onChange={(event) =>
-                      patch({
-                        defaults: {
-                          ...draft.defaults,
-                          stepTimeoutMs: Number(event.target.value) || 0
-                        }
-                      })
-                    }
-                  />
-                </Field>
-              </div>
-
-              <Toggle
-                label="İlk hatada dur"
-                checked={draft.defaults.stopOnFailure}
-                onChange={(next) => patch({ defaults: { ...draft.defaults, stopOnFailure: next } })}
-              />
-              <Toggle
-                label="Sayfa durumunu doğrula"
-                checked={draft.defaults.verifyState}
-                onChange={(next) => patch({ defaults: { ...draft.defaults, verifyState: next } })}
-              />
-
               <div className="kv">
                 <span className="kv-key">şema</span>
                 <span className="kv-val mono">{draft.version}</span>
@@ -1080,13 +1530,52 @@ export default function ScenarioPage({
                 <span className="kv-val mono">{draft.id}</span>
                 <span className="kv-key">adres</span>
                 <span className="kv-val mono">{shortUrl(draft.baseUrl)}</span>
+                <span className="kv-key">konum</span>
+                <span className="kv-val mono">{place || 'kök'}</span>
               </div>
             </>
           ) : (
-            <Empty glyph="sliders" text="Adım seçilmedi" />
+            <Empty
+              glyph="sliders"
+              text="Adım seçilmedi"
+              hint="Ortadaki listeden bir adım seçtiğinizde ayarları burada açılır."
+            />
           )}
         </Card>
       </div>
+
+      {menu ? (
+        <Menu
+          x={menu.x}
+          y={menu.y}
+          items={menuItems}
+          onPick={pickMenu}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
+
+      {defaultsOpen && draft ? (
+        <DefaultsSheet
+          title={draft.title}
+          defaults={draft.defaults}
+          disabled={locked}
+          onPatch={patchDefaults}
+          onClose={() => setDefaultsOpen(false)}
+        />
+      ) : null}
+
+      {ask ? (
+        <PromptSheet
+          title={ask.title}
+          label={ask.label}
+          value={ask.value}
+          message={ask.message}
+          confirmLabel={ask.confirmLabel}
+          danger={ask.danger}
+          onSubmit={submitAsk}
+          onClose={() => setAsk(null)}
+        />
+      ) : null}
     </div>
   )
 }

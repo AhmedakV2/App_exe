@@ -1,5 +1,5 @@
 import { WebContentsView } from 'electron'
-import { ActionEngine } from '../action'
+import { ActionEngine, DEFAULT_WAIT_MS } from '../action'
 import type { ActionOutcome, ActionRequest, DescriptorLookup } from '../action'
 import { DiscoveryEngine } from '../discovery'
 import type { ElementGraph } from '../discovery'
@@ -234,7 +234,7 @@ export class BrowserController {
       case 'right_click':
         return { kind: 'right-click', ...target }
       case 'mouse_move':
-        return { kind: 'hover', ...target }
+        return { kind: 'hover', waitMs: request.waitMs, ...target }
       case 'type':
         return { kind: 'type', text: request.text ?? '', ...target }
       case 'clear_type':
@@ -248,11 +248,11 @@ export class BrowserController {
       case 'press_key':
         return { kind: 'press-key', key: request.key ?? '', ...target }
       case 'wait':
-        return { kind: 'wait' }
+        return { kind: 'wait', waitMs: request.waitMs ?? DEFAULT_WAIT_MS }
       case 'refresh':
         return { kind: 'refresh' }
       default:
-        return { kind: 'wait' }
+        return { kind: 'wait', waitMs: request.waitMs ?? DEFAULT_WAIT_MS }
     }
   }
 

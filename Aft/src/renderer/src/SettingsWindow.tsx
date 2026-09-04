@@ -9,7 +9,9 @@ const SHORTCUTS: { name: string; code: string }[] = [
   { name: 'Adres çubuğu', code: 'Ctrl + L' },
   { name: 'Sayfayı incele', code: 'F12' },
   { name: 'Tam ekran', code: 'F11' },
-  { name: 'Kayıtta imleç adımı', code: 'Ctrl + Shift + M' },
+  { name: 'Kayıtta imleç adımları', code: 'Ctrl + H' },
+  { name: 'Seçili öğeyi sil', code: 'Del' },
+  { name: 'Adım kopyala / yapıştır', code: 'Ctrl + C / Ctrl + V' },
   { name: 'Komut geçmişi', code: '↑ / ↓' }
 ]
 
@@ -86,7 +88,7 @@ export default function SettingsWindow(): React.JSX.Element {
       <header className="win-head">
         <span className="win-title">
           <Glyph name="settings" size={13} />
-          AYARLAR
+          Ayarlar
         </span>
         <span className="win-push" />
         <button

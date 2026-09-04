@@ -1,4 +1,4 @@
-import type { InputMode } from '../action'
+import { DEFAULT_WAIT_MS, MAX_WAIT_MS, type InputMode } from '../action'
 import type { ScanLevel } from '../discovery'
 import type { Descriptor } from '../identity'
 import { digest } from '../model'
@@ -125,6 +125,12 @@ function inspect(
     if (step.kind === 'upload' && !step.files.length) {
       errors.push({ path: at, message: 'dosya listesi bos' })
     }
+    if (step.kind === 'wait' && step.waitMs <= 0) {
+      errors.push({ path: at, message: 'bekleme suresi bos' })
+    }
+    if (step.kind === 'wait' && step.timeoutMs > 0 && step.timeoutMs < step.waitMs) {
+      warnings.push({ path: at, message: 'zaman asimi bekleme suresinden kisa' })
+    }
     if (step.kind === 'assert' && !step.assertion) {
       errors.push({ path: at, message: 'dogrulama tanimi yok' })
     }
@@ -211,6 +217,7 @@ function normalizeStep(
     deltaY: num(source['deltaY'], 0),
     optionValue: str(source['optionValue']),
     files: strList(source['files']),
+    waitMs: waitOf(kind, source),
     timeoutMs: clamp(num(source['timeoutMs'], defaults.stepTimeoutMs), 0, MAX_TIMEOUT_MS),
     retries: clamp(num(source['retries'], defaults.retries), 0, MAX_RETRIES),
     scanLevel:
@@ -374,6 +381,13 @@ function normalizeExpected(raw: unknown, fallback: ScanLevel): ExpectedState | n
   }
 }
 
+function waitOf(kind: StepKind, source: Record<string, unknown>): number {
+  const explicit = source['waitMs'] ?? source['durationMs'] ?? source['delayMs']
+  if (explicit !== undefined) return clamp(num(explicit, 0), 0, MAX_WAIT_MS)
+  if (kind !== 'wait') return 0
+  return clamp(num(source['timeoutMs'], DEFAULT_WAIT_MS), 0, MAX_WAIT_MS)
+}
+
 function describe(
   kind: StepKind,
   source: Record<string, unknown>,
@@ -381,6 +395,7 @@ function describe(
 ): string {
   const label = target ? ' ' + target.label : ''
   if (kind === 'navigate') return 'Adres: ' + str(source['url'])
+  if (kind === 'wait') return 'Bekle: ' + waitOf(kind, source) + ' ms'
   if (kind === 'assert') {
     const nested = asRecord(source['assertion'])
     const name = str(nested['kind'] ?? nested['assert'] ?? source['assert'], 'tanimsiz')

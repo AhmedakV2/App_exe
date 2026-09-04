@@ -1,4 +1,4 @@
-import { isPressableKey } from '../action'
+import { MAX_HOVER_HOLD_MS, isPressableKey } from '../action'
 import type { ActionKind } from '../action'
 import type { RawElement, RawInteraction, RecordIntent, RecordOptions } from './types'
 
@@ -25,6 +25,7 @@ export function normalize(raw: RawInteraction, options: RecordOptions): RecordIn
     optionValue: '',
     files: [] as string[],
     deltaY: 0,
+    waitMs: 0,
     optionalElement: false,
     label: labelOf(raw.element)
   }
@@ -62,7 +63,7 @@ export function normalize(raw: RawInteraction, options: RecordOptions): RecordIn
 
   if (raw.kind === 'hover') {
     if (!options.captureHover) return null
-    return { ...base, kind: 'hover', needsElement: true }
+    return { ...base, kind: 'hover', waitMs: dwellOf(raw.dwellMs, options), needsElement: true }
   }
 
   if (raw.kind === 'input') {
@@ -94,6 +95,11 @@ export function normalize(raw: RawInteraction, options: RecordOptions): RecordIn
   if (raw.kind === 'click') return { ...base, kind: 'click', needsElement: true }
 
   return null
+}
+
+function dwellOf(dwellMs: number, options: RecordOptions): number {
+  const raw = Number.isFinite(dwellMs) && dwellMs > 0 ? Math.round(dwellMs) : options.hoverDwellMs
+  return Math.min(MAX_HOVER_HOLD_MS, Math.max(0, raw))
 }
 
 export function needsElement(kind: ActionKind): boolean {

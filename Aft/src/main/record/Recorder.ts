@@ -110,7 +110,7 @@ export class Recorder {
     this.session = session
     this.interactedAt = 0
 
-    await this.host.watch((batch) => this.accept(batch))
+    await this.host.watch((batch) => this.accept(batch), { hoverDwellMs: options.hoverDwellMs })
     this.watching = true
 
     this.notice('info', '', 'Kayit basladi: ' + (url || 'bos sayfa'), [
@@ -170,6 +170,17 @@ export class Recorder {
     if (this.session) await this.stop()
     this.session = null
     this.emit()
+  }
+
+  setHover(next: boolean): boolean {
+    const session = this.session
+    if (!session) return false
+
+    session.options = { ...session.options, captureHover: next }
+    session.updatedAt = Date.now()
+    this.notice('info', '', next ? 'Imlec adimlari acildi' : 'Imlec adimlari kapatildi')
+    this.emit()
+    return next
   }
 
   applyEdit(request: EditRequest): EditOutcome {
