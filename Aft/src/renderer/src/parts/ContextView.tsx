@@ -86,7 +86,7 @@ export default memo(function ContextView({
           </span>
           <span className="sheet-push" />
           <button
-            className="sheet-close"
+            className="ghost-btn"
             title="Kapat"
             aria-label="Kapat"
             onClick={onClose}

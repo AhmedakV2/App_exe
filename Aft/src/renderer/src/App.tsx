@@ -30,8 +30,6 @@ type PageId = 'browser' | 'scenarios' | 'results' | 'stats' | 'identity' | 'cove
 
 type NavItem = { id: PageId; label: string; glyph: string; suite?: boolean }
 
-const NAV_ICON = 22
-
 const NAV: NavItem[] = [
   { id: 'browser', label: 'Tarayıcı', glyph: 'globe' },
   { id: 'browser', label: 'Kayıt ve oynatma', glyph: 'suite', suite: true },
@@ -63,6 +61,7 @@ const DOCK_KEY = 'aft:dock-width'
 const DEV_KEY = 'aft:devtools-width'
 const DOCK_TAB_KEY = 'aft:dock-tab'
 const PAGE_KEY = 'aft:page'
+const RAIL_KEY = 'aft:rail-mini'
 const AUTO_TERM_KEY = 'aft:auto-terminal'
 const AUTO_BACK_KEY = 'aft:auto-terminal-restore'
 const SHOT_KEY = 'aft:play-screenshot'
@@ -217,6 +216,7 @@ export default function App(): React.JSX.Element {
   const [urlSeed, setUrlSeed] = useState(0)
   const [createSeed, setCreateSeed] = useState(0)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [railMini, setRailMini] = useState(() => readFlag(RAIL_KEY, false))
   const [recording, setRecording] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [library, setLibrary] = useState(0)
@@ -305,6 +305,10 @@ export default function App(): React.JSX.Element {
     window.aft.requestState()
     return off
   }, [])
+
+  useEffect(() => {
+    storeFlag(RAIL_KEY, railMini)
+  }, [railMini])
 
   useEffect(() => {
     paintTheme(theme)
@@ -557,6 +561,8 @@ export default function App(): React.JSX.Element {
   const openPalette = useCallback((): void => setPaletteOpen(true), [])
 
   const closePalette = useCallback((): void => setPaletteOpen(false), [])
+
+  const toggleRail = useCallback((): void => setRailMini((prev) => !prev), [])
 
   const toggleSettings = useCallback((): void => {
     window.aft.setSettings(!settingsOpen)
@@ -877,7 +883,7 @@ export default function App(): React.JSX.Element {
     return { label: 'hazır', tone: 'idle' }
   }, [playing, recording, state.loading])
   return (
-    <div className={'shell' + (drag ? ' drag-' + drag : '')}>
+    <div className={'shell' + (drag ? ' drag-' + drag : '') + (railMini ? ' rail-mini' : '')}>
       <header className="titlebar">
         <div className="title-brand">
           <Brand />
@@ -907,6 +913,8 @@ export default function App(): React.JSX.Element {
       </header>
 
       <aside className="sidebar">
+        <span className="rail-label">Çalışma alanı</span>
+
         <nav className="rail-group" aria-label="Ana gezinme">
           {NAV.map((item) => {
             const on = item.suite ? Boolean(dock) : item.id === page && !item.suite
@@ -915,12 +923,12 @@ export default function App(): React.JSX.Element {
                 key={item.label}
                 className={'nav-item' + (on ? ' sel' : '')}
                 title={item.label}
-                aria-label={item.label}
                 aria-pressed={on}
                 onClick={() => pick(item)}
                 type="button"
               >
-                <Glyph name={item.glyph} size={NAV_ICON} />
+                <Glyph name={item.glyph} size={16} />
+                <span className="nav-text">{item.label}</span>
                 {item.suite && recording ? <span className="nav-dot rec" /> : null}
                 {item.suite && !recording && playing ? <span className="nav-dot run" /> : null}
               </button>
@@ -928,55 +936,64 @@ export default function App(): React.JSX.Element {
           })}
         </nav>
 
-        <span className="rail-split" />
+        <span className="rail-gap" />
+
+        <span className="rail-label">Araçlar</span>
 
         <nav className="rail-group" aria-label="Yardımcı araçlar">
           <button
             className={'nav-item' + (listOpen && page === 'browser' ? ' sel' : '')}
             title="Öğeler"
-            aria-label="Öğeler"
             aria-pressed={listOpen && page === 'browser'}
             onClick={toggleList}
             type="button"
           >
-            <Glyph name="grid" size={NAV_ICON} />
+            <Glyph name="grid" size={16} />
+            <span className="nav-text">Öğeler</span>
           </button>
           <button
             className={'nav-item' + (devtoolsOpen && page === 'browser' ? ' sel' : '')}
             title="Sayfayı incele F12"
-            aria-label="Sayfayı incele"
             aria-pressed={devtoolsOpen && page === 'browser'}
             onClick={toggleDevtools}
             type="button"
           >
-            <Glyph name="inspect" size={NAV_ICON} />
+            <Glyph name="inspect" size={16} />
+            <span className="nav-text">İncele</span>
           </button>
           <button
             className={'nav-item' + (terminalOpen ? ' sel' : '')}
             title="Yardımcı panel Ctrl+K"
-            aria-label="Yardımcı panel"
             aria-pressed={terminalOpen}
             onClick={toggleDrawer}
             type="button"
           >
-            <Glyph name="terminal" size={NAV_ICON} />
+            <Glyph name="terminal" size={16} />
+            <span className="nav-text">Panel</span>
           </button>
-        </nav>
-
-        <span className="rail-gap" />
-
-        <nav className="rail-group" aria-label="Ayarlar">
           <button
             className={'nav-item' + (settingsOpen ? ' sel' : '')}
             title="Ayarlar"
-            aria-label="Ayarlar"
             aria-pressed={settingsOpen}
             onClick={toggleSettings}
             type="button"
           >
-            <Glyph name="settings" size={NAV_ICON} />
+            <Glyph name="settings" size={16} />
+            <span className="nav-text">Ayarlar</span>
           </button>
         </nav>
+
+        <div className="rail-foot">
+          <button
+            className="ghost-btn"
+            title={railMini ? 'Kenar çubuğunu genişlet' : 'Kenar çubuğunu daralt'}
+            aria-label={railMini ? 'Kenar çubuğunu genişlet' : 'Kenar çubuğunu daralt'}
+            onClick={toggleRail}
+            type="button"
+          >
+            <Glyph name={railMini ? 'expand' : 'collapse'} size={15} />
+          </button>
+        </div>
       </aside>
 
       <main className="stagearea" ref={spaceRef}>
