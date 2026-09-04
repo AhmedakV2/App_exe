@@ -30,11 +30,15 @@ import type { ScanLevel } from './discovery'
 import { HOME_URL, isHomeUrl, mountHome, registerHomeScheme, setHomeTheme } from './home'
 
 const FRAME = 40
-const STAGE_RADIUS = 8
-const FRAME_COLOR = '#101114'
+const STAGE_RADIUS = 16
+const FRAME_COLOR = '#0a0b0d'
 const AGENT_PARTITION = 'persist:aft-agent'
 const DRAG_TICK = 16
 const DRAG_MAX_MS = 30000
+const SPLASH_WIDTH = 420
+const SPLASH_HEIGHT = 320
+const SPLASH_MIN_MS = 1600
+const SPLASH_MAX_MS = 9000
 const SETTINGS_WIDTH = 392
 const SETTINGS_HEIGHT = 620
 const SETTINGS_MIN_WIDTH = 320
@@ -65,6 +69,8 @@ let modalOpen = false
 let stageShown = true
 let pageHold = false
 let settingsWin: BrowserWindow | null = null
+let splashWin: BrowserWindow | null = null
+let revealed = false
 let settingsSpot: { x: number; y: number } | null = null
 let settingsSize = { width: SETTINGS_WIDTH, height: SETTINGS_HEIGHT }
 let chromeColor = FRAME_COLOR
@@ -720,6 +726,61 @@ function bindTargetEvents(): void {
   wc.on('did-fail-load', pushState)
 }
 
+function openSplash(): void {
+  splashWin = new BrowserWindow({
+    width: SPLASH_WIDTH,
+    height: SPLASH_HEIGHT,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    center: true,
+    show: false,
+    title: 'AFT',
+    icon: iconPath,
+    frame: false,
+    backgroundColor: FRAME_COLOR,
+    webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true }
+  })
+
+  const next = splashWin
+
+  next.once('ready-to-show', () => {
+    if (!next.isDestroyed()) next.show()
+  })
+
+  next.on('closed', () => {
+    if (splashWin === next) splashWin = null
+  })
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    void next.loadURL(process.env['ELECTRON_RENDERER_URL'] + '?view=splash').catch(() => undefined)
+  } else {
+    void next
+      .loadFile(join(__dirname, '../renderer/index.html'), { query: { view: 'splash' } })
+      .catch(() => undefined)
+  }
+}
+
+function closeSplash(): void {
+  if (!splashWin || splashWin.isDestroyed()) return
+  const target = splashWin
+  splashWin = null
+  target.destroy()
+}
+
+function reveal(): void {
+  if (revealed) return
+  revealed = true
+  closeSplash()
+  if (!win || win.isDestroyed()) return
+  win.show()
+  win.focus()
+  focusChat()
+}
+
 function createWindow(): void {
   Menu.setApplicationMenu(null)
   win = new BaseWindow({
@@ -730,6 +791,7 @@ function createWindow(): void {
     title: 'AFT',
     icon: iconPath,
     frame: false,
+    show: false,
     roundedCorners: false,
     backgroundColor: FRAME_COLOR
   })
@@ -799,7 +861,14 @@ function createWindow(): void {
       .catch(() => undefined)
       .finally(() => controller.dispose())
   })
-  win.show()
+
+  const opened = Date.now()
+
+  chatView.webContents.once('did-finish-load', () => {
+    setTimeout(reveal, Math.max(0, SPLASH_MIN_MS - (Date.now() - opened)))
+  })
+
+  setTimeout(reveal, SPLASH_MAX_MS)
 }
 
 app.whenReady().then(() => {
@@ -884,6 +953,7 @@ app.whenReady().then(() => {
 
   ipcMain.on('aft:state', () => pushState())
 
+  openSplash()
   createWindow()
 })
 
