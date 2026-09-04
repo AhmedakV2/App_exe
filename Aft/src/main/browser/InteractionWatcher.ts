@@ -44,7 +44,6 @@ const SOURCE = `(function () {
   var PROMOTE_HOPS = 4;
   var PROMOTE_VIEW = 0.5;
   var TONES = { strong: '#3ecf8e', weak: '#f0a02a', blocked: '#ef4444' };
-  var HOVER_COMBO = 'Control+Shift+M';
   var HOVER_DWELL_MS = __AFT_HOVER_DWELL__;
   var HOVER_MIN_SIZE = 4;
 
@@ -373,17 +372,6 @@ const SOURCE = `(function () {
     if (!key || MODIFIER_KEYS.indexOf(key) >= 0) return;
 
     cancelDwell();
-
-    if (combo(event) === HOVER_COMBO) {
-      if (typeof event.preventDefault === 'function') event.preventDefault();
-      var resting = promote(hoverRaw);
-      if (!dwellable(resting)) return;
-      lastKeyAt = Date.now();
-      hoverSent = resting;
-      markProbe(resting);
-      emit('hover', resting, { dwellMs: HOVER_DWELL_MS });
-      return;
-    }
 
     var hard = event.ctrlKey || event.altKey || event.metaKey;
     var known = KEYS.indexOf(key) >= 0 || key === ' ';

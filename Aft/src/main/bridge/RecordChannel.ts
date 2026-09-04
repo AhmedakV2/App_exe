@@ -204,6 +204,12 @@ export class RecordChannel {
     return this.recorder.state()
   }
 
+  toggleHover(): boolean {
+    const session = this.recorder.state()
+    if (!session) return false
+    return this.recorder.setHover(!session.options.captureHover)
+  }
+
   private apply(options: Partial<RecordOptions>): void {
     const session = this.recorder.state()
     if (!session) throw new Error('Etkin kayit yok')
