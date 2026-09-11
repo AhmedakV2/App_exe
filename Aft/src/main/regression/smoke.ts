@@ -9,25 +9,9 @@ import type { Descriptor } from '../identity'
 import { project, validateSnapshot } from '../model'
 import { SMOKE_FRAME, SMOKE_PAGE } from './fixture'
 import { FixtureServer } from './FixtureServer'
+import { expect, runEntry, step, verdict } from '../harness'
 
 const VIEWPORT = { width: 1280, height: 900 }
-
-interface Check {
-  name: string
-  ok: boolean
-  detail: string
-}
-
-const checks: Check[] = []
-
-function expect(name: string, ok: boolean, detail: string): void {
-  checks.push({ name, ok, detail })
-  process.stdout.write((ok ? 'GECTI ' : 'KALDI ') + name + ' | ' + detail + '\n')
-}
-
-function step(name: string): void {
-  process.stdout.write('... ' + name + '\n')
-}
 
 async function fixtures(): Promise<FixtureServer> {
   const root = await mkdtemp(join(tmpdir(), 'aft-smoke-'))
@@ -98,7 +82,7 @@ async function main(): Promise<number> {
     const graph = controller.currentGraph()
     if (!graph) {
       expect('kesif', false, 'tarama uretilemedi')
-      return report()
+      return verdict()
     }
 
     const nodes = graph.nodes
@@ -164,7 +148,7 @@ async function main(): Promise<number> {
     const primary = byTestId(nodes, 'primary-action')
     if (!primary || primary.index < 0) {
       expect('hedef dugme', false, 'primary-action adreslenemedi')
-      return report()
+      return verdict()
     }
 
     pinned = identity.captureFromIndex(index, primary.index)
@@ -197,7 +181,7 @@ async function main(): Promise<number> {
     const second = controller.currentGraph()
     if (!second) {
       expect('ikinci kesif', false, 'tarama uretilemedi')
-      return report()
+      return verdict()
     }
 
     const resolution = identity.resolveOn(pinned, second).resolution
@@ -241,7 +225,7 @@ async function main(): Promise<number> {
       'kod=' + String(missing.outcome?.code)
     )
 
-    return report()
+    return verdict()
   } finally {
     controller.dispose()
     await identity.dispose()
@@ -251,21 +235,4 @@ async function main(): Promise<number> {
   }
 }
 
-function report(): number {
-  const failed = checks.filter((check) => !check.ok).length
-  process.stdout.write('\nToplam ' + checks.length + ', basarisiz ' + failed + '\n')
-  return failed === 0 ? 0 : 1
-}
-
-app.whenReady().then(() => {
-  step('electron hazir')
-  main().then(
-    (code) => app.exit(code),
-    (error: unknown) => {
-      process.stderr.write((error instanceof Error ? error.stack : String(error)) + '\n')
-      app.exit(3)
-    }
-  )
-})
-
-app.on('window-all-closed', () => undefined)
+runEntry(main, true)

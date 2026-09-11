@@ -25,12 +25,12 @@ export interface ExecutionContext {
   previous: StepResult | null
 }
 
-export interface StepAttempt {
+interface StepAttempt {
   ok: boolean
   message: string
 }
 
-export interface ConditionCheck {
+interface ConditionCheck {
   run: boolean
   reason: string
 }
@@ -340,20 +340,15 @@ export class StepExecutor {
   }
 }
 
-export function budgetOf(step: ScenarioStep): number {
+function budgetOf(step: ScenarioStep): number {
   if (step.timeoutMs <= 0) return 0
   return step.timeoutMs + (HOLD_KINDS.has(step.kind) ? Math.max(0, step.waitMs) : 0)
 }
 
-export function profileFor(target: StepTarget | null, force: boolean): ScanProfileName {
+function profileFor(target: StepTarget | null, force: boolean): ScanProfileName {
   if (force) return 'agent'
   if (target && target.kind === 'ordinal') return 'agent'
   return 'playback'
-}
-
-export function needsElements(step: ScenarioStep): boolean {
-  if (step.kind === 'assert') return Boolean(step.assertion?.target)
-  return step.target !== null
 }
 
 export function absolute(url: string, baseUrl: string): string {

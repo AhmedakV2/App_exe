@@ -9,9 +9,9 @@ import type { AgentAction, PageState } from './types'
 
 const SYNC_DELAY = 260
 
-export type DescriptorResolver = (descriptorId: string) => DescriptorLookup | null
+type DescriptorResolver = (descriptorId: string) => DescriptorLookup | null
 
-export interface ActionReport {
+interface ActionReport {
   ok: boolean
   result: string
   page: PageState | null

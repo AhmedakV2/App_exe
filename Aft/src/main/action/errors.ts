@@ -33,7 +33,3 @@ export function classify(error: unknown): ActionError {
   if (/navigat/i.test(detail)) return new ActionError('navigation-failed', detail)
   return new ActionError('protocol-error', detail)
 }
-
-export function describeCode(code: ActionErrorCode): string {
-  return MESSAGES[code]
-}

@@ -8,6 +8,7 @@
     "src/main/home/search.ts",
     "src/main/record/types.ts",
     "src/main/scenario/types.ts",
+    "src/main/bridge/types.ts",
     "src/main/bridge/record-types.ts",
     "src/main/bridge/playback-types.ts"
   ],

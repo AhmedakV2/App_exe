@@ -9,6 +9,7 @@ import { PlaybackEngine } from './PlaybackEngine'
 import { renderText, writeReport } from './Reporter'
 import { ScenarioStore } from './ScenarioStore'
 import { DEFAULT_PLAYBACK, type PlaybackOptions, type RunResult, type StepResult } from './types'
+import { runEntry } from '../harness'
 
 const WINDOW = { width: 1440, height: 900 }
 
@@ -160,14 +161,4 @@ function progress(done: number, total: number, step: StepResult): string {
   )
 }
 
-app.whenReady().then(() => {
-  main().then(
-    (code) => app.exit(code),
-    (error: unknown) => {
-      process.stderr.write((error instanceof Error ? error.stack : String(error)) + '\n')
-      app.exit(3)
-    }
-  )
-})
-
-app.on('window-all-closed', () => undefined)
+runEntry(main)

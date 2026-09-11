@@ -19,7 +19,7 @@ export class NullTransport implements OutboxTransport {
   }
 }
 
-export const MAX_ATTEMPTS = 8
+const MAX_ATTEMPTS = 8
 
 const BACKOFF_STEP = 30000
 

@@ -83,11 +83,6 @@ export interface StageBox {
   height: number
 }
 
-export interface PointerSpot {
-  x: number
-  y: number
-}
-
 export type DragAxis = 'chat' | 'terminal' | 'record' | 'devtools'
 
 export type NavKind = 'back' | 'forward' | 'reload' | 'home' | 'stop'

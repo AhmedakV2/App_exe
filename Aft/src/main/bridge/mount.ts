@@ -25,10 +25,6 @@ export async function mountIdentity(controller: BrowserController): Promise<Iden
   return created
 }
 
-export function identityChannel(): IdentityChannel | null {
-  return channel
-}
-
 export async function unmountIdentity(): Promise<void> {
   if (!channel) return
   bound?.setDescriptorResolver(null)

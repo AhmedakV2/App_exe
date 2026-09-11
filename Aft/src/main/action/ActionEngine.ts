@@ -31,7 +31,7 @@ export interface DescriptorLookup {
   ambiguous: boolean
 }
 
-export interface ActionEngineOptions {
+interface ActionEngineOptions {
   getGraph: () => ElementGraph | null
   resolveDescriptor?: (descriptorId: string) => DescriptorLookup | null
   options?: Partial<ActionOptions>

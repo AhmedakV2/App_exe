@@ -4,7 +4,6 @@ import type {
   RunResult,
   Scenario,
   ScenarioReport,
-  StepResult,
   StoredContext
 } from '../scenario/types'
 import type { ScenarioEntry, ScenarioFolder } from '../scenario/ScenarioStore'
@@ -37,11 +36,6 @@ export interface ScenarioListPayload {
   folders: ScenarioFolder[]
 }
 
-export interface ScenarioSaveRequest {
-  scenario: unknown
-  folder: string | null
-}
-
 export interface ScenarioMoveRequest {
   scenarioId: string
   folder: string
@@ -70,12 +64,6 @@ export interface RunRequest {
 export interface RunPayload {
   run: RunResult
   reports: string[]
-}
-
-export interface ProgressPayload {
-  done: number
-  total: number
-  step: StepResult
 }
 
 export interface ContextListPayload {

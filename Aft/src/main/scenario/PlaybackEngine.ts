@@ -22,7 +22,7 @@ import {
   type StepResult
 } from './types'
 
-export interface PlaybackEngineOptions {
+interface PlaybackEngineOptions {
   descriptors?: DescriptorStore | null
   options?: Partial<PlaybackOptions>
 }

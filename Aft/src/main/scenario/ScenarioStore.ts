@@ -31,7 +31,7 @@ export interface ScenarioEntry {
   folder: string
 }
 
-export function folderName(raw: string): string {
+function folderName(raw: string): string {
   let out = ''
   for (const letter of String(raw)) {
     const code = letter.codePointAt(0) ?? 0

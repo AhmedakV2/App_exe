@@ -2,7 +2,6 @@ import { app, BaseWindow, WebContentsView } from 'electron'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { existsSync } from 'node:fs'
 import {
   mountIdentity,
   mountPlayback,
@@ -17,6 +16,8 @@ import { delay } from './discovery'
 import type { ElementGraph } from './discovery'
 import { RECORD_FRAME_PAGE, RECORD_PAGE, RECORD_RESULT_PAGE } from './record/fixture'
 import { FixtureServer } from './regression/FixtureServer'
+import { expect, runEntry, step, verdict } from './harness'
+import { preloadPath } from './shell/paths'
 
 const VIEWPORT = { width: 1280, height: 900 }
 
@@ -25,28 +26,6 @@ const SETTLE_MS = 420
 const SHELL_PAGE = `<!doctype html>
 <html lang="tr"><head><meta charset="utf-8"><title>AFT kabuk</title></head>
 <body><div id="root"></div></body></html>`
-
-interface Check {
-  name: string
-  ok: boolean
-  detail: string
-}
-
-const checks: Check[] = []
-
-function expect(name: string, ok: boolean, detail: string): void {
-  checks.push({ name, ok, detail })
-  process.stdout.write((ok ? 'GECTI ' : 'KALDI ') + name + ' | ' + detail + '\n')
-}
-
-function step(name: string): void {
-  process.stdout.write('... ' + name + '\n')
-}
-
-function preloadPath(): string {
-  const mjs = join(__dirname, '../preload/index.mjs')
-  return existsSync(mjs) ? mjs : join(__dirname, '../preload/index.js')
-}
 
 function ordinalOf(graph: ElementGraph, match: (attrs: Record<string, string>) => boolean): number {
   const node = graph.nodes.find((entry) => entry.index >= 0 && match(entry.attrs))
@@ -70,7 +49,7 @@ async function main(): Promise<number> {
   const window = new BaseWindow({ ...VIEWPORT, show: true })
 
   const shell = new WebContentsView({
-    webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true }
+    webPreferences: { preload: preloadPath(__dirname), sandbox: false, contextIsolation: true }
   })
   const target = new WebContentsView({
     webPreferences: { sandbox: true, contextIsolation: true, partition: 'persist:aft-uctan-uca' }
@@ -436,21 +415,4 @@ async function main(): Promise<number> {
   }
 }
 
-function verdict(): number {
-  const failed = checks.filter((check) => !check.ok).length
-  process.stdout.write('\nToplam ' + checks.length + ', basarisiz ' + failed + '\n')
-  return failed === 0 ? 0 : 1
-}
-
-app.whenReady().then(() => {
-  step('electron hazir')
-  main().then(
-    (code) => app.exit(code),
-    (error: unknown) => {
-      process.stderr.write((error instanceof Error ? error.stack : String(error)) + '\n')
-      app.exit(3)
-    }
-  )
-})
-
-app.on('window-all-closed', () => undefined)
+runEntry(main, true)

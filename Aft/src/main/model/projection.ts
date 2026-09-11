@@ -6,7 +6,7 @@ const CONTAINER_TOLERANCE = 4
 
 const LABEL_CAP = 80
 
-export interface ProjectionOptions {
+interface ProjectionOptions {
   viewportMargin: number
   maxCandidates: number
   tokenBudget: number
@@ -55,7 +55,7 @@ export interface ConsumerProjection {
   estimatedTokens: number
 }
 
-export const PROJECTION_DEFAULTS: Record<ConsumerKind, ProjectionOptions> = {
+const PROJECTION_DEFAULTS: Record<ConsumerKind, ProjectionOptions> = {
   agent: {
     viewportMargin: 160,
     maxCandidates: 220,
@@ -145,19 +145,6 @@ export function project(
     blindSpots: index.blindSpots(),
     truncated: budgeted.length < filtered.length,
     estimatedTokens: budgeted.reduce((total, element) => total + estimateTokens(element), 0)
-  }
-}
-
-export function projectScoped(index: ModelIndex, refs: readonly string[]): ConsumerProjection {
-  const base = project(index, 'playback')
-  const allowed = new Set(refs)
-  const elements = base.elements.filter((element) => allowed.has(element.ref))
-
-  return {
-    ...base,
-    elements,
-    truncated: base.truncated,
-    estimatedTokens: elements.reduce((total, element) => total + estimateTokens(element), 0)
   }
 }
 

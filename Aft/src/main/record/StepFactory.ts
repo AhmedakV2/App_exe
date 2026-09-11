@@ -46,7 +46,7 @@ export function stepId(sessionId: string, order: number, kind: string, at: numbe
   return digest([sessionId, String(order), kind, String(at)])
 }
 
-export function descriptorTarget(descriptor: Descriptor, label: string): StepTarget {
+function descriptorTarget(descriptor: Descriptor, label: string): StepTarget {
   return {
     kind: 'inline-descriptor',
     label: label || descriptor.target.name || descriptor.target.tag,

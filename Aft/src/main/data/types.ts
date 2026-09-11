@@ -1,7 +1,6 @@
 import type { MatchState } from '../identity'
 import type { RunMetrics, RunStatus, StepKind, StepStatus } from '../scenario'
 
-export const DATA_VERSION = 'aftdata/1.0.0'
 export const DATA_USER_VERSION = 1
 export type SyncState = 'pending' | 'sending' | 'sent' | 'failed'
 export type OutboxKind = 'run' | 'context'

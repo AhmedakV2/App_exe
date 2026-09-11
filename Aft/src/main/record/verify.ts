@@ -1,4 +1,4 @@
-import { app, BaseWindow, WebContentsView } from 'electron'
+import { BaseWindow, WebContentsView } from 'electron'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,29 +14,13 @@ import type { ScenarioStep } from '../scenario'
 import { RECORD_FRAME_PAGE, RECORD_PAGE, RECORD_RESULT_PAGE } from './fixture'
 import { Recorder } from './Recorder'
 import type { RecordSession } from './types'
+import { expect, runEntry, step, verdict } from '../harness'
 
 const VIEWPORT = { width: 1280, height: 900 }
 
 const SETTLE_MS = 420
 
 const DWELL_MS = 1400
-
-interface Check {
-  name: string
-  ok: boolean
-  detail: string
-}
-
-const checks: Check[] = []
-
-function expect(name: string, ok: boolean, detail: string): void {
-  checks.push({ name, ok, detail })
-  process.stdout.write((ok ? 'GECTI ' : 'KALDI ') + name + ' | ' + detail + '\n')
-}
-
-function step(name: string): void {
-  process.stdout.write('... ' + name + '\n')
-}
 
 async function workspace(): Promise<{ server: FixtureServer; root: string }> {
   const root = await mkdtemp(join(tmpdir(), 'aft-record-'))
@@ -386,21 +370,4 @@ function hasOrdinalTarget(steps: readonly ScenarioStep[]): boolean {
   return false
 }
 
-function verdict(): number {
-  const failed = checks.filter((check) => !check.ok).length
-  process.stdout.write('\nToplam ' + checks.length + ', basarisiz ' + failed + '\n')
-  return failed === 0 ? 0 : 1
-}
-
-app.whenReady().then(() => {
-  step('electron hazir')
-  main().then(
-    (code) => app.exit(code),
-    (error: unknown) => {
-      process.stderr.write((error instanceof Error ? error.stack : String(error)) + '\n')
-      app.exit(3)
-    }
-  )
-})
-
-app.on('window-all-closed', () => undefined)
+runEntry(main, true)

@@ -2,7 +2,6 @@ import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { digest } from './hash'
-import { migrate } from './migrate'
 import { ModelIndex } from './ModelIndex'
 import type { GraphSnapshot } from './schema'
 import { assertSnapshot } from './validate'
@@ -11,7 +10,7 @@ const MEMORY_WINDOW = 2
 
 const FILE_SUFFIX = '.snapshot.json.gz'
 
-export interface StoredSnapshot {
+interface StoredSnapshot {
   id: string
   capturedAt: number
   bytes: number
@@ -106,7 +105,7 @@ export class ModelStore {
     try {
       const raw = await readFile(join(this.directory, id + FILE_SUFFIX))
       const parsed: unknown = JSON.parse(gunzipSync(raw).toString('utf8'))
-      return assertSnapshot(migrate(parsed).snapshot)
+      return assertSnapshot(parsed as GraphSnapshot)
     } catch {
       return null
     }

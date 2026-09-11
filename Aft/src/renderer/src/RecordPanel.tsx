@@ -7,7 +7,7 @@ import { Empty, TextButton } from './ui'
 
 type ReportLevel = 'ok' | 'err' | 'note'
 
-export type RecordReport = { level: ReportLevel; text: string; detail?: string[] }
+type RecordReport = { level: ReportLevel; text: string; detail?: string[] }
 
 const LEVEL_LABELS: Record<string, string> = {
   strong: 'Güçlü kimlik',

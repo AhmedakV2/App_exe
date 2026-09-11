@@ -11,7 +11,6 @@ import {
   type ScenarioIndexRow
 } from '../data'
 import { ContextStore, SCENARIO_VERSION, type ScenarioStore } from '../scenario'
-import type { ChannelResult } from './types'
 import type {
   DataChannelName,
   DataStatsPayload,
@@ -25,6 +24,7 @@ import type {
   ScenarioIndexPayload,
   SweepPayload
 } from './data-types'
+import { guard } from './guard'
 
 const CHANNELS: DataChannelName[] = [
   'aft:data:runs',
@@ -42,7 +42,7 @@ const CHANNELS: DataChannelName[] = [
 
 const FRAGILE_LIMIT = 25
 
-export interface DataChannelOptions {
+interface DataChannelOptions {
   userDataDir: string
   scenarios: ScenarioStore
 }
@@ -103,7 +103,7 @@ export class DataChannel {
     this.registered = true
 
     ipcMain.handle('aft:data:runs', (_event, request: unknown) =>
-      this.guard('Kosum listesi hazir', (): RunListPayload => {
+      guard('Kosum listesi hazir', (): RunListPayload => {
         const query = this.query(request)
         return {
           rows: this.store.indexer.runs(query),
@@ -114,7 +114,7 @@ export class DataChannel {
     )
 
     ipcMain.handle('aft:data:run', (_event, id: unknown) =>
-      this.guard('Kosum okundu', (): RunDetailPayload => {
+      guard('Kosum okundu', (): RunDetailPayload => {
         const detail = this.store.indexer.detail(String(id))
         if (!detail) throw new Error('Kosum bulunamadi: ' + String(id))
         return { detail }
@@ -122,44 +122,44 @@ export class DataChannel {
     )
 
     ipcMain.handle('aft:data:report', (_event, id: unknown) =>
-      this.guard('Rapor okundu', () => this.report(String(id)))
+      guard('Rapor okundu', () => this.report(String(id)))
     )
 
     ipcMain.handle('aft:data:scenarios', () =>
-      this.guard('Senaryo indeksi hazir', (): ScenarioIndexPayload => {
+      guard('Senaryo indeksi hazir', (): ScenarioIndexPayload => {
         this.syncScenarios()
         return { rows: this.store.indexer.scenarios() }
       })
     )
 
     ipcMain.handle('aft:data:health', () =>
-      this.guard('Kimlik sagligi hazir', (): HealthPayload => ({
+      guard('Kimlik sagligi hazir', (): HealthPayload => ({
         summary: this.store.indexer.health(),
         fragile: this.store.indexer.fragile(FRAGILE_LIMIT)
       }))
     )
 
     ipcMain.handle('aft:data:fragile', (_event, limit: unknown) =>
-      this.guard('Kirilgan adimlar hazir', () =>
+      guard('Kirilgan adimlar hazir', () =>
         this.store.indexer.fragile(Number(limit) > 0 ? Number(limit) : FRAGILE_LIMIT)
       )
     )
 
     ipcMain.handle('aft:data:outbox', () =>
-      this.guard('Kuyruk durumu hazir', (): OutboxStatePayload => ({
+      guard('Kuyruk durumu hazir', (): OutboxStatePayload => ({
         summary: this.store.outbox.summary()
       }))
     )
 
     ipcMain.handle('aft:data:flush', (_event, limit: unknown) =>
-      this.guard('Kuyruk bosaltildi', async (): Promise<FlushPayload> => {
+      guard('Kuyruk bosaltildi', async (): Promise<FlushPayload> => {
         const report = await this.store.outbox.flush(Number(limit) > 0 ? Number(limit) : 20)
         return { report, summary: this.store.outbox.summary() }
       })
     )
 
     ipcMain.handle('aft:data:reconcile', () =>
-      this.guard('Indeks uzlastirildi', async (): Promise<ReconcilePayload> => {
+      guard('Indeks uzlastirildi', async (): Promise<ReconcilePayload> => {
         const scenarios = this.syncScenarios()
         const refs = await this.contexts.refs()
         return { report: this.store.indexer.reconcile(refs), scenarios }
@@ -167,14 +167,14 @@ export class DataChannel {
     )
 
     ipcMain.handle('aft:data:sweep', () =>
-      this.guard('Saklama politikasi uygulandi', async (): Promise<SweepPayload> => ({
+      guard('Saklama politikasi uygulandi', async (): Promise<SweepPayload> => ({
         report: await this.store.retention.sweep(),
         summary: this.store.outbox.summary()
       }))
     )
 
     ipcMain.handle('aft:data:stats', () =>
-      this.guard('Veri ozeti hazir', async (): Promise<DataStatsPayload> => ({
+      guard('Veri ozeti hazir', async (): Promise<DataStatsPayload> => ({
         stats: await this.store.stats(),
         faults: this.store.driver.fault() ? [this.store.driver.fault()] : []
       }))
@@ -207,21 +207,6 @@ export class DataChannel {
       status: raw.status ?? null,
       limit: Number(raw.limit) > 0 ? Number(raw.limit) : DEFAULT_RUN_QUERY.limit,
       offset: Number(raw.offset) > 0 ? Number(raw.offset) : 0
-    }
-  }
-
-  private async guard<T>(
-    message: string,
-    handler: () => T | Promise<T>
-  ): Promise<ChannelResult<T>> {
-    try {
-      return { ok: true, data: await handler(), message }
-    } catch (error) {
-      return {
-        ok: false,
-        data: null,
-        message: error instanceof Error ? error.message : String(error)
-      }
     }
   }
 }

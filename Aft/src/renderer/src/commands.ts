@@ -2,7 +2,7 @@ import type { AgentAction } from '../../main/browser/types'
 import { toUrl } from './format'
 
 export type Entry = { key: string; usage: string; hint: string }
-export type ActionEntry = Entry & { build: (args: string[]) => AgentAction | null }
+type ActionEntry = Entry & { build: (args: string[]) => AgentAction | null }
 
 function num(value: string | undefined): number | null {
   if (value === undefined || value.trim() === '') return null
@@ -10,7 +10,7 @@ function num(value: string | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-export const ACTIONS: ActionEntry[] = [
+const ACTIONS: ActionEntry[] = [
   {
     key: 'go',
     usage: 'go <adres>',
@@ -140,7 +140,7 @@ export const ACTIONS: ActionEntry[] = [
   }
 ]
 
-export const BUILTINS: Entry[] = [
+const BUILTINS: Entry[] = [
   { key: 'a', usage: 'a', hint: 'Komut listesini yazdırır' },
   { key: 'c', usage: 'c', hint: 'Terminal geçmişini temizler' }
 ]

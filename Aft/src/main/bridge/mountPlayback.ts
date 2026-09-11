@@ -6,7 +6,7 @@ import type { PlaybackOptions } from '../scenario'
 import { PlaybackAdapter } from './PlaybackAdapter'
 import { PlaybackChannel } from './PlaybackChannel'
 
-export interface MountPlaybackOptions {
+interface MountPlaybackOptions {
   identity: IdentityService
   descriptors: DescriptorStore
   target: WebContents | null
@@ -40,10 +40,6 @@ export async function mountPlayback(
 
   channel = created
   return created
-}
-
-export function playbackChannel(): PlaybackChannel | null {
-  return channel
 }
 
 export async function unmountPlayback(): Promise<void> {

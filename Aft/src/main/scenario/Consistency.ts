@@ -2,7 +2,7 @@ import { flatten } from './FlowController'
 import { mean, round } from './Metrics'
 import type { RunResult, StepResult, StepStatus } from './types'
 
-export interface StepConsistency {
+interface StepConsistency {
   stepId: string
   title: string
   stable: boolean
@@ -14,7 +14,7 @@ export interface StepConsistency {
   reason: string
 }
 
-export interface ConsistencyReport {
+interface ConsistencyReport {
   runs: number
   stable: boolean
   statuses: string[]
@@ -26,7 +26,7 @@ export interface ConsistencyReport {
   reasons: string[]
 }
 
-export const CONFIDENCE_SPREAD_LIMIT = 0.1
+const CONFIDENCE_SPREAD_LIMIT = 0.1
 
 export function compareRuns(runs: readonly RunResult[]): ConsistencyReport {
   const reasons: string[] = []

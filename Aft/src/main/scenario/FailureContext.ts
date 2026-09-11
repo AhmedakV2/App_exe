@@ -22,11 +22,11 @@ const ELEMENT_CAP = 400
 
 const TEXT_CAP = 120
 
-export interface StoredContextRef extends StoredContext {
+interface StoredContextRef extends StoredContext {
   filePath: string
 }
 
-export interface ContextInput {
+interface ContextInput {
   runId: string
   scenarioId: string
   stepId: string
@@ -67,7 +67,7 @@ export function buildContext(input: ContextInput): FailureContext {
   }
 }
 
-export function dumpElements(index: ModelIndex): ElementDump[] {
+function dumpElements(index: ModelIndex): ElementDump[] {
   return index
     .addressable()
     .slice(0, ELEMENT_CAP)

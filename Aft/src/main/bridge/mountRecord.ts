@@ -6,7 +6,7 @@ import type { ScenarioStore } from '../scenario'
 import { RecordAdapter } from './RecordAdapter'
 import { RecordChannel } from './RecordChannel'
 
-export interface MountRecordOptions {
+interface MountRecordOptions {
   identity: IdentityService
   descriptors: DescriptorStore
   scenarios: ScenarioStore

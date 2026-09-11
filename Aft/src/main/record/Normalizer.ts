@@ -1,19 +1,7 @@
 import { MAX_HOVER_HOLD_MS, isPressableKey } from '../action'
-import type { ActionKind } from '../action'
 import type { RawElement, RawInteraction, RecordIntent, RecordOptions } from './types'
 
 const ROOT_TAGS: ReadonlySet<string> = new Set(['', 'body', 'html', '#document'])
-
-const ELEMENT_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>([
-  'click',
-  'double-click',
-  'right-click',
-  'hover',
-  'type',
-  'clear-type',
-  'select-option',
-  'upload'
-])
 
 export function normalize(raw: RawInteraction, options: RecordOptions): RecordIntent | null {
   const base = {
@@ -102,11 +90,7 @@ function dwellOf(dwellMs: number, options: RecordOptions): number {
   return Math.min(MAX_HOVER_HOLD_MS, Math.max(0, raw))
 }
 
-export function needsElement(kind: ActionKind): boolean {
-  return ELEMENT_KINDS.has(kind)
-}
-
-export function addressable(element: RawElement | null): boolean {
+function addressable(element: RawElement | null): boolean {
   if (!element) return false
   return !ROOT_TAGS.has(element.tag)
 }

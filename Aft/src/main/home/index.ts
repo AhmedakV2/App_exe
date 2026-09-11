@@ -44,4 +44,4 @@ export function setHomeTheme(next: string): boolean {
   return true
 }
 
-export { HOME_SCHEME, HOME_URL, isHomeUrl, resolveInput, searchUrl } from './search'
+export { HOME_URL, isHomeUrl } from './search'

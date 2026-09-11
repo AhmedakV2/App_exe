@@ -14,7 +14,6 @@ import {
   type ScenarioMeta
 } from '../record'
 import { ASSERTION_KINDS, type ScenarioStore } from '../scenario'
-import type { ChannelResult } from './types'
 import {
   RECORD_NOTICE_EVENT,
   RECORD_UPDATE_EVENT,
@@ -27,6 +26,7 @@ import {
   type SaveRequest,
   type StartRequest
 } from './record-types'
+import { guard } from './guard'
 
 const CHANNELS: RecordChannelName[] = [
   'aft:record:start',
@@ -67,7 +67,7 @@ const VALUE_LABELS: Record<string, string> = {
   assert: 'Beklenen'
 }
 
-export interface RecordChannelOptions {
+interface RecordChannelOptions {
   host: RecordHost
   identity: IdentityService
   descriptors?: DescriptorStore | null
@@ -128,7 +128,7 @@ export class RecordChannel {
     this.registered = true
 
     ipcMain.handle('aft:record:start', (_event, request: unknown) =>
-      this.guard('Kayit basladi', async () => {
+      guard('Kayit basladi', async () => {
         const payload = (request ?? {}) as Partial<StartRequest>
         await this.recorder.start(payload.options ?? {})
         return this.view()
@@ -136,55 +136,55 @@ export class RecordChannel {
     )
 
     ipcMain.handle('aft:record:stop', () =>
-      this.guard('Kayit durduruldu', async () => {
+      guard('Kayit durduruldu', async () => {
         await this.recorder.stop()
         return this.view()
       })
     )
 
     ipcMain.handle('aft:record:pause', () =>
-      this.guard('Kayit duraklatildi', () => {
+      guard('Kayit duraklatildi', () => {
         this.recorder.pause()
         return this.view()
       })
     )
 
     ipcMain.handle('aft:record:resume', () =>
-      this.guard('Kayit surduruluyor', () => {
+      guard('Kayit surduruluyor', () => {
         this.recorder.resume()
         return this.view()
       })
     )
 
-    ipcMain.handle('aft:record:state', () => this.guard('Kayit durumu okundu', () => this.view()))
+    ipcMain.handle('aft:record:state', () => guard('Kayit durumu okundu', () => this.view()))
 
     ipcMain.handle('aft:record:edit', (_event, request: unknown) =>
-      this.guard('Duzenleme uygulandi', (): EditPayload => {
+      guard('Duzenleme uygulandi', (): EditPayload => {
         const outcome = this.recorder.applyEdit(editRequest(request as RecordEditRequest))
         return { ...outcome, view: this.view() }
       })
     )
 
     ipcMain.handle('aft:record:describe', (_event, meta: unknown) =>
-      this.guard('Kayit bilgisi guncellendi', () => {
+      guard('Kayit bilgisi guncellendi', () => {
         this.recorder.describe((meta ?? {}) as Partial<ScenarioMeta>)
         return this.view()
       })
     )
 
     ipcMain.handle('aft:record:options', (_event, options: unknown) =>
-      this.guard('Kayit ayarlari guncellendi', () => {
+      guard('Kayit ayarlari guncellendi', () => {
         this.apply((options ?? {}) as Partial<RecordOptions>)
         return this.view()
       })
     )
 
     ipcMain.handle('aft:record:save', (_event, request: unknown) =>
-      this.guard('Senaryo kaydedildi', () => this.save((request ?? {}) as Partial<SaveRequest>))
+      guard('Senaryo kaydedildi', () => this.save((request ?? {}) as Partial<SaveRequest>))
     )
 
     ipcMain.handle('aft:record:discard', () =>
-      this.guard('Kayit atildi', async () => {
+      guard('Kayit atildi', async () => {
         await this.recorder.discard()
         return this.view()
       })
@@ -241,24 +241,9 @@ export class RecordChannel {
     const session = this.recorder.state()
     return session ? view(session) : empty()
   }
-
-  private async guard<T>(
-    message: string,
-    handler: () => T | Promise<T>
-  ): Promise<ChannelResult<T>> {
-    try {
-      return { ok: true, data: await handler(), message }
-    } catch (error) {
-      return {
-        ok: false,
-        data: null,
-        message: error instanceof Error ? error.message : String(error)
-      }
-    }
-  }
 }
 
-export function view(session: RecordSession): RecordView {
+function view(session: RecordSession): RecordView {
   const report = session.steps.length ? compose(session).report : null
 
   return {

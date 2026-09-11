@@ -2,32 +2,39 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ScenarioEntry, ScenarioFolder } from '../../../main/scenario/ScenarioStore'
 import type {
   Assertion,
-  AssertionKind,
-  QueryKind,
   Scenario,
   ScenarioDefaults,
   ScenarioReport,
   ScenarioStep,
-  StepKind,
-  StepTarget,
-  TargetKind
-} from '../../../main/scenario/types'
-import {
-  ASSERTION_KINDS,
-  DEFAULT_DEFAULTS,
-  QUERY_KINDS,
-  SCENARIO_VERSION
+  StepKind
 } from '../../../main/scenario/types'
 import { Glyph, IconButton } from '../icons'
-import { Card, Empty, Field, Menu, PageHead, Pill, Segmented, TextButton, Toggle } from '../ui'
+import { Card, Empty, Field, Menu, PageHead, Pill, Segmented, TextButton } from '../ui'
 import type { MenuItem } from '../ui'
-import { percent, shortUrl } from '../format'
 import ScenarioTree from '../parts/ScenarioTree'
 import type { TreeTarget } from '../parts/ScenarioTree'
 import StepTree from '../parts/StepTree'
 import DefaultsSheet from '../parts/DefaultsSheet'
 import PromptSheet from '../parts/PromptSheet'
 import type { Report } from '../report'
+import StepInspector from './scenario/StepInspector'
+import {
+  ADD_KINDS,
+  KIND_TITLES,
+  blankScenario,
+  blankStep,
+  cloneStep,
+  dropStep,
+  findStep,
+  flatSteps,
+  holdsStep,
+  mapSteps,
+  placeStep,
+  readClip,
+  shiftStep,
+  typing,
+  writeClip
+} from './scenario/model'
 
 type Ask = {
   kind: 'folder-add' | 'folder-rename' | 'folder-remove' | 'scenario-remove'
@@ -41,438 +48,6 @@ type Ask = {
 }
 
 type MenuState = { target: TreeTarget; x: number; y: number }
-
-const ADD_KINDS: StepKind[] = [
-  'click',
-  'double-click',
-  'right-click',
-  'hover',
-  'type',
-  'clear-type',
-  'press-key',
-  'scroll',
-  'select-option',
-  'upload',
-  'navigate',
-  'wait',
-  'refresh',
-  'assert'
-]
-
-const TARGET_KINDS: TargetKind[] = ['descriptor', 'inline-descriptor', 'query', 'ordinal']
-
-const KIND_TITLES: Record<string, string> = {
-  click: 'Tıkla',
-  'double-click': 'Çift tıkla',
-  'right-click': 'Sağ tıkla',
-  hover: 'Üzerine gel',
-  type: 'Yaz',
-  'clear-type': 'Temizle ve yaz',
-  'press-key': 'Tuşa bas',
-  scroll: 'Kaydır',
-  'select-option': 'Seçenek seç',
-  upload: 'Dosya yükle',
-  navigate: 'Adrese git',
-  wait: 'Bekle',
-  refresh: 'Sayfayı yenile',
-  assert: 'Doğrula'
-}
-
-const ELEMENT_KINDS: ReadonlySet<string> = new Set([
-  'click',
-  'double-click',
-  'right-click',
-  'hover',
-  'type',
-  'clear-type',
-  'select-option',
-  'upload'
-])
-
-const TARGETLESS_KINDS: ReadonlySet<string> = new Set(['navigate', 'wait', 'refresh', 'assert'])
-
-const ELEMENT_ASSERTIONS: ReadonlySet<string> = new Set([
-  'element-exists',
-  'element-absent',
-  'element-visible',
-  'element-enabled',
-  'element-checked',
-  'element-count',
-  'text-equals',
-  'text-contains',
-  'value-equals',
-  'attribute-equals'
-])
-
-let seq = 0
-
-function uid(prefix: string): string {
-  seq += 1
-  return (
-    prefix + Date.now().toString(36) + seq.toString(36) + Math.random().toString(36).slice(2, 6)
-  )
-}
-
-function renewIds(step: ScenarioStep): ScenarioStep {
-  return { ...step, id: uid('st-'), steps: step.steps.map(renewIds) }
-}
-
-function cloneStep(step: ScenarioStep): ScenarioStep {
-  return renewIds(JSON.parse(JSON.stringify(step)) as ScenarioStep)
-}
-
-function typing(node: EventTarget | null): boolean {
-  if (!(node instanceof HTMLElement)) return false
-  if (node.isContentEditable) return true
-  const tag = node.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-}
-
-let stepClipboard: ScenarioStep | null = null
-
-function blankTarget(kind: TargetKind): StepTarget {
-  return {
-    kind,
-    label: '',
-    descriptorId: '',
-    descriptor: null,
-    query:
-      kind === 'query'
-        ? { kind: 'test-id', value: '', attribute: '', tag: '', role: '', nth: -1 }
-        : null,
-    ordinal: kind === 'ordinal' ? 0 : -1
-  }
-}
-
-function blankStep(kind: StepKind, title: string): ScenarioStep {
-  return {
-    id: uid('st-'),
-    kind,
-    title,
-    target: ELEMENT_KINDS.has(kind) ? blankTarget('query') : null,
-    assertion:
-      kind === 'assert'
-        ? {
-            kind: 'url-matches',
-            target: null,
-            expected: '',
-            attribute: '',
-            count: 0,
-            soft: false,
-            message: ''
-          }
-        : null,
-    condition: null,
-    steps: [],
-    text: '',
-    key: '',
-    url: '',
-    deltaY: 0,
-    optionValue: '',
-    files: [],
-    waitMs: kind === 'wait' ? 1000 : 0,
-    timeoutMs: DEFAULT_DEFAULTS.stepTimeoutMs,
-    retries: DEFAULT_DEFAULTS.retries,
-    scanLevel: null,
-    mode: null,
-    continueOnFailure: false,
-    allowLowConfidence: false,
-    expectState: null
-  }
-}
-
-function blankScenario(baseUrl: string): Scenario {
-  const first = blankStep('navigate', KIND_TITLES['navigate'])
-  first.url = baseUrl
-  return {
-    version: SCENARIO_VERSION,
-    id: uid('sc-'),
-    title: 'Yeni senaryo',
-    description: '',
-    baseUrl,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    defaults: { ...DEFAULT_DEFAULTS },
-    steps: [first]
-  }
-}
-
-function mapSteps(steps: ScenarioStep[], fn: (step: ScenarioStep) => ScenarioStep): ScenarioStep[] {
-  return steps.map((step) => {
-    const next = fn(step)
-    if (!next.steps.length) return next
-    return { ...next, steps: mapSteps(next.steps, fn) }
-  })
-}
-
-function flatSteps(steps: ScenarioStep[], depth = 0): { step: ScenarioStep; depth: number }[] {
-  const out: { step: ScenarioStep; depth: number }[] = []
-  for (const step of steps) {
-    out.push({ step, depth })
-    if (step.steps.length) out.push(...flatSteps(step.steps, depth + 1))
-  }
-  return out
-}
-
-function dropStep(steps: ScenarioStep[], id: string): ScenarioStep[] {
-  return steps
-    .filter((step) => step.id !== id)
-    .map((step) => (step.steps.length ? { ...step, steps: dropStep(step.steps, id) } : step))
-}
-
-function shiftStep(steps: ScenarioStep[], id: string, offset: number): ScenarioStep[] {
-  const index = steps.findIndex((step) => step.id === id)
-  if (index >= 0) {
-    const target = index + offset
-    if (target < 0 || target >= steps.length) return steps
-    const next = steps.slice()
-    const [item] = next.splice(index, 1)
-    next.splice(target, 0, item)
-    return next
-  }
-  return steps.map((step) =>
-    step.steps.length ? { ...step, steps: shiftStep(step.steps, id, offset) } : step
-  )
-}
-
-function findStep(steps: ScenarioStep[], id: string): ScenarioStep | null {
-  for (const step of steps) {
-    if (step.id === id) return step
-    const nested = findStep(step.steps, id)
-    if (nested) return nested
-  }
-  return null
-}
-
-function holdsStep(step: ScenarioStep, id: string): boolean {
-  return step.id === id || step.steps.some((child) => holdsStep(child, id))
-}
-
-function placeStep(
-  steps: ScenarioStep[],
-  targetId: string,
-  item: ScenarioStep,
-  after: boolean
-): ScenarioStep[] {
-  const index = steps.findIndex((step) => step.id === targetId)
-  if (index >= 0) {
-    const next = steps.slice()
-    next.splice(index + (after ? 1 : 0), 0, item)
-    return next
-  }
-  return steps.map((step) =>
-    step.steps.length ? { ...step, steps: placeStep(step.steps, targetId, item, after) } : step
-  )
-}
-
-const NUMERIC_KINDS: ReadonlySet<string> = new Set(['scroll', 'wait', 'hover'])
-
-function valueLabel(kind: StepKind): string {
-  if (kind === 'type' || kind === 'clear-type') return 'Metin'
-  if (kind === 'press-key') return 'Tuş'
-  if (kind === 'navigate') return 'Adres'
-  if (kind === 'select-option') return 'Seçenek'
-  if (kind === 'scroll') return 'Kaydırma (piksel)'
-  if (kind === 'upload') return 'Dosya yolları (virgülle)'
-  if (kind === 'wait') return 'Bekleme (ms)'
-  if (kind === 'hover') return 'İmleç süresi (ms)'
-  return ''
-}
-
-function valueOf(step: ScenarioStep): string {
-  if (step.kind === 'press-key') return step.key
-  if (step.kind === 'navigate') return step.url
-  if (step.kind === 'select-option') return step.optionValue
-  if (step.kind === 'scroll') return String(step.deltaY)
-  if (step.kind === 'upload') return step.files.join(', ')
-  if (step.kind === 'wait' || step.kind === 'hover') return String(step.waitMs)
-  return step.text
-}
-
-function patchValue(kind: StepKind, value: string): Partial<ScenarioStep> {
-  if (kind === 'press-key') return { key: value }
-  if (kind === 'navigate') return { url: value }
-  if (kind === 'select-option') return { optionValue: value }
-  if (kind === 'scroll') return { deltaY: intOf(value, 0) }
-  if (kind === 'wait' || kind === 'hover') return { waitMs: Math.max(0, intOf(value, 0)) }
-  if (kind === 'upload') {
-    return {
-      files: value
-        .split(',')
-        .map((part) => part.trim())
-        .filter(Boolean)
-    }
-  }
-  return { text: value }
-}
-
-function intOf(value: string, fallback: number): number {
-  const parsed = Number(value.trim())
-  return Number.isFinite(parsed) ? Math.round(parsed) : fallback
-}
-
-function TargetEditor({
-  label,
-  target,
-  disabled,
-  onChange
-}: {
-  label: string
-  target: StepTarget | null
-  disabled: boolean
-  onChange: (next: StepTarget | null) => void
-}): React.JSX.Element {
-  const kind = target?.kind ?? 'none'
-
-  return (
-    <>
-      <div className="card-split">{label}</div>
-
-      <Field label="Hedefleme">
-        <select
-          value={kind}
-          disabled={disabled}
-          onChange={(event) => {
-            const next = event.target.value
-            if (next === 'none') {
-              onChange(null)
-              return
-            }
-            onChange({ ...blankTarget(next as TargetKind), label: target?.label ?? '' })
-          }}
-        >
-          <option value="none">Hedef yok</option>
-          {TARGET_KINDS.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      {target ? (
-        <Field label="Etiket">
-          <input
-            value={target.label}
-            disabled={disabled}
-            onChange={(event) => onChange({ ...target, label: event.target.value })}
-            spellCheck={false}
-          />
-        </Field>
-      ) : null}
-
-      {target && (target.kind === 'descriptor' || target.kind === 'inline-descriptor') ? (
-        <Field label="Descriptor kimliği">
-          <input
-            value={target.descriptorId}
-            disabled={disabled}
-            onChange={(event) => onChange({ ...target, descriptorId: event.target.value })}
-            spellCheck={false}
-          />
-        </Field>
-      ) : null}
-
-      {target && target.kind === 'ordinal' ? (
-        <Field label="Sıra">
-          <input
-            type="number"
-            value={target.ordinal}
-            disabled={disabled}
-            onChange={(event) => onChange({ ...target, ordinal: Number(event.target.value) || 0 })}
-          />
-        </Field>
-      ) : null}
-
-      {target && target.kind === 'query' && target.query ? (
-        <>
-          <div className="grid-2">
-            <Field label="Sorgu türü">
-              <select
-                value={target.query.kind}
-                disabled={disabled}
-                onChange={(event) =>
-                  onChange({
-                    ...target,
-                    query: { ...target.query!, kind: event.target.value as QueryKind }
-                  })
-                }
-              >
-                {QUERY_KINDS.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Kaçıncı (-1 hepsi)">
-              <input
-                type="number"
-                value={target.query.nth}
-                disabled={disabled}
-                onChange={(event) =>
-                  onChange({
-                    ...target,
-                    query: { ...target.query!, nth: Number(event.target.value) }
-                  })
-                }
-              />
-            </Field>
-          </div>
-
-          <Field label="Değer">
-            <input
-              value={target.query.value}
-              disabled={disabled}
-              onChange={(event) =>
-                onChange({ ...target, query: { ...target.query!, value: event.target.value } })
-              }
-              spellCheck={false}
-            />
-          </Field>
-
-          <div className="grid-2">
-            <Field label="Etiket adı">
-              <input
-                value={target.query.tag}
-                disabled={disabled}
-                onChange={(event) =>
-                  onChange({ ...target, query: { ...target.query!, tag: event.target.value } })
-                }
-                spellCheck={false}
-              />
-            </Field>
-            <Field label="Rol">
-              <input
-                value={target.query.role}
-                disabled={disabled}
-                onChange={(event) =>
-                  onChange({ ...target, query: { ...target.query!, role: event.target.value } })
-                }
-                spellCheck={false}
-              />
-            </Field>
-          </div>
-
-          {target.query.kind === 'test-id' ? (
-            <Field label="Nitelik adı">
-              <input
-                value={target.query.attribute}
-                disabled={disabled}
-                onChange={(event) =>
-                  onChange({
-                    ...target,
-                    query: { ...target.query!, attribute: event.target.value }
-                  })
-                }
-                spellCheck={false}
-              />
-            </Field>
-          ) : null}
-        </>
-      ) : null}
-    </>
-  )
-}
 
 export default function ScenarioPage({
   revision,
@@ -509,7 +84,7 @@ export default function ScenarioPage({
   const [ask, setAsk] = useState<Ask | null>(null)
   const [defaultsOpen, setDefaultsOpen] = useState(false)
   const [zone, setZone] = useState<'folder' | 'scenario' | 'step'>('scenario')
-  const [clip, setClip] = useState<ScenarioStep | null>(stepClipboard)
+  const [clip, setClip] = useState<ScenarioStep | null>(readClip())
 
   const jsonRef = useRef<HTMLTextAreaElement | null>(null)
 
@@ -679,8 +254,7 @@ export default function ScenarioPage({
   const copyStep = useCallback((): void => {
     if (!step) return
 
-    stepClipboard = cloneStep(step)
-    setClip(stepClipboard)
+    setClip(writeClip(step))
     onReport({ level: 'note', text: 'Adım kopyalandı: ' + step.title })
   }, [onReport, step])
 
@@ -1289,259 +863,20 @@ export default function ScenarioPage({
           )}
         </Card>
 
-        <Card
-          label="Adım ayarı"
-          actions={
-            draft ? (
-              <IconButton
-                name="sliders"
-                title="Senaryo varsayılanları"
-                onClick={() => setDefaultsOpen(true)}
-                small
-              />
-            ) : null
-          }
-          scroll
-        >
-          {draft && step ? (
-            <>
-              <div className="step-actions">
-                <IconButton
-                  name="up"
-                  title="Yukarı"
-                  onClick={() => moveStep(step.id, -1)}
-                  disabled={locked}
-                  small
-                />
-                <IconButton
-                  name="down"
-                  title="Aşağı"
-                  onClick={() => moveStep(step.id, 1)}
-                  disabled={locked}
-                  small
-                />
-                <IconButton
-                  name="copy"
-                  title="Adımı kopyala (Ctrl+C)"
-                  onClick={copyStep}
-                  disabled={locked}
-                  small
-                />
-                <IconButton
-                  name="layers"
-                  title="Adımı yapıştır (Ctrl+V)"
-                  onClick={pasteStep}
-                  disabled={locked || !clip}
-                  small
-                />
-                <IconButton
-                  name="trash"
-                  title="Adımı sil (Del)"
-                  onClick={() => removeStep(step.id)}
-                  disabled={locked}
-                  small
-                  danger
-                />
-              </div>
-
-              <div className="grid-2">
-                <Field label="Tür">
-                  <select
-                    value={step.kind}
-                    disabled={locked}
-                    onChange={(event) => {
-                      const next = event.target.value as StepKind
-                      patchStep(step.id, {
-                        kind: next,
-                        waitMs: next === 'wait' && step.waitMs <= 0 ? 1000 : step.waitMs,
-                        target: ELEMENT_KINDS.has(next)
-                          ? (step.target ?? blankTarget('query'))
-                          : TARGETLESS_KINDS.has(next)
-                            ? null
-                            : step.target,
-                        assertion:
-                          next === 'assert'
-                            ? (step.assertion ?? {
-                                kind: 'url-matches',
-                                target: null,
-                                expected: '',
-                                attribute: '',
-                                count: 0,
-                                soft: false,
-                                message: ''
-                              })
-                            : step.assertion
-                      })
-                    }}
-                  >
-                    {ADD_KINDS.map((kind) => (
-                      <option key={kind} value={kind}>
-                        {kind}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Başlık">
-                  <input
-                    value={step.title}
-                    onChange={(event) => patchStep(step.id, { title: event.target.value })}
-                    spellCheck={false}
-                  />
-                </Field>
-              </div>
-
-              {valueLabel(step.kind) ? (
-                <Field label={valueLabel(step.kind)}>
-                  <input
-                    type={NUMERIC_KINDS.has(step.kind) ? 'number' : 'text'}
-                    value={valueOf(step)}
-                    onChange={(event) =>
-                      patchStep(step.id, patchValue(step.kind, event.target.value))
-                    }
-                    spellCheck={false}
-                  />
-                </Field>
-              ) : null}
-
-              {step.target?.descriptor ? (
-                <div className="kv">
-                  <span className="kv-key">Kalite</span>
-                  <span className="kv-val">{percent(step.target.descriptor.quality.score)}</span>
-                  <span className="kv-key">Strateji</span>
-                  <span className="kv-val">
-                    {step.target.descriptor.strategies.map((entry) => entry.kind).join(', ')}
-                  </span>
-                </div>
-              ) : null}
-
-              {step.kind === 'assert' ? null : (
-                <TargetEditor
-                  label="Hedef"
-                  target={step.target}
-                  disabled={locked}
-                  onChange={(next) => patchStep(step.id, { target: next })}
-                />
-              )}
-
-              {step.assertion ? (
-                <>
-                  <div className="card-split">Doğrulama</div>
-                  <Field label="Tür">
-                    <select
-                      value={step.assertion.kind}
-                      onChange={(event) =>
-                        patchAssertion(step.id, { kind: event.target.value as AssertionKind })
-                      }
-                    >
-                      {ASSERTION_KINDS.map((kind) => (
-                        <option key={kind} value={kind}>
-                          {kind}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Beklenen">
-                    <input
-                      value={step.assertion.expected}
-                      onChange={(event) =>
-                        patchAssertion(step.id, { expected: event.target.value })
-                      }
-                      spellCheck={false}
-                    />
-                  </Field>
-                  {step.assertion.kind === 'attribute-equals' ? (
-                    <Field label="Nitelik">
-                      <input
-                        value={step.assertion.attribute}
-                        onChange={(event) =>
-                          patchAssertion(step.id, { attribute: event.target.value })
-                        }
-                        spellCheck={false}
-                      />
-                    </Field>
-                  ) : null}
-                  {step.assertion.kind === 'element-count' ? (
-                    <Field label="Adet">
-                      <input
-                        type="number"
-                        value={step.assertion.count}
-                        onChange={(event) =>
-                          patchAssertion(step.id, {
-                            count: Math.max(0, intOf(event.target.value, 0))
-                          })
-                        }
-                      />
-                    </Field>
-                  ) : null}
-                  <Toggle
-                    label="Yumuşak doğrulama"
-                    checked={step.assertion.soft}
-                    onChange={(next) => patchAssertion(step.id, { soft: next })}
-                  />
-                  {ELEMENT_ASSERTIONS.has(step.assertion.kind) ? (
-                    <TargetEditor
-                      label="Doğrulama hedefi"
-                      target={step.assertion.target}
-                      disabled={locked}
-                      onChange={(next) => patchAssertion(step.id, { target: next })}
-                    />
-                  ) : null}
-                </>
-              ) : null}
-
-              <div className="card-split">Adım ayarları</div>
-
-              <div className="grid-2">
-                <Field label="Zaman aşımı">
-                  <input
-                    type="number"
-                    value={step.timeoutMs}
-                    onChange={(event) =>
-                      patchStep(step.id, { timeoutMs: Math.max(0, intOf(event.target.value, 0)) })
-                    }
-                  />
-                </Field>
-                <Field label="Deneme">
-                  <input
-                    type="number"
-                    value={step.retries}
-                    onChange={(event) =>
-                      patchStep(step.id, { retries: Math.max(0, intOf(event.target.value, 0)) })
-                    }
-                  />
-                </Field>
-              </div>
-
-              <Toggle
-                label="Hatada devam et"
-                checked={step.continueOnFailure}
-                onChange={(next) => patchStep(step.id, { continueOnFailure: next })}
-              />
-              <Toggle
-                label="Düşük güvene izin ver"
-                checked={step.allowLowConfidence}
-                onChange={(next) => patchStep(step.id, { allowLowConfidence: next })}
-              />
-
-              <div className="kv">
-                <span className="kv-key">Şema</span>
-                <span className="kv-val mono">{draft.version}</span>
-                <span className="kv-key">Kimlik</span>
-                <span className="kv-val mono">{draft.id}</span>
-                <span className="kv-key">Adres</span>
-                <span className="kv-val mono">{shortUrl(draft.baseUrl)}</span>
-                <span className="kv-key">Konum</span>
-                <span className="kv-val mono">{place || 'Kök'}</span>
-              </div>
-            </>
-          ) : (
-            <Empty
-              glyph="sliders"
-              text="Adım seçilmedi"
-              hint="Ortadaki listeden bir adım seçtiğinizde ayarları burada açılır."
-            />
-          )}
-        </Card>
+        <StepInspector
+          draft={draft}
+          step={step}
+          locked={locked}
+          clip={clip}
+          place={place}
+          onOpenDefaults={() => setDefaultsOpen(true)}
+          onMove={moveStep}
+          onCopy={copyStep}
+          onPaste={pasteStep}
+          onRemove={removeStep}
+          onPatch={patchStep}
+          onPatchAssertion={patchAssertion}
+        />
       </div>
 
       {menu ? (

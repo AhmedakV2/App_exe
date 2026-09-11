@@ -181,7 +181,7 @@ export function ambiguous(node: GraphNode): boolean {
 
 const PROBE_CONCURRENCY = 16
 
-export const PROBE_GROUP = 'aft-listener-probe'
+const PROBE_GROUP = 'aft-listener-probe'
 
 export async function probeListeners(
   tp: Transport,

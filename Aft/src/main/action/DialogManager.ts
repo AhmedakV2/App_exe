@@ -9,7 +9,7 @@ function pause(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export interface FileChooserRequest {
+interface FileChooserRequest {
   backendNodeId: number
   sessionId: string
   mode: string

@@ -1,7 +1,6 @@
 import { app, BaseWindow, BrowserWindow, WebContentsView, ipcMain, Menu, screen } from 'electron'
-import type { Rectangle, WebContents } from 'electron'
+import type { WebContents } from 'electron'
 import { join } from 'path'
-import { existsSync } from 'fs'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
   mountData,
@@ -28,8 +27,9 @@ import {
 } from './browser/types'
 import type { ScanLevel } from './discovery'
 import { HOME_URL, isHomeUrl, mountHome, registerHomeScheme, setHomeTheme } from './home'
+import { readBox, sameBox, splitStage, stageBounds, visibleArea } from './shell/geometry'
+import { preloadPath } from './shell/paths'
 
-const FRAME = 40
 const STAGE_RADIUS = 14
 const FRAME_COLOR = '#101114'
 const AGENT_PARTITION = 'persist:aft-agent'
@@ -44,8 +44,6 @@ const SETTINGS_HEIGHT = 620
 const SETTINGS_MIN_WIDTH = 320
 const SETTINGS_MIN_HEIGHT = 280
 const DEVTOOLS_RATIO = 0.45
-const DEVTOOLS_MIN = 260
-const DEVTOOLS_GAP = 6
 const DEVTOOLS_MIN_RATIO = 0.15
 const DEVTOOLS_MAX_RATIO = 0.8
 const iconPath = app.isPackaged
@@ -80,112 +78,25 @@ let prefs: AppPrefs | null = null
 
 registerHomeScheme()
 
-function preloadPath(): string {
-  const mjs = join(__dirname, '../preload/index.mjs')
-  return existsSync(mjs) ? mjs : join(__dirname, '../preload/index.js')
-}
-
-function visibleArea(): Rectangle {
-  const bounds = win.getContentBounds()
-  if (!win.isMaximized()) return { x: 0, y: 0, width: bounds.width, height: bounds.height }
-
-  const work = screen.getDisplayMatching(bounds).workArea
-  const left = Math.max(0, work.x - bounds.x)
-  const top = Math.max(0, work.y - bounds.y)
-  const right = Math.max(0, bounds.x + bounds.width - (work.x + work.width))
-  const bottom = Math.max(0, bounds.y + bounds.height - (work.y + work.height))
-
-  return {
-    x: left,
-    y: top,
-    width: Math.max(0, bounds.width - left - right),
-    height: Math.max(0, bounds.height - top - bottom)
-  }
-}
-
-function fallbackStage(area: Rectangle): Rectangle {
-  return {
-    x: area.x + FRAME,
-    y: area.y + FRAME,
-    width: Math.max(0, area.width - FRAME * 2),
-    height: Math.max(0, area.height - FRAME * 2)
-  }
-}
-
-function stageBounds(area: Rectangle): Rectangle {
-  if (!stageBox) return fallbackStage(area)
-
-  const x = area.x + Math.round(stageBox.x * area.width)
-  const y = area.y + Math.round(stageBox.y * area.height)
-  const width = Math.round(stageBox.width * area.width)
-  const height = Math.round(stageBox.height * area.height)
-
-  return {
-    x,
-    y,
-    width: Math.max(0, Math.min(width, area.x + area.width - x)),
-    height: Math.max(0, Math.min(height, area.y + area.height - y))
-  }
-}
-
 function layout(): void {
   if (!win || win.isDestroyed()) return
-  const area = visibleArea()
+  const area = visibleArea(win)
   chatView.setBounds(area)
 
-  const stage = stageBounds(area)
+  const stage = stageBounds(area, stageBox)
   if (!devtoolsOpen || !devtoolsView) {
     targetView.setBounds(stage)
     return
   }
 
-  const panel = Math.min(
-    Math.max(DEVTOOLS_MIN, Math.round(stage.width * devtoolsRatio)),
-    Math.max(0, stage.width - DEVTOOLS_MIN - DEVTOOLS_GAP)
-  )
-  const pageWidth = Math.max(0, stage.width - panel - DEVTOOLS_GAP)
-
-  targetView.setBounds({ x: stage.x, y: stage.y, width: pageWidth, height: stage.height })
-  devtoolsView.setBounds({
-    x: stage.x + pageWidth + DEVTOOLS_GAP,
-    y: stage.y,
-    width: panel,
-    height: stage.height
-  })
-}
-
-function readBox(value: unknown): StageBox | null {
-  if (!value || typeof value !== 'object') return null
-  const raw = value as Record<string, unknown>
-  const x = Number(raw.x)
-  const y = Number(raw.y)
-  const width = Number(raw.width)
-  const height = Number(raw.height)
-
-  if (![x, y, width, height].every((part) => Number.isFinite(part))) return null
-  if (width <= 0 || height <= 0) return null
-
-  return {
-    x: Math.min(1, Math.max(0, x)),
-    y: Math.min(1, Math.max(0, y)),
-    width: Math.min(1, Math.max(0, width)),
-    height: Math.min(1, Math.max(0, height))
-  }
+  const split = splitStage(stage, devtoolsRatio)
+  targetView.setBounds(split.page)
+  devtoolsView.setBounds(split.panel)
 }
 
 function setStage(value: unknown): void {
   const box = readBox(value)
-  if (!box) return
-  const current = stageBox
-  if (
-    current &&
-    current.x === box.x &&
-    current.y === box.y &&
-    current.width === box.width &&
-    current.height === box.height
-  ) {
-    return
-  }
+  if (!box || sameBox(stageBox, box)) return
   stageBox = box
   layout()
 }
@@ -377,7 +288,7 @@ function openSettings(): void {
     skipTaskbar: true,
     backgroundColor: chromeColor,
     parent: win && !win.isDestroyed() ? win : undefined,
-    webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true }
+    webPreferences: { preload: preloadPath(__dirname), sandbox: false, contextIsolation: true }
   })
 
   settingsWin = next
@@ -482,7 +393,7 @@ function sendPointer(): void {
     return
   }
 
-  const area = visibleArea()
+  const area = visibleArea(win)
   if (area.width <= 0 || area.height <= 0) return
 
   const bounds = win.getContentBounds()
@@ -742,7 +653,7 @@ function openSplash(): void {
     icon: iconPath,
     frame: false,
     backgroundColor: FRAME_COLOR,
-    webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true }
+    webPreferences: { preload: preloadPath(__dirname), sandbox: false, contextIsolation: true }
   })
 
   const next = splashWin
@@ -797,7 +708,7 @@ function createWindow(): void {
   })
 
   chatView = new WebContentsView({
-    webPreferences: { preload: preloadPath(), sandbox: false, contextIsolation: true }
+    webPreferences: { preload: preloadPath(__dirname), sandbox: false, contextIsolation: true }
   })
 
   targetView = new WebContentsView({

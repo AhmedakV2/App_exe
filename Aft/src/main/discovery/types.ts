@@ -127,7 +127,7 @@ export interface ScanOptions {
   profile: ScanProfileName
 }
 
-export const DEFAULT_SCAN: ScanOptions = {
+const DEFAULT_SCAN: ScanOptions = {
   level: 1,
   quietMs: 180,
   quietTimeoutMs: 1000,
@@ -140,7 +140,7 @@ export const DEFAULT_SCAN: ScanOptions = {
   profile: 'agent'
 }
 
-export const SCAN_PROFILES: Record<ScanProfileName, Partial<ScanOptions>> = {
+const SCAN_PROFILES: Record<ScanProfileName, Partial<ScanOptions>> = {
   agent: {},
   record: {
     occlusionBudget: 2000,
