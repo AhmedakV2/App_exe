@@ -1,7 +1,7 @@
 import { sourceKey } from './Normalizer'
 import type { RecordIntent, RecordOptions, RecordedStep } from './types'
 
-export interface Suppression {
+interface Suppression {
   drop: boolean
   reason: string
   mergeInto: string

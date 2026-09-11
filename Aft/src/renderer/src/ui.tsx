@@ -22,16 +22,6 @@ export const PageHead = memo(function PageHead({
   )
 })
 
-export const Skeleton = memo(function Skeleton({ rows = 3 }: { rows?: number }): React.JSX.Element {
-  return (
-    <div className="skeleton-stack">
-      {Array.from({ length: rows }, (_, index) => (
-        <span key={index} className={'skeleton ' + (index % 2 ? 'line-2' : 'line-1')} />
-      ))}
-    </div>
-  )
-})
-
 export const Pill = memo(function Pill({
   tone = 'flat',
   children
@@ -148,26 +138,6 @@ export const Field = memo(function Field({
       <span className="field-label">{label}</span>
       {children}
       {hint ? <span className="field-hint">{hint}</span> : null}
-    </label>
-  )
-})
-
-export const FieldRow = memo(function FieldRow({
-  label,
-  hint,
-  children
-}: {
-  label: string
-  hint?: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <label className="form-row">
-      <span className="field-label">{label}</span>
-      <span className="form-control">
-        {children}
-        {hint ? <span className="field-hint">{hint}</span> : null}
-      </span>
     </label>
   )
 })

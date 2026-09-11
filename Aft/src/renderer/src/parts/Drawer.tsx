@@ -4,7 +4,7 @@ import ConsoleStream from './Console'
 import { Glyph } from '../icons'
 import { Empty } from '../ui'
 
-export type DrawerTab = 'terminal' | 'agent'
+type DrawerTab = 'terminal' | 'agent'
 
 const TABS: { id: DrawerTab; label: string; glyph: string }[] = [
   { id: 'terminal', label: 'Terminal', glyph: 'terminal' },

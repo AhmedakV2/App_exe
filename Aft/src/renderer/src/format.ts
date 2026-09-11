@@ -75,15 +75,6 @@ export function shortUrl(raw: string): string {
   }
 }
 
-export function hostOf(raw: string): string {
-  if (!raw) return '—'
-  try {
-    return new URL(raw).host
-  } catch {
-    return raw
-  }
-}
-
 export function toUrl(input: string): string {
   return resolveInput(input)
 }

@@ -70,7 +70,7 @@ dpr: window.devicePixelRatio || 1
 };
 })())`
 
-export interface ProbeReading {
+interface ProbeReading {
   ok: boolean
   m: number
   idle: number
@@ -85,7 +85,7 @@ export interface ProbeReading {
   dpr: number
 }
 
-export interface QuietResult {
+interface QuietResult {
   reading: ProbeReading
   timedOut: boolean
   waitedMs: number

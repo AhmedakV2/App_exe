@@ -7,7 +7,7 @@ import { Outbox, type OutboxTransport } from './Outbox'
 import { Retention } from './Retention'
 import type { DataStats } from './types'
 
-export interface DataStoreOptions {
+interface DataStoreOptions {
   filePath: string
   contexts: ContextStore
   transport?: OutboxTransport

@@ -1,4 +1,4 @@
-import { app, BaseWindow, WebContentsView } from 'electron'
+import { BaseWindow, WebContentsView } from 'electron'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,6 +10,7 @@ import { DEFAULT_HEALING, IdentityService } from '../identity'
 import { Recorder } from '../record/Recorder'
 import { TargetResolver } from '../scenario/TargetResolver'
 import { FixtureServer } from './FixtureServer'
+import { expect, runEntry, verdict } from '../harness'
 
 const VIEWPORT = { width: 1280, height: 900 }
 const SETTLE_MS = 420
@@ -78,13 +79,6 @@ const PAGE_V2 = page(
   ],
   SATIRLAR
 )
-
-const checks: { name: string; ok: boolean; detail: string }[] = []
-
-function expect(name: string, ok: boolean, detail: string): void {
-  checks.push({ name, ok, detail })
-  process.stdout.write((ok ? 'GECTI ' : 'KALDI ') + name + ' | ' + detail + '\n')
-}
 
 async function fixtures(): Promise<{ server: FixtureServer; root: string }> {
   const root = await mkdtemp(join(tmpdir(), 'aft-probe-'))
@@ -234,9 +228,7 @@ async function main(): Promise<number> {
       )
     }
 
-    const failed = checks.filter((entry) => !entry.ok).length
-    process.stdout.write('\nToplam ' + checks.length + ', basarisiz ' + failed + '\n')
-    return failed === 0 ? 0 : 1
+    return verdict()
   } finally {
     await recorder.discard().catch(() => undefined)
     controller.dispose()
@@ -247,11 +239,4 @@ async function main(): Promise<number> {
   }
 }
 
-app.whenReady().then(() => {
-  main()
-    .then((code) => app.exit(code))
-    .catch((error) => {
-      process.stdout.write('HATA ' + String(error) + '\n')
-      app.exit(1)
-    })
-})
+runEntry(main)

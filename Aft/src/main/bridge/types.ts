@@ -1,4 +1,3 @@
-import type { ConsumerKind } from '../model'
 import type { ConsumerProjection } from '../model'
 import type { ValidationReport } from '../model'
 import type { DescriptorSummary } from '../identity'
@@ -54,8 +53,4 @@ export interface StatsPayload {
   strategies: Record<string, StrategyStat>
   descriptors: number
   weak: number
-}
-
-export interface ProjectionRequest {
-  kind: ConsumerKind
 }

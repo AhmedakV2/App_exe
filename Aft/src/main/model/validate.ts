@@ -1,6 +1,6 @@
 import { SUPPORTED_MODEL_VERSIONS, type ElementModel, type GraphSnapshot } from './schema'
 
-export type ValidationSeverity = 'error' | 'warning'
+type ValidationSeverity = 'error' | 'warning'
 
 export interface ValidationIssue {
   severity: ValidationSeverity
@@ -17,7 +17,7 @@ export interface ValidationReport {
   warnings: ValidationIssue[]
 }
 
-export class ModelValidationError extends Error {
+class ModelValidationError extends Error {
   constructor(readonly report: ValidationReport) {
     super('Model dogrulama basarisiz: ' + report.errors.length + ' hata')
     this.name = 'ModelValidationError'

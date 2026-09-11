@@ -10,7 +10,7 @@ interface FlowState {
   onProgress: ProgressHandler | undefined
 }
 
-export interface FlowOutcome {
+interface FlowOutcome {
   steps: StepResult[]
   aborted: boolean
 }
@@ -171,7 +171,7 @@ export function select(steps: readonly ScenarioStep[], only: readonly string[]):
   return steps.filter((step) => only.includes(step.id))
 }
 
-export function count(steps: readonly ScenarioStep[]): number {
+function count(steps: readonly ScenarioStep[]): number {
   return steps.reduce((total, step) => total + 1 + count(step.steps), 0)
 }
 

@@ -136,12 +136,6 @@ export const POOL: readonly PoolCase[] = [
     minInteractive: 32
   })
 ]
-export function caseById(id: string): PoolCase | undefined {
-  return POOL.find((entry) => entry.id === id)
-}
-export function casesByKind(kind: CaseKind): PoolCase[] {
-  return POOL.filter((entry) => entry.kind === kind)
-}
 export function poolCoverage(): Record<CaseKind, number> {
   const out: Record<CaseKind, number> = {
     'classic-html': 0,

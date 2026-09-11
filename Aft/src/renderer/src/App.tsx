@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AgentAction,
   BrowserState,
@@ -13,7 +13,7 @@ import { Glyph, IconButton } from './icons'
 import { clamp, formatMs } from './format'
 import { useConsole } from './useConsole'
 import type { Report } from './report'
-import type { PlaybackOptions, StepResult } from '../../main/scenario/types'
+import type { PlaybackOptions } from '../../main/scenario/types'
 import BrowserPage from './pages/BrowserPage'
 import type { DockTab } from './pages/BrowserPage'
 import ScenarioPage from './pages/ScenarioPage'
@@ -25,173 +25,44 @@ import StatsPage from './pages/StatsPage'
 import Drawer from './parts/Drawer'
 import CommandPalette from './parts/CommandPalette'
 import type { Command } from './parts/CommandPalette'
-
-type PageId = 'browser' | 'scenarios' | 'results' | 'stats' | 'identity' | 'coverage' | 'data'
-
-type NavItem = { id: PageId; label: string; glyph: string; suite?: boolean }
-
-const NAV_ICON = 22
-
-const NAV: NavItem[] = [
-  { id: 'browser', label: 'Tarayıcı', glyph: 'globe' },
-  { id: 'browser', label: 'Kayıt ve oynatma', glyph: 'suite', suite: true },
-  { id: 'scenarios', label: 'Senaryolar', glyph: 'library' },
-  { id: 'results', label: 'Sonuçlar', glyph: 'history' },
-  { id: 'stats', label: 'İstatistik', glyph: 'spark' },
-  { id: 'identity', label: 'Kimlik', glyph: 'pulse' },
-  { id: 'coverage', label: 'Kapsam', glyph: 'radar' },
-  { id: 'data', label: 'Veri', glyph: 'database' }
-]
-
-const PAGE_LABELS: Record<PageId, string> = {
-  browser: 'Tarayıcı',
-  scenarios: 'Senaryolar',
-  results: 'Sonuçlar',
-  stats: 'İstatistik',
-  identity: 'Kimlik',
-  coverage: 'Kapsam',
-  data: 'Veri'
-}
-
-function isPageId(value: unknown): value is PageId {
-  return typeof value === 'string' && value in PAGE_LABELS
-}
-
-const LIST_KEY = 'aft:list-width'
-const TERM_KEY = 'aft:term-height'
-const DOCK_KEY = 'aft:dock-width'
-const DEV_KEY = 'aft:devtools-width'
-const DOCK_TAB_KEY = 'aft:dock-tab'
-const PAGE_KEY = 'aft:page'
-const AUTO_TERM_KEY = 'aft:auto-terminal'
-const AUTO_BACK_KEY = 'aft:auto-terminal-restore'
-const SHOT_KEY = 'aft:play-screenshot'
-const STOP_KEY = 'aft:play-stop'
-const STATE_KEY = 'aft:play-verify'
-
-const LIST_SIZE = 300
-const TERM_SIZE = 268
-const DOCK_SIZE = 380
-const DEV_SIZE = 520
-const LIST_MIN = 220
-const TERM_MIN = 120
-const DOCK_MIN = 300
-const DEV_MIN = 260
-const LIST_MAX_RATIO = 0.5
-const TERM_MAX_RATIO = 0.72
-const DOCK_MAX_RATIO = 0.62
-const DEV_MAX_RATIO = 0.8
-
-function sameBox(a: StageBox | null, b: StageBox): boolean {
-  if (!a) return false
-  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
-}
-
-function part(value: number, total: number): number {
-  if (!total) return 0
-  return Math.round((value / total) * 10000) / 10000
-}
-
-function readSize(key: string, fallback: number): number {
-  try {
-    const raw = Number(window.localStorage.getItem(key))
-    return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : fallback
-  } catch {
-    return fallback
-  }
-}
-
-function storeSize(key: string, value: number): void {
-  try {
-    window.localStorage.setItem(key, String(Math.round(value)))
-  } catch {
-    return
-  }
-}
-
-function readFlag(key: string, fallback: boolean): boolean {
-  try {
-    const raw = window.localStorage.getItem(key)
-    if (raw === '1') return true
-    if (raw === '0') return false
-    return fallback
-  } catch {
-    return fallback
-  }
-}
-
-function storeFlag(key: string, value: boolean): void {
-  try {
-    window.localStorage.setItem(key, value ? '1' : '0')
-  } catch {
-    return
-  }
-}
-
-function readPage(): PageId {
-  try {
-    const raw = window.localStorage.getItem(PAGE_KEY)
-    return isPageId(raw) ? raw : 'browser'
-  } catch {
-    return 'browser'
-  }
-}
-
-function readDock(): DockTab {
-  try {
-    const raw = window.localStorage.getItem(DOCK_TAB_KEY)
-    return raw === 'record' || raw === 'playback' ? raw : null
-  } catch {
-    return null
-  }
-}
-
-const Brand = memo(function Brand(): React.JSX.Element {
-  return (
-    <span className="brand" title="AFT">
-      <svg width="18" height="18" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
-        <path d="M212 60 L300 60 L458 428 L352 428 L258 188 L182 348 L250 348 L296 398 L258 398 L222 428 L54 428 Z" />
-      </svg>
-    </span>
-  )
-})
-
-const STEP_LABELS: Record<string, string> = {
-  passed: 'Geçti',
-  failed: 'Kaldı',
-  errored: 'Hata',
-  skipped: 'Atlandı'
-}
-
-function stepDetail(step: StepResult): string[] {
-  const detail: string[] = []
-  if (step.resolution) {
-    detail.push(
-      'Kimlik: ' +
-        step.resolution.state +
-        ' · güven %' +
-        Math.round(step.resolution.confidence * 100)
-    )
-  }
-  for (const check of step.assertions) {
-    detail.push(
-      'Doğrulama: ' +
-        check.kind +
-        ' · beklenen "' +
-        check.expected +
-        '" · gelen "' +
-        check.actual +
-        '"'
-    )
-  }
-  if (step.stateCheck && !step.stateCheck.ok) {
-    detail.push('Durum: ' + step.stateCheck.reasons.join(', '))
-  }
-  if (step.outcome?.code) detail.push('Kod: ' + step.outcome.code)
-  if (step.contextId) detail.push('Bağlam: ' + step.contextId)
-  if (step.message) detail.push(step.message)
-  return detail
-}
+import Brand from './shell/Brand'
+import { NAV, NAV_ICON, PAGE_LABELS } from './shell/nav'
+import type { NavItem } from './shell/nav'
+import { STEP_LABELS, stepDetail } from './shell/steps'
+import type { PageId } from './shell/prefs'
+import {
+  AUTO_BACK_KEY,
+  AUTO_TERM_KEY,
+  DEV_KEY,
+  DEV_MAX_RATIO,
+  DEV_MIN,
+  DEV_SIZE,
+  DOCK_KEY,
+  DOCK_MAX_RATIO,
+  DOCK_MIN,
+  DOCK_SIZE,
+  DOCK_TAB_KEY,
+  LIST_KEY,
+  LIST_MAX_RATIO,
+  LIST_MIN,
+  LIST_SIZE,
+  PAGE_KEY,
+  SHOT_KEY,
+  STATE_KEY,
+  STOP_KEY,
+  TERM_KEY,
+  TERM_MAX_RATIO,
+  TERM_MIN,
+  TERM_SIZE,
+  part,
+  readDock,
+  readFlag,
+  readPage,
+  readSize,
+  sameBox,
+  storeFlag,
+  storeSize
+} from './shell/prefs'
 
 const EMPTY_STATE: BrowserState = {
   url: '',

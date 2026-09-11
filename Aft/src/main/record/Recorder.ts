@@ -44,7 +44,7 @@ interface Located {
   element: ElementModel
 }
 
-export interface RecorderOptions {
+interface RecorderOptions {
   descriptors?: DescriptorStore | null
   options?: Partial<RecordOptions>
   onChange?: (session: RecordSession) => void

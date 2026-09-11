@@ -1,6 +1,6 @@
 export type ThemeId = 'grafit' | 'gece' | 'kagit' | 'orman'
 
-export interface Theme {
+interface Theme {
   id: ThemeId
   label: string
   note: string
@@ -39,7 +39,7 @@ export const THEMES: Theme[] = [
   }
 ]
 
-export const DEFAULT_THEME: ThemeId = 'grafit'
+const DEFAULT_THEME: ThemeId = 'grafit'
 
 const STORAGE_KEY = 'aft:theme'
 
