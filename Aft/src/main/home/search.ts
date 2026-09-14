@@ -4,7 +4,7 @@ export const HOME_URL = 'aft://home/'
 export const SEARCH_ENDPOINT = 'https://www.google.com/search?q='
 export const FAVICON_ENDPOINT = 'https://www.google.com/s2/favicons?sz=64&domain='
 
-export function searchUrl(query: string): string {
+function searchUrl(query: string): string {
   const text = query.trim()
   if (!text) return HOME_URL
   return SEARCH_ENDPOINT + encodeURIComponent(text)

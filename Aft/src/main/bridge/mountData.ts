@@ -4,7 +4,7 @@ import { DataChannel } from './DataChannel'
 
 let channel: DataChannel | null = null
 
-export interface MountDataOptions {
+interface MountDataOptions {
   scenarios: ScenarioStore
 }
 export async function mountData(options: MountDataOptions): Promise<DataChannel> {
@@ -17,9 +17,6 @@ export async function mountData(options: MountDataOptions): Promise<DataChannel>
   created.register()
   channel = created
   return created
-}
-export function dataChannel(): DataChannel | null {
-  return channel
 }
 export async function unmountData(): Promise<void> {
   if (!channel) return

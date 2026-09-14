@@ -8,19 +8,19 @@ import { HistoryStore } from './HistoryStore'
 import { Resolver } from './Resolver'
 import type { Descriptor, HealingProposal, ResolveOptions, Resolution, StrategyStat } from './types'
 
-export interface IdentityOptions {
+interface IdentityOptions {
   historyPath: string
   healing: HealingPolicy
   resolve: Partial<ResolveOptions>
   validate?: boolean
 }
 
-export interface CaptureResult {
+interface CaptureResult {
   descriptor: Descriptor
   index: ModelIndex
 }
 
-export interface ResolveResult {
+interface ResolveResult {
   resolution: Resolution
   descriptor: Descriptor
   proposal: HealingProposal | null

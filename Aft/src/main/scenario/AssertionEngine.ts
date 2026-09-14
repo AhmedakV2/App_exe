@@ -2,7 +2,7 @@ import type { ElementModel, ModelIndex } from '../model'
 import type { TargetResolution, TargetResolver } from './TargetResolver'
 import { ELEMENT_ASSERTION_KINDS, type Assertion, type AssertionRecord } from './types'
 
-export interface AssertionOutcome {
+interface AssertionOutcome {
   record: AssertionRecord
   resolution: TargetResolution | null
 }

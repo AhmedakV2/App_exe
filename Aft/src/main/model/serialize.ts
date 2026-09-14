@@ -52,7 +52,7 @@ export function toSnapshot(graph: ElementGraph): GraphSnapshot {
   }
 }
 
-export function toFrameModel(frame: FrameRecord, rootSessionId: string): FrameModel {
+function toFrameModel(frame: FrameRecord, rootSessionId: string): FrameModel {
   return {
     frameId: frame.frameId,
     parentFrameId: frame.parentFrameId,
@@ -66,7 +66,7 @@ export function toFrameModel(frame: FrameRecord, rootSessionId: string): FrameMo
   }
 }
 
-export function toBlindSpotModel(spot: BlindSpot): BlindSpotModel {
+function toBlindSpotModel(spot: BlindSpot): BlindSpotModel {
   return {
     kind: spot.kind,
     frameId: spot.frameId,
@@ -76,7 +76,7 @@ export function toBlindSpotModel(spot: BlindSpot): BlindSpotModel {
   }
 }
 
-export function toElementModel(
+function toElementModel(
   node: GraphNode,
   crossOriginFrames: ReadonlySet<string>,
   siblingRank: Map<string, number>

@@ -22,7 +22,7 @@ const QUERY_LABELS: Record<QueryKind, string> = {
   text: 'Metin'
 }
 
-export interface StrategyProbe {
+interface StrategyProbe {
   kind: string
   weight: number
   matches: number
@@ -109,11 +109,7 @@ export function plain(): StepAdvice {
   }
 }
 
-export function probe(
-  descriptor: Descriptor,
-  element: ElementModel,
-  index: ModelIndex
-): StrategyProbe[] {
+function probe(descriptor: Descriptor, element: ElementModel, index: ModelIndex): StrategyProbe[] {
   const ref = element.identity.ref
   const out: StrategyProbe[] = []
 
@@ -136,7 +132,7 @@ export function probe(
   return out
 }
 
-export function alternatives(
+function alternatives(
   element: ElementModel,
   index: ModelIndex,
   raw: RawElement | null

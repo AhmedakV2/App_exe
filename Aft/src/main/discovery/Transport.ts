@@ -11,7 +11,14 @@ export class ProtocolError extends Error {
   }
 }
 
-export type EventHandler = (params: Record<string, unknown>, sessionId: string) => void
+type EventHandler = (params: Record<string, unknown>, sessionId: string) => void
+
+const COMMAND_TIMEOUT_MS = 15000
+
+interface ProtocolStats {
+  total: number
+  byMethod: Record<string, number>
+}
 
 export const COMMAND_TIMEOUT_MS = 15000
 

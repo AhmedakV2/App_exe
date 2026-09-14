@@ -15,20 +15,6 @@ const HASH_SUFFIX = /[-_][A-Za-z0-9]{5,}$/
 
 const TAILWIND_ARBITRARY = /\[[^\]]+\]/
 
-const VOLATILE_ATTRS: ReadonlySet<string> = new Set([
-  'style',
-  'class',
-  'srcset',
-  'nonce',
-  'data-reactid',
-  'data-react-checksum',
-  'data-v-app'
-])
-
-export function isVolatileAttribute(name: string): boolean {
-  return VOLATILE_ATTRS.has(name.toLowerCase())
-}
-
 export function isDynamicValue(value: string): boolean {
   const trimmed = value.trim()
   if (!trimmed) return true
@@ -43,10 +29,6 @@ export function isDynamicValue(value: string): boolean {
   return entropy(trimmed) > 3.6 && trimmed.length >= 10
 }
 
-export function isStableIdentifier(value: string): boolean {
-  return !isDynamicValue(value)
-}
-
 export function stableClasses(className: string): string[] {
   return className
     .split(/\s+/)
@@ -58,7 +40,7 @@ export function stableClasses(className: string): string[] {
     .sort()
 }
 
-export function entropy(value: string): number {
+function entropy(value: string): number {
   const counts = new Map<string, number>()
   for (const char of value) counts.set(char, (counts.get(char) ?? 0) + 1)
 

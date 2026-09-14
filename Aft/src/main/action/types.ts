@@ -156,13 +156,11 @@ export const NAVIGATION_GRACE: Partial<Record<ActionKind, number>> = {
   'select-option': 250
 }
 
-export const MIN_WAIT_MS = 0
-
 export const MAX_WAIT_MS = 600000
 
 export const DEFAULT_WAIT_MS = 1000
 
-export const DEFAULT_HOVER_HOLD_MS = 320
+const DEFAULT_HOVER_HOLD_MS = 320
 
 export const MAX_HOVER_HOLD_MS = 10000
 

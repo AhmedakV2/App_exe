@@ -146,10 +146,6 @@ export interface GraphSnapshot {
   elements: ElementModel[]
 }
 
-export const EMPTY_FRAME_PATH: FramePath = { chain: [], depth: 0, crossOrigin: false }
-
-export const EMPTY_SHADOW_PATH: ShadowPath = { hops: [], depth: 0, closed: false }
-
 export const TEXT_CAP = 160
 
 export const ATTR_CAP = 512

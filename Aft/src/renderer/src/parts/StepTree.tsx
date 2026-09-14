@@ -9,7 +9,7 @@ const KIND_TONE: Record<string, Tone> = {
   group: 'flat'
 }
 
-export type FlatStep = { step: ScenarioStep; depth: number }
+type FlatStep = { step: ScenarioStep; depth: number }
 
 export default memo(function StepTree({
   steps,

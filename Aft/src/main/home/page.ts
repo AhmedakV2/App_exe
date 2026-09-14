@@ -64,7 +64,7 @@ const SKINS: Record<string, HomeSkin> = {
   }
 }
 
-export function skinOf(theme: string): HomeSkin {
+function skinOf(theme: string): HomeSkin {
   return SKINS[theme] ?? SKINS.grafit
 }
 

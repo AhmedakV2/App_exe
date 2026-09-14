@@ -31,7 +31,7 @@ export function emptyMetrics(): CaseMetrics {
   }
 }
 
-export function isFalsePositive(element: ElementModel): boolean {
+function isFalsePositive(element: ElementModel): boolean {
   if (!element.interactivity.interactive) return false
   if (element.visibility.state === 'hidden') return true
   if (element.visibility.pointerEvents === 'none') return true
@@ -59,7 +59,7 @@ export function mean(values: readonly number[]): number {
   return round(values.reduce((total, value) => total + value, 0) / values.length)
 }
 
-export function percentile(values: readonly number[], fraction: number): number {
+function percentile(values: readonly number[], fraction: number): number {
   if (!values.length) return 0
   const sorted = values.slice().sort((a, b) => a - b)
   const position = Math.min(sorted.length - 1, Math.floor(fraction * sorted.length))

@@ -11,7 +11,7 @@ import type {
   SyncState
 } from './types'
 
-export const SCHEMA_STATEMENTS: readonly string[] = [
+const SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS scenario_index (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -180,11 +180,11 @@ export function flag(value: boolean): number {
   return value ? 1 : 0
 }
 
-export function bool(value: number): boolean {
+function bool(value: number): boolean {
   return Number(value) === 1
 }
 
-export function parseList(raw: string): string[] {
+function parseList(raw: string): string[] {
   try {
     const parsed = JSON.parse(raw) as unknown
     return Array.isArray(parsed) ? parsed.map((entry) => String(entry)) : []

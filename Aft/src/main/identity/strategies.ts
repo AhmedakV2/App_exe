@@ -8,14 +8,14 @@ const MATCH_CAP = 64
 
 const NEIGHBOUR_RADIUS = 220
 
-export interface Strategy {
+interface Strategy {
   kind: StrategyKind
   weight: number
   extract(element: ElementModel, index: ModelIndex): StrategyPayload | null
   match(payload: StrategyPayload, index: ModelIndex): ElementModel[]
 }
 
-export const STRATEGY_WEIGHTS: Record<StrategyKind, number> = {
+const STRATEGY_WEIGHTS: Record<StrategyKind, number> = {
   'test-attribute': 1,
   'element-id': 0.86,
   'form-field': 0.78,

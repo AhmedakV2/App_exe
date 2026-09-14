@@ -41,7 +41,7 @@ const MAX_RETRIES = 10
 
 const MAX_TIMEOUT_MS = 600000
 
-export class ScenarioError extends Error {
+class ScenarioError extends Error {
   constructor(
     message: string,
     readonly issues: ScenarioIssue[] = []

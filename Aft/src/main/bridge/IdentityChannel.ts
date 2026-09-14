@@ -14,13 +14,13 @@ import type { ConsumerKind, GraphSnapshot } from '../model'
 import { validateSnapshot } from '../model'
 import type {
   CapturePayload,
-  ChannelResult,
   IdentityChannelName,
   ProjectionPayload,
   ResolvePayload,
   ScanPayload,
   StatsPayload
 } from './types'
+import { guard } from './guard'
 
 const CHANNELS: IdentityChannelName[] = [
   'aft:identity:capture',
@@ -38,7 +38,7 @@ const CHANNELS: IdentityChannelName[] = [
 
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
-export interface IdentityChannelOptions {
+interface IdentityChannelOptions {
   userDataDir: string
   getGraph: () => ElementGraph | null
   ensureGraph?: () => Promise<ElementGraph | null>
@@ -81,15 +81,15 @@ export class IdentityChannel {
     this.registered = true
 
     ipcMain.handle('aft:identity:capture', (_event, ordinal: unknown) =>
-      this.guard('Descriptor uretildi', () => this.capture(Number(ordinal)))
+      guard('Descriptor uretildi', () => this.capture(Number(ordinal)))
     )
 
     ipcMain.handle('aft:identity:resolve', (_event, descriptorId: unknown) =>
-      this.guard('Cozumleme tamam', () => this.resolve(String(descriptorId)))
+      guard('Cozumleme tamam', () => this.resolve(String(descriptorId)))
     )
 
     ipcMain.handle('aft:identity:scan', () =>
-      this.guard('Sayfa tarandi', async (): Promise<ScanPayload> => {
+      guard('Sayfa tarandi', async (): Promise<ScanPayload> => {
         const graph = await this.requireGraph()
         const index = this.indexOf(graph)
         return {
@@ -102,40 +102,40 @@ export class IdentityChannel {
     )
 
     ipcMain.handle('aft:identity:project', (_event, kind: unknown) =>
-      this.guard('Projeksiyon hazir', () => this.project(normalizeKind(kind)))
+      guard('Projeksiyon hazir', () => this.project(normalizeKind(kind)))
     )
 
     ipcMain.handle('aft:identity:validate', () =>
-      this.guard('Model dogrulandi', async () =>
+      guard('Model dogrulandi', async () =>
         validateSnapshot(this.snapshotOf(await this.requireGraph()))
       )
     )
 
     ipcMain.handle('aft:identity:list', () =>
-      this.guard('Katalog okundu', () => this.descriptors.summaries())
+      guard('Katalog okundu', () => this.descriptors.summaries())
     )
 
     ipcMain.handle('aft:identity:remove', (_event, descriptorId: unknown) =>
-      this.guard('Descriptor silindi', () => this.descriptors.remove(String(descriptorId)))
+      guard('Descriptor silindi', () => this.descriptors.remove(String(descriptorId)))
     )
 
     ipcMain.handle('aft:identity:approvals', () =>
-      this.guard('Onay kuyrugu okundu', () => this.service.pendingApprovals())
+      guard('Onay kuyrugu okundu', () => this.service.pendingApprovals())
     )
 
     ipcMain.handle('aft:identity:approve', (_event, descriptorId: unknown) =>
-      this.guard('Onarim uygulandi', () => this.approve(String(descriptorId)))
+      guard('Onarim uygulandi', () => this.approve(String(descriptorId)))
     )
 
     ipcMain.handle('aft:identity:reject', (_event, descriptorId: unknown) =>
-      this.guard('Onarim reddedildi', () => {
+      guard('Onarim reddedildi', () => {
         this.service.reject(String(descriptorId))
         return true
       })
     )
 
     ipcMain.handle('aft:identity:stats', (_event, descriptorId: unknown) =>
-      this.guard('Istatistik hazir', () => this.stats(String(descriptorId)))
+      guard('Istatistik hazir', () => this.stats(String(descriptorId)))
     )
   }
 
@@ -265,21 +265,6 @@ export class IdentityChannel {
     const descriptor = this.descriptors.get(descriptorId)
     if (!descriptor) throw new Error('Descriptor bulunamadi: ' + descriptorId)
     return descriptor
-  }
-
-  private async guard<T>(
-    message: string,
-    handler: () => T | Promise<T>
-  ): Promise<ChannelResult<T>> {
-    try {
-      return { ok: true, data: await handler(), message }
-    } catch (error) {
-      return {
-        ok: false,
-        data: null,
-        message: error instanceof Error ? error.message : String(error)
-      }
-    }
   }
 }
 

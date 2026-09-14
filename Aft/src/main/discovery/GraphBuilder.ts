@@ -9,7 +9,7 @@ const TEXT_CAP = 160
 
 const EMIT_BUDGET_MS = 8
 
-export const OVERLAY_ID = '__aft_overlay'
+const OVERLAY_ID = '__aft_overlay'
 
 interface DocRef {
   sessionId: string
@@ -277,7 +277,7 @@ function px(value: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-export function detectBlindSpots(nodes: GraphNode[], frames: FrameRegistry): BlindSpot[] {
+function detectBlindSpots(nodes: GraphNode[], frames: FrameRegistry): BlindSpot[] {
   const out: BlindSpot[] = []
 
   for (const frame of frames.all()) {

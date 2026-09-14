@@ -7,6 +7,7 @@ import { FixtureServer } from './FixtureServer'
 import { PoolRunner } from './PoolRunner'
 import { renderText, writeReport } from './Reporter'
 import { DEFAULT_RUN, type CaseKind, type CaseResult, type RunOptions } from './types'
+import { runEntry } from '../harness'
 
 const KINDS: readonly CaseKind[] = [
   'classic-html',
@@ -121,14 +122,4 @@ function progress(done: number, total: number, result: CaseResult): string {
   )
 }
 
-app.whenReady().then(() => {
-  main().then(
-    (code) => app.exit(code),
-    (error: unknown) => {
-      process.stderr.write((error instanceof Error ? error.stack : String(error)) + '\n')
-      app.exit(3)
-    }
-  )
-})
-
-app.on('window-all-closed', () => undefined)
+runEntry(main)

@@ -34,7 +34,7 @@ interface Evidence {
   uniqueKinds: Set<StrategyKind>
 }
 
-export class DescriptorVersionError extends Error {
+class DescriptorVersionError extends Error {
   constructor(readonly version: string) {
     super('Desteklenmeyen descriptor surumu: ' + version)
     this.name = 'DescriptorVersionError'

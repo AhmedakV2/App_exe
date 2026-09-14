@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { StatementSync } from 'node:sqlite'
 
-export const MEMORY_PATH = ':memory:'
+const MEMORY_PATH = ':memory:'
 export type DataParam = string | number | null
 
 export interface RunOutcome {
@@ -23,7 +23,7 @@ export interface DataDriver {
   fault(): string
   close(): void
 }
-export class DriverError extends Error {
+class DriverError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'DriverError'
