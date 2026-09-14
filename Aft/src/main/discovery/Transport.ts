@@ -20,7 +20,6 @@ interface ProtocolStats {
   byMethod: Record<string, number>
 }
 
-export const COMMAND_TIMEOUT_MS = 15000
 
 export interface ProtocolStats {
   total: number
