@@ -20,12 +20,6 @@ interface ProtocolStats {
   byMethod: Record<string, number>
 }
 
-
-export interface ProtocolStats {
-  total: number
-  byMethod: Record<string, number>
-}
-
 export class Transport {
   private readonly handlers = new Map<string, Set<EventHandler>>()
   private readonly parents = new Map<string, string>()
