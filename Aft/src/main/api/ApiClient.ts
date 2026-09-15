@@ -1,5 +1,8 @@
 import type { AuthStore, Session } from './AuthStore'
 import type { ConfigStore } from './config'
+import type { DeviceInfo, Profile } from './types'
+
+export type { DeviceInfo, Profile }
 
 export interface LoginInput {
   email: string
@@ -11,26 +14,6 @@ export interface TokenResponse {
   refreshToken: string
   tokenType: string
   expiresIn: number
-}
-
-export interface Profile {
-  id: string
-  email: string
-  displayName: string
-  locale: string
-  mfaEnabled: boolean
-  roles: string[]
-  organizations: { id: string; name: string; slug: string }[]
-}
-
-export interface DeviceInfo {
-  id: string
-  orgId: string
-  hostname: string
-  os: string
-  appVersion: string
-  status: string
-  lastSeenAt: number | null
 }
 
 interface ProblemDetail {

@@ -1,11 +1,11 @@
-import type { ChannelResult } from '../main/bridge'
+import type { ChannelResult } from '../main/bridge/types'
 import type {
   AgentConfig,
   AgentState,
   ApprovalRequest,
   ConfigPayload,
   LoginPayload
-} from '../main/bridge'
+} from '../main/bridge/api-types'
 
 declare global {
   interface Window {

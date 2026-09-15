@@ -15,6 +15,40 @@ export interface ToolResult {
   truncated: boolean
 }
 
+export interface AgentConfig {
+  baseUrl: string
+  orgId: string
+  deviceKey: string
+  autoConnect: boolean
+}
+
+export interface SessionState {
+  signedIn: boolean
+  email: string
+  displayName: string
+  expiresAt: number
+}
+
+export interface Profile {
+  id: string
+  email: string
+  displayName: string
+  locale: string
+  mfaEnabled: boolean
+  roles: string[]
+  organizations: { id: string; name: string; slug: string }[]
+}
+
+export interface DeviceInfo {
+  id: string
+  orgId: string
+  hostname: string
+  os: string
+  appVersion: string
+  status: string
+  lastSeenAt: number | null
+}
+
 export interface AgentEndpoint {
   baseUrl: string
   deviceId: string
