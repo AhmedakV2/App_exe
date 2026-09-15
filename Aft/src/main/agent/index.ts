@@ -1,0 +1,5 @@
+export { mountAgent, unmountAgent, agentBridge } from './mountAgent'
+export { ToolDispatcher } from './ToolDispatcher'
+export { ToolSocket } from './ToolSocket'
+export type { AgentBridge, AgentMountOptions } from './mountAgent'
+export type { AgentEndpoint, ApprovalGate, ToolInvocation, ToolResult } from './types'
