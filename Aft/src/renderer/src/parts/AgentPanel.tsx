@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AgentState, ApprovalRequest } from '../../../main/bridge'
+import type { AgentState, ApprovalRequest } from '../../../main/bridge/api-types'
 
 interface ChatMessage {
   id: string

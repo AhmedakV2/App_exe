@@ -1,6 +1,9 @@
 import { safeStorage } from 'electron'
 import { readFile, writeFile, rm, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { SessionState } from './types'
+
+export type { SessionState }
 
 export interface Session {
   accessToken: string
@@ -9,13 +12,6 @@ export interface Session {
   userId: string
   email: string
   displayName: string
-}
-
-export interface SessionState {
-  signedIn: boolean
-  email: string
-  displayName: string
-  expiresAt: number
 }
 
 const FILE_NAME = 'agent-session.bin'

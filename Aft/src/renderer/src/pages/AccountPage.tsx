@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AgentConfig, AgentState } from '../../../main/bridge'
+import type { AgentConfig, AgentState } from '../../../main/bridge/api-types'
 
 const EMPTY_STATE: AgentState = {
   session: { signedIn: false, email: '', displayName: '', expiresAt: 0 },

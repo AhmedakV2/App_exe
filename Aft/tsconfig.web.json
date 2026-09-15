@@ -10,7 +10,9 @@
     "src/main/scenario/types.ts",
     "src/main/bridge/types.ts",
     "src/main/bridge/record-types.ts",
-    "src/main/bridge/playback-types.ts"
+    "src/main/bridge/playback-types.ts",
+    "src/main/bridge/api-types.ts",
+    "src/main/api/types.ts"
   ],
   "compilerOptions": {
     "composite": true,

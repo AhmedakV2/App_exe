@@ -1,7 +1,4 @@
-import type { AgentConfig } from '../api/config'
-import type { DeviceInfo, Profile } from '../api/ApiClient'
-import type { SessionState } from '../api/AuthStore'
-import type { ToolInvocation } from '../api/types'
+import type { AgentConfig, DeviceInfo, Profile, SessionState, ToolInvocation } from '../api/types'
 
 export type ApiChannelName =
   | 'aft:api:state'

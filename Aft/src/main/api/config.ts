@@ -1,13 +1,9 @@
 import { app } from 'electron'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { AgentConfig } from './types'
 
-export interface AgentConfig {
-  baseUrl: string
-  orgId: string
-  deviceKey: string
-  autoConnect: boolean
-}
+export type { AgentConfig }
 
 export const DEFAULT_CONFIG: AgentConfig = {
   baseUrl: 'http://localhost:8080',
