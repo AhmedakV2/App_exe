@@ -72,6 +72,10 @@ export class DataChannel {
     return this.store.indexer
   }
 
+  contextStore(): ContextStore {
+    return this.contexts
+  }
+
   data(): DataStore {
     return this.store
   }
