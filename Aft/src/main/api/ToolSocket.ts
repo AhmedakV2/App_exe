@@ -1,9 +1,11 @@
+import { ApiError, retryAfterMillis } from './ApiError'
 import { decode, encode } from './stomp'
 import type { AgentEndpoint, ToolInvocation, ToolResult } from './types'
 
 const TOOL_QUEUE = '/user/queue/tools'
 const RESULT_DESTINATION = '/app/tool-results'
 const MAX_BACKOFF_MS = 30_000
+const MAX_RETRY_AFTER_MS = 60_000
 
 export interface ToolSocketOptions {
   endpoint: AgentEndpoint
@@ -16,6 +18,7 @@ export class ToolSocket {
   private timer: ReturnType<typeof setTimeout> | null = null
   private attempt = 0
   private closing = false
+  private cooldownMs = 0
 
   constructor(private readonly options: ToolSocketOptions) {}
 
@@ -94,7 +97,9 @@ export class ToolSocket {
 
   private scheduleReconnect(): void {
     if (this.closing || this.timer) return
-    const wait = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** this.attempt)
+    const backoff = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** this.attempt)
+    const wait = Math.max(backoff, this.cooldownMs)
+    this.cooldownMs = 0
     this.attempt += 1
     this.timer = setTimeout(() => {
       this.timer = null
@@ -107,7 +112,15 @@ export class ToolSocket {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + this.options.endpoint.accessToken }
     })
-    if (!response.ok) throw new Error('WebSocket bileti alinamadi: ' + response.status)
+    if (!response.ok) {
+      this.cooldownMs = retryAfterMillis(response, MAX_RETRY_AFTER_MS)
+      throw new ApiError(
+        response.status,
+        response.status === 429 ? 'RATE_LIMIT_EXCEEDED' : 'WS_TICKET_FAILED',
+        'WebSocket bileti alinamadi: ' + response.status,
+        this.cooldownMs
+      )
+    }
     const payload = (await response.json()) as { ticket: string }
     return payload.ticket
   }

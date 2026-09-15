@@ -1,8 +1,10 @@
 import type { AuthStore, Session } from './AuthStore'
 import type { ConfigStore } from './config'
 import type { DeviceInfo, Profile } from './types'
+import { ApiError, retryAfterMillis } from './ApiError'
 
 export type { DeviceInfo, Profile }
+export { ApiError }
 
 export interface LoginInput {
   email: string
@@ -16,21 +18,12 @@ export interface TokenResponse {
   expiresIn: number
 }
 
+const MAX_RETRY_AFTER_MS = 60_000
+
 interface ProblemDetail {
   title?: string
   detail?: string
   code?: string
-}
-
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string
-  ) {
-    super(message)
-    this.name = 'ApiError'
-  }
 }
 
 export class ApiClient {
@@ -145,6 +138,11 @@ export class ApiClient {
       problem = {}
     }
     const message = problem.detail ?? problem.title ?? 'Istek basarisiz: ' + response.status
-    return new ApiError(response.status, problem.code ?? 'UNKNOWN', message)
+    return new ApiError(
+      response.status,
+      problem.code ?? 'UNKNOWN',
+      message,
+      retryAfterMillis(response, MAX_RETRY_AFTER_MS)
+    )
   }
 }
