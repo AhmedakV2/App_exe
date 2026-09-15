@@ -1,7 +1,7 @@
 import type { AgentConfig } from '../api/config'
 import type { DeviceInfo, Profile } from '../api/ApiClient'
 import type { SessionState } from '../api/AuthStore'
-import type { ToolInvocation } from '../api/types'
+import type { ToolInvocation } from '../api'
 
 export type ApiChannelName =
   | 'aft:api:state'

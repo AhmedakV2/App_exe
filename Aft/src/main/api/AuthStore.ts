@@ -18,12 +18,11 @@ export interface SessionState {
   expiresAt: number
 }
 
-const FILE_NAME = 'agent-session.bin'
+const FILE_NAME = 'agent-session.json'
 const RENEW_MARGIN_MS = 60_000
 
 export class AuthStore {
   private session: Session | null = null
-
   constructor(private readonly directory: string) {}
 
   state(): SessionState {
@@ -38,33 +37,28 @@ export class AuthStore {
   current(): Session | null {
     return this.session
   }
-
   accessToken(): string {
     return this.session?.accessToken ?? ''
   }
-
   refreshToken(): string {
     return this.session?.refreshToken ?? ''
   }
-
   needsRenewal(): boolean {
     if (!this.session) return false
     return this.session.expiresAt - RENEW_MARGIN_MS <= Date.now()
   }
-
   async load(): Promise<SessionState> {
     try {
       const raw = await readFile(join(this.directory, FILE_NAME))
       const json = safeStorage.isEncryptionAvailable()
         ? safeStorage.decryptString(raw)
-        : raw.toString('utf8')
+        : raw.toString('utf-8')
       this.session = JSON.parse(json) as Session
     } catch {
       this.session = null
     }
     return this.state()
   }
-
   async save(session: Session): Promise<SessionState> {
     this.session = session
     const json = JSON.stringify(session)
@@ -75,7 +69,6 @@ export class AuthStore {
     await writeFile(join(this.directory, FILE_NAME), payload)
     return this.state()
   }
-
   async clear(): Promise<SessionState> {
     this.session = null
     await rm(join(this.directory, FILE_NAME), { force: true })
