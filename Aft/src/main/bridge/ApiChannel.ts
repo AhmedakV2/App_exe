@@ -128,7 +128,8 @@ export class ApiChannel {
       endpoint: {
         baseUrl: settings.baseUrl,
         deviceId: this.device.id,
-        accessToken: session.accessToken
+        accessToken: session.accessToken,
+        deviceKey: settings.deviceKey
       },
       controller: this.options.controller,
       scenarios: this.options.scenarios,

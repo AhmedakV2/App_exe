@@ -2,6 +2,7 @@ import type { BrowserController } from '../browser/BrowserController'
 import type { Indexer } from '../data'
 import type { DescriptorStore } from '../identity'
 import type { ContextStore, ScenarioStore } from '../scenario'
+import { ApiError, retryAfterMillis } from './ApiError'
 import { ToolDispatcher } from './ToolDispatcher'
 import { ToolSocket } from './ToolSocket'
 import { browserTools } from './tools/browserTools'
@@ -9,6 +10,8 @@ import { identityTools } from './tools/identityTools'
 import { runTools } from './tools/runTools'
 import { scenarioTools } from './tools/scenarioTools'
 import type { AgentEndpoint, ApprovalGate } from './types'
+
+const MAX_RETRY_AFTER_MS = 60_000
 
 export interface AgentMountOptions {
   endpoint: AgentEndpoint
@@ -70,12 +73,23 @@ async function publishCapabilities(endpoint: AgentEndpoint, tools: string[]): Pr
   const body = {
     capabilities: tools.map((toolName) => ({ toolName, schemaVersion: 1, enabled: true }))
   }
-  await fetch(endpoint.baseUrl + '/api/v1/devices/' + endpoint.deviceId + '/capabilities', {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer ' + endpoint.accessToken
-    },
-    body: JSON.stringify(body)
-  })
+  const response = await fetch(
+    endpoint.baseUrl + '/api/v1/devices/' + endpoint.deviceId + '/capabilities',
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Aft-Key': endpoint.deviceKey
+      },
+      body: JSON.stringify(body)
+    }
+  )
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      response.status === 429 ? 'RATE_LIMIT_EXCEEDED' : 'CAPABILITY_PUBLISH_FAILED',
+      'Arac yetenekleri bildirilemedi: ' + response.status,
+      retryAfterMillis(response, MAX_RETRY_AFTER_MS)
+    )
+  }
 }
