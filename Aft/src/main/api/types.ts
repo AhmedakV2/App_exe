@@ -46,13 +46,14 @@ export interface DeviceInfo {
   os: string
   appVersion: string
   status: string
-  lastSeenAt: number | null
+  lastSeenAt: string | null
 }
 
 export interface AgentEndpoint {
   baseUrl: string
   deviceId: string
   accessToken: string
+  deviceKey: string
 }
 
 export type ApprovalGate = (invocation: ToolInvocation) => Promise<boolean>
