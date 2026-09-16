@@ -3,11 +3,14 @@ import type { WebContents } from 'electron'
 import { join } from 'path'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
+  bindApiViewer,
+  mountApi,
   mountData,
   mountIdentity,
   mountPlayback,
   mountRecord,
   recordChannel,
+  unmountApi,
   unmountData,
   unmountIdentity,
   unmountPlayback,
@@ -755,6 +758,15 @@ function createWindow(): void {
         target: targetView.webContents,
         renderer: chatView.webContents
       })
+
+      await mountApi({
+        controller,
+        scenarios: playback.library(),
+        indexer: data.indexer(),
+        contexts: data.contextStore(),
+        descriptors: identity.catalog()
+      })
+      bindApiViewer(chatView.webContents)
     })
     .catch(() => undefined)
   void targetView.webContents.loadURL(HOME_URL).catch(() => undefined)
@@ -762,7 +774,9 @@ function createWindow(): void {
   win.on('closed', () => {
     stopDrag()
     closeDevtools()
-    void unmountRecord()
+    void unmountApi()
+      .catch(() => undefined)
+      .then(() => unmountRecord())
       .catch(() => undefined)
       .then(() => unmountData())
       .catch(() => undefined)

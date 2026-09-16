@@ -1,0 +1,71 @@
+export interface ToolInvocation {
+  callId: string
+  sessionId: string
+  toolName: string
+  argumentsJson: string
+  approvalRequired: boolean
+  timeoutMs: number
+}
+
+export interface ToolResult {
+  callId: string
+  ok: boolean
+  contentJson: string | null
+  error: string | null
+  truncated: boolean
+}
+
+export interface AgentConfig {
+  baseUrl: string
+  orgId: string
+  deviceKey: string
+  autoConnect: boolean
+}
+
+export interface SessionState {
+  signedIn: boolean
+  email: string
+  displayName: string
+  expiresAt: number
+}
+
+export interface Profile {
+  id: string
+  email: string
+  displayName: string
+  locale: string
+  mfaEnabled: boolean
+  roles: string[]
+  organizations: { id: string; name: string; slug: string }[]
+}
+
+export interface DeviceInfo {
+  id: string
+  orgId: string
+  hostname: string
+  os: string
+  appVersion: string
+  status: string
+  lastSeenAt: string | null
+}
+
+export interface AgentEndpoint {
+  baseUrl: string
+  deviceId: string
+  accessToken: string
+  deviceKey: string
+}
+
+export type ApprovalGate = (invocation: ToolInvocation) => Promise<boolean>
+
+export type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>
+
+export const MAX_RESULT_BYTES = 256 * 1024
+
+export function ok(callId: string, payload: unknown, truncated: boolean): ToolResult {
+  return { callId, ok: true, contentJson: JSON.stringify(payload), error: null, truncated }
+}
+
+export function fail(callId: string, error: string): ToolResult {
+  return { callId, ok: false, contentJson: null, error, truncated: false }
+}

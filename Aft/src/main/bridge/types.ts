@@ -20,6 +20,9 @@ export interface ChannelResult<T> {
   ok: boolean
   data: T | null
   message: string
+  status?: number
+  code?: string
+  retryAfterMs?: number
 }
 
 export interface CapturePayload {

@@ -4,6 +4,7 @@ import './identity'
 import './playback'
 import './record'
 import './data'
+import './api'
 
 const api = {
   execute: (action: unknown) => ipcRenderer.invoke('aft:execute', action),
