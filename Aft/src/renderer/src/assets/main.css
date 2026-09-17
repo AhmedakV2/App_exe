@@ -4893,6 +4893,19 @@ body[data-view='splash'] {
   font-size: var(--fs-meta);
 }
 
+.chat-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chat-banner-why {
+  font: 400 var(--fs-micro) var(--mono);
+  color: var(--danger);
+  word-break: break-word;
+}
+
 .chat-banner button {
   margin-left: auto;
   height: var(--ctl-sm);

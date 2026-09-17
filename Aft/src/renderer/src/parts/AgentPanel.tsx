@@ -50,6 +50,7 @@ export function AgentPanel(): React.JSX.Element {
   const [pending, setPending] = useState<ApprovalRequest | null>(null)
   const [pinned, setPinned] = useState(true)
   const [linking, setLinking] = useState(false)
+  const [linkError, setLinkError] = useState('')
 
   const threadRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
@@ -108,8 +109,14 @@ export function AgentPanel(): React.JSX.Element {
 
   const reconnect = useCallback((): void => {
     setLinking(true)
-    void window.aftApi.connect().finally(() => setLinking(false))
+    setLinkError('')
+    void window.aftApi
+      .connect()
+      .then((result) => setLinkError(result.ok ? '' : result.message))
+      .finally(() => setLinking(false))
   }, [])
+
+  const linkNote = linkError || state?.error || ''
 
   const send = useCallback(
     (text: string): void => {
@@ -220,8 +227,11 @@ export function AgentPanel(): React.JSX.Element {
       {!connected ? (
         <div className="chat-banner" role="status">
           <Glyph name="cloud" size={14} />
-          <span>
-            {signedIn ? 'Ajan sunucusuna bağlanılamadı.' : 'Ajanı kullanmak için giriş yapın.'}
+          <span className="chat-banner-text">
+            <strong>
+              {signedIn ? 'Ajan sunucusuna bağlanılamadı.' : 'Ajanı kullanmak için giriş yapın.'}
+            </strong>
+            {linkNote ? <span className="chat-banner-why">{linkNote}</span> : null}
           </span>
           {signedIn ? (
             <button type="button" onClick={reconnect} disabled={linking}>

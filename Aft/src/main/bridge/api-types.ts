@@ -20,6 +20,7 @@ export interface AgentState {
   session: SessionState
   connected: boolean
   orgId: string
+  error: string
   device: DeviceInfo | null
   capabilities: string[]
 }
