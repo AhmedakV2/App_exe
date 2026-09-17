@@ -14,58 +14,34 @@ interface HomeSkin {
 }
 
 const SKINS: Record<string, HomeSkin> = {
-  grafit: {
-    bg: '#0b0c0e',
-    panel: '#1a1c20',
-    raised: '#212429',
-    field: '#101115',
-    hover: '#2b2f36',
-    line: '#292c33',
-    edge: '#3b4048',
-    text: '#eef0f4',
-    muted: '#adb4bf',
-    faint: '#767d89'
+  dark: {
+    bg: '#131314',
+    panel: '#1e1f20',
+    raised: '#282a2c',
+    field: '#1b1b1b',
+    hover: '#333438',
+    line: '#333438',
+    edge: '#444746',
+    text: '#e3e3e3',
+    muted: '#9aa0a6',
+    faint: '#8e918f'
   },
-  gece: {
-    bg: '#050912',
-    panel: '#111a28',
-    raised: '#182333',
-    field: '#08101b',
-    hover: '#22314a',
-    line: '#1e2b3e',
-    edge: '#2f4260',
-    text: '#e9f1fd',
-    muted: '#aab9d0',
-    faint: '#6f819c'
-  },
-  kagit: {
-    bg: '#eef0f4',
+  light: {
+    bg: '#f0f4f9',
     panel: '#ffffff',
-    raised: '#f5f7fa',
+    raised: '#f8fafd',
     field: '#ffffff',
-    hover: '#e9edf3',
-    line: '#dfe3ea',
-    edge: '#c6ccd6',
-    text: '#101319',
-    muted: '#4b5462',
-    faint: '#7b8391'
-  },
-  orman: {
-    bg: '#060f0b',
-    panel: '#14211a',
-    raised: '#1b2c23',
-    field: '#0b1510',
-    hover: '#24382c',
-    line: '#1f3327',
-    edge: '#35523f',
-    text: '#e9f6ee',
-    muted: '#adc8b8',
-    faint: '#718f7d'
+    hover: '#e9eef6',
+    line: '#dde3ea',
+    edge: '#c4c7c5',
+    text: '#1f1f1f',
+    muted: '#5f6368',
+    faint: '#747775'
   }
 }
 
 function skinOf(theme: string): HomeSkin {
-  return SKINS[theme] ?? SKINS.grafit
+  return SKINS[theme] ?? SKINS.dark
 }
 
 export function homePage(theme: string): string {

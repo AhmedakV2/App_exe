@@ -2,7 +2,7 @@ import { protocol, session } from 'electron'
 import { homePage } from './page'
 import { HOME_HOST, HOME_SCHEME } from './search'
 
-let theme = 'grafit'
+let theme = 'dark'
 let mounted = false
 
 export function registerHomeScheme(): void {
