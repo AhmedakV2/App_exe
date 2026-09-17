@@ -71,7 +71,11 @@ export interface GraphNode {
 }
 
 export type BlindSpotKind =
-  'canvas' | 'media' | 'restricted-frame' | 'virtual-list' | 'collapsed-region'
+  | 'canvas'
+  | 'media'
+  | 'restricted-frame'
+  | 'virtual-list'
+  | 'collapsed-region'
 
 export interface BlindSpot {
   kind: BlindSpotKind

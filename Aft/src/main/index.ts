@@ -24,6 +24,7 @@ import {
   DragAxis,
   ExecuteResult,
   NavKind,
+  RailItemPref,
   ScanReport,
   StageBox,
   WindowAction
@@ -360,11 +361,28 @@ function publishPrefs(value: unknown): void {
     autoTerminalRestore: Boolean(raw.autoTerminalRestore),
     screenshotOnFailure: Boolean(raw.screenshotOnFailure),
     stopOnFailure: Boolean(raw.stopOnFailure),
-    verifyState: Boolean(raw.verifyState)
+    verifyState: Boolean(raw.verifyState),
+    rail: readRail(raw.rail)
   }
 
   if (settingsAlive()) (settingsWin as BrowserWindow).webContents.send('aft:prefs', prefs)
   if (setHomeTheme(prefs.theme)) repaintHome()
+}
+
+function readRail(value: unknown): RailItemPref[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return []
+    const item = entry as Partial<RailItemPref>
+    if (typeof item.id !== 'string') return []
+    return [
+      {
+        id: item.id,
+        hidden: item.hidden === true,
+        shortcut: typeof item.shortcut === 'string' ? item.shortcut : ''
+      }
+    ]
+  })
 }
 
 function patchPrefs(patch: unknown): void {
@@ -814,17 +832,20 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.aft.agent')
   mountHome(AGENT_PARTITION)
 
-  ipcMain.handle('aft:execute', (_e, action: AgentAction): Promise<ExecuteResult> =>
-    respond(() => controller.execute(action))
+  ipcMain.handle(
+    'aft:execute',
+    (_e, action: AgentAction): Promise<ExecuteResult> => respond(() => controller.execute(action))
   )
 
-  ipcMain.handle('aft:scan', (_e, level: unknown): Promise<ExecuteResult> =>
-    respond(async () => {
-      const target = normalizeLevel(level)
-      controller.setLevel(target)
-      const page = await controller.scan(target)
-      return { result: 'Tarama tamamlandı: seviye ' + target, page, outcome: null }
-    })
+  ipcMain.handle(
+    'aft:scan',
+    (_e, level: unknown): Promise<ExecuteResult> =>
+      respond(async () => {
+        const target = normalizeLevel(level)
+        controller.setLevel(target)
+        const page = await controller.scan(target)
+        return { result: 'Tarama tamamlandı: seviye ' + target, page, outcome: null }
+      })
   )
 
   ipcMain.handle('aft:coverage', async (): Promise<ScanReport | null> => {
@@ -851,11 +872,13 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('aft:vision', (_e, on: boolean): Promise<ExecuteResult> =>
-    respond(async () => {
-      const page = await controller.setVision(on)
-      return { result: on ? 'Görüş açıldı' : 'Görüş kapatıldı', page, outcome: null }
-    })
+  ipcMain.handle(
+    'aft:vision',
+    (_e, on: boolean): Promise<ExecuteResult> =>
+      respond(async () => {
+        const page = await controller.setVision(on)
+        return { result: on ? 'Görüş açıldı' : 'Görüş kapatıldı', page, outcome: null }
+      })
   )
 
   ipcMain.on('aft:nav', (_e, kind: NavKind) => navigate(kind))

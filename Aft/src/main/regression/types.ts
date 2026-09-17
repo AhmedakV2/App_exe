@@ -4,7 +4,12 @@ import type { ScanLevel } from '../discovery'
 export const POOL_VERSION = 'regression/1.0.0'
 
 export type CaseKind =
-  'classic-html' | 'spa' | 'shadow-dom' | 'nested-iframe' | 'virtual-list' | 'multi-step-form'
+  | 'classic-html'
+  | 'spa'
+  | 'shadow-dom'
+  | 'nested-iframe'
+  | 'virtual-list'
+  | 'multi-step-form'
 
 export type CaseSource = 'frozen' | 'live'
 

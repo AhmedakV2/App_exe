@@ -64,7 +64,11 @@ export type AssertionKind =
   | 'title-contains'
 
 export type ConditionKind =
-  'always' | 'previous-passed' | 'previous-failed' | 'assertion-passes' | 'assertion-fails'
+  | 'always'
+  | 'previous-passed'
+  | 'previous-failed'
+  | 'assertion-passes'
+  | 'assertion-fails'
 
 export type LogLevel = 'info' | 'step' | 'resolve' | 'assert' | 'state' | 'warn' | 'error'
 

@@ -4810,3 +4810,58 @@ body[data-view='splash'] {
   opacity: 0.45;
   cursor: default;
 }
+
+.rail-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.rail-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border: var(--hair) solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+}
+
+.rail-row.off {
+  opacity: 0.5;
+}
+
+.rail-row-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  color: var(--muted);
+}
+
+.rail-row-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-meta);
+}
+
+.rail-row-key {
+  height: 28px;
+  padding: 0 6px;
+  border: var(--hair) solid var(--line);
+  border-radius: var(--r-xs);
+  background: var(--field);
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-micro);
+  outline: none;
+}
+
+.rail-row-key:focus {
+  border-color: var(--accent);
+}
+
+.rail-row .ghost-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

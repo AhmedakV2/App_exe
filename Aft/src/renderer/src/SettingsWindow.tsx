@@ -4,12 +4,16 @@ import { THEMES, isThemeId, paintTheme, readTheme, storeTheme, themeOf } from '.
 import type { ThemeId } from './themes'
 import { Glyph } from './icons'
 import AccountSection from './settings/AccountSection'
+import RailSection from './settings/RailSection'
+import { normalizeRail, readRail, storeRail } from './shell/rail'
+import type { RailItem } from './shell/rail'
 
-type SectionId = 'account' | 'appearance' | 'terminal' | 'playback' | 'shortcuts'
+type SectionId = 'account' | 'appearance' | 'rail' | 'terminal' | 'playback' | 'shortcuts'
 
 const SECTIONS: { id: SectionId; label: string; glyph: string }[] = [
   { id: 'account', label: 'Hesap', glyph: 'shield' },
   { id: 'appearance', label: 'Görünüm', glyph: 'sliders' },
+  { id: 'rail', label: 'Sol panel', glyph: 'list' },
   { id: 'terminal', label: 'Terminal', glyph: 'terminal' },
   { id: 'playback', label: 'Oynatma', glyph: 'play' },
   { id: 'shortcuts', label: 'Kısayollar', glyph: 'grid' }
@@ -46,6 +50,7 @@ export default function SettingsWindow(): React.JSX.Element {
   const [shotOnFail, setShotOnFail] = useState(true)
   const [stopOnFail, setStopOnFail] = useState(true)
   const [verifyState, setVerifyState] = useState(true)
+  const [rail, setRail] = useState<RailItem[]>(() => readRail())
 
   useEffect(() => {
     paintTheme(theme)
@@ -69,6 +74,7 @@ export default function SettingsWindow(): React.JSX.Element {
       setShotOnFail(value.screenshotOnFailure)
       setStopOnFail(value.stopOnFailure)
       setVerifyState(value.verifyState)
+      if (value.rail.length) setRail(normalizeRail(value.rail))
     })
   }, [])
 
@@ -113,6 +119,12 @@ export default function SettingsWindow(): React.JSX.Element {
   const toggleVerify = useCallback((next: boolean): void => {
     setVerifyState(next)
     window.aft.patchPrefs({ verifyState: next })
+  }, [])
+
+  const changeRail = useCallback((next: RailItem[]): void => {
+    setRail(next)
+    storeRail(next)
+    window.aft.patchPrefs({ rail: next })
   }, [])
 
   const active = SECTIONS.find((item) => item.id === section) ?? SECTIONS[0]
@@ -185,6 +197,8 @@ export default function SettingsWindow(): React.JSX.Element {
               </div>
             </section>
           ) : null}
+
+          {section === 'rail' ? <RailSection rail={rail} onChange={changeRail} /> : null}
 
           {section === 'terminal' ? (
             <section className="sheet-block">

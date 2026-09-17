@@ -54,7 +54,8 @@ export class InteractionWatcher {
     this.offs.push(
       this.tp.on('Runtime.executionContextCreated', (params, sessionId) => {
         const context = params['context'] as
-          { id?: number; name?: string; auxData?: { frameId?: string } } | undefined
+          | { id?: number; name?: string; auxData?: { frameId?: string } }
+          | undefined
         if (!context || context.name !== WORLD || typeof context.id !== 'number') return
         this.remember(sessionId, String(context.auxData?.frameId ?? ''), context.id)
       })

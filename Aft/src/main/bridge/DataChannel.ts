@@ -137,10 +137,13 @@ export class DataChannel {
     )
 
     ipcMain.handle('aft:data:health', () =>
-      guard('Kimlik sagligi hazir', (): HealthPayload => ({
-        summary: this.store.indexer.health(),
-        fragile: this.store.indexer.fragile(FRAGILE_LIMIT)
-      }))
+      guard(
+        'Kimlik sagligi hazir',
+        (): HealthPayload => ({
+          summary: this.store.indexer.health(),
+          fragile: this.store.indexer.fragile(FRAGILE_LIMIT)
+        })
+      )
     )
 
     ipcMain.handle('aft:data:fragile', (_event, limit: unknown) =>
@@ -150,9 +153,12 @@ export class DataChannel {
     )
 
     ipcMain.handle('aft:data:outbox', () =>
-      guard('Kuyruk durumu hazir', (): OutboxStatePayload => ({
-        summary: this.store.outbox.summary()
-      }))
+      guard(
+        'Kuyruk durumu hazir',
+        (): OutboxStatePayload => ({
+          summary: this.store.outbox.summary()
+        })
+      )
     )
 
     ipcMain.handle('aft:data:flush', (_event, limit: unknown) =>
@@ -171,17 +177,23 @@ export class DataChannel {
     )
 
     ipcMain.handle('aft:data:sweep', () =>
-      guard('Saklama politikasi uygulandi', async (): Promise<SweepPayload> => ({
-        report: await this.store.retention.sweep(),
-        summary: this.store.outbox.summary()
-      }))
+      guard(
+        'Saklama politikasi uygulandi',
+        async (): Promise<SweepPayload> => ({
+          report: await this.store.retention.sweep(),
+          summary: this.store.outbox.summary()
+        })
+      )
     )
 
     ipcMain.handle('aft:data:stats', () =>
-      guard('Veri ozeti hazir', async (): Promise<DataStatsPayload> => ({
-        stats: await this.store.stats(),
-        faults: this.store.driver.fault() ? [this.store.driver.fault()] : []
-      }))
+      guard(
+        'Veri ozeti hazir',
+        async (): Promise<DataStatsPayload> => ({
+          stats: await this.store.stats(),
+          faults: this.store.driver.fault() ? [this.store.driver.fault()] : []
+        })
+      )
     )
   }
 

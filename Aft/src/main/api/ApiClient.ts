@@ -78,7 +78,11 @@ export class ApiClient {
     return this.call<Profile>('GET', '/api/v1/auth/me', null, true)
   }
 
-  async provisionDevice(hostname: string, os: string, appVersion: string): Promise<DeviceProvision> {
+  async provisionDevice(
+    hostname: string,
+    os: string,
+    appVersion: string
+  ): Promise<DeviceProvision> {
     return this.call<DeviceProvision>(
       'POST',
       '/api/v1/devices/provision',

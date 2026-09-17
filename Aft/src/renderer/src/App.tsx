@@ -29,6 +29,8 @@ import type { Command } from './parts/CommandPalette'
 import Brand from './shell/Brand'
 import { NAV, NAV_ICON, PAGE_LABELS } from './shell/nav'
 import type { NavItem } from './shell/nav'
+import { matchShortcut, normalizeRail, railEntries, readRail, storeRail } from './shell/rail'
+import type { RailItem } from './shell/rail'
 import { STEP_LABELS, stepDetail } from './shell/steps'
 import type { PageId } from './shell/prefs'
 import {
@@ -106,6 +108,7 @@ export default function App(): React.JSX.Element {
   const [dockWidth, setDockWidth] = useState(() => readSize(DOCK_KEY, DOCK_SIZE))
   const [devWidth, setDevWidth] = useState(() => readSize(DEV_KEY, DEV_SIZE))
   const [dock, setDock] = useState<DockTab>(() => readDock())
+  const [rail, setRail] = useState<RailItem[]>(() => readRail())
   const [space, setSpace] = useState({ width: 0, height: 0 })
   const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null)
   const [stageWidth, setStageWidth] = useState(0)
@@ -172,7 +175,10 @@ export default function App(): React.JSX.Element {
   }, [stageEl])
 
   useEffect(() => {
-    const off = window.aft.onState((next) => setState(next))
+    const off = window.aft.onState((next) => {
+      setState(next)
+      if (next.devtoolsOpen) setPage('browser')
+    })
     window.aft.requestState()
     return off
   }, [])
@@ -259,21 +265,34 @@ export default function App(): React.JSX.Element {
   }, [playOptions])
 
   useEffect(() => {
+    storeRail(rail)
+  }, [rail])
+
+  useEffect(() => {
     window.aft.publishPrefs({
       theme,
       autoTerminal: autoTerm,
       autoTerminalRestore: autoBack,
       screenshotOnFailure: Boolean(playOptions.screenshotOnFailure),
       stopOnFailure: Boolean(playOptions.stopOnFailure),
-      verifyState: Boolean(playOptions.verifyState)
+      verifyState: Boolean(playOptions.verifyState),
+      rail
     })
-  }, [autoBack, autoTerm, playOptions, theme])
+  }, [autoBack, autoTerm, playOptions, rail, theme])
 
   useEffect(() => {
     return window.aft.onPrefsPatch((patch) => {
       if (isThemeId(patch.theme)) setTheme(patch.theme)
       if (typeof patch.autoTerminal === 'boolean') setAutoTerm(patch.autoTerminal)
       if (typeof patch.autoTerminalRestore === 'boolean') setAutoBack(patch.autoTerminalRestore)
+      if (Array.isArray(patch.rail)) {
+        const next = normalizeRail(patch.rail)
+        const shown = railEntries(next).filter((entry) => !entry.hidden)
+        setRail(next)
+        setPage((current) =>
+          shown.some((entry) => entry.id === current) ? current : (shown[0]?.id ?? current)
+        )
+      }
 
       const keys = ['screenshotOnFailure', 'stopOnFailure', 'verifyState'] as const
       const next: Partial<PlaybackOptions> = {}
@@ -403,9 +422,21 @@ export default function App(): React.JSX.Element {
     window.aft.setDevtoolsSplit(devSize / stageWidth)
   }, [devSize, devtoolsOpen, stageWidth])
 
+  const visibleRail = useMemo(() => railEntries(rail).filter((entry) => !entry.hidden), [rail])
+
   useEffect(() => {
-    if (devtoolsOpen) setPage('browser')
-  }, [devtoolsOpen])
+    const onKey = (event: KeyboardEvent): void => {
+      const combo = matchShortcut(event)
+      if (!combo) return
+      const target = visibleRail.find((entry) => entry.shortcut === combo)
+      if (!target) return
+      event.preventDefault()
+      setPage(target.id)
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [visibleRail])
 
   const nav = useCallback((kind: NavKind): void => window.aft.nav(kind), [])
   const winAction = useCallback((action: WindowAction): void => window.aft.window(action), [])
@@ -486,12 +517,9 @@ export default function App(): React.JSX.Element {
 
   const pick = useCallback((item: NavItem): void => setPage(item.id), [])
 
-  const toggleDock = useCallback(
-    (tab: Exclude<DockTab, null>): void => {
-      setDock((current) => (current === tab ? null : tab))
-    },
-    []
-  )
+  const toggleDock = useCallback((tab: Exclude<DockTab, null>): void => {
+    setDock((current) => (current === tab ? null : tab))
+  }, [])
 
   const onSaved = useCallback((): void => {
     setLibrary((prev) => prev + 1)
@@ -541,6 +569,7 @@ export default function App(): React.JSX.Element {
       group: 'Sayfalar',
       label: item.label + ' sekmesini aç',
       glyph: item.glyph,
+      hint: rail.find((entry) => entry.id === item.id)?.shortcut || undefined,
       keywords: item.id
     }))
 
@@ -655,7 +684,7 @@ export default function App(): React.JSX.Element {
         keywords: 'tema renk ' + item.id
       }))
     )
-  }, [state.vision])
+  }, [rail, state.vision])
 
   const runCommand = useCallback(
     (id: string): void => {
@@ -772,19 +801,22 @@ export default function App(): React.JSX.Element {
 
       <aside className="sidebar">
         <nav className="rail-group" aria-label="Ana gezinme">
-          {NAV.map((item) => {
-            const on = item.id === page
+          {visibleRail.map((entry) => {
+            const on = entry.id === page
+            const label = entry.shortcut
+              ? entry.nav.label + ' (' + entry.shortcut + ')'
+              : entry.nav.label
             return (
               <button
-                key={item.id}
+                key={entry.id}
                 className={'nav-item' + (on ? ' sel' : '')}
-                title={item.label}
-                aria-label={item.label}
+                title={label}
+                aria-label={label}
                 aria-pressed={on}
-                onClick={() => pick(item)}
+                onClick={() => pick(entry.nav)}
                 type="button"
               >
-                <Glyph name={item.glyph} size={NAV_ICON} />
+                <Glyph name={entry.nav.glyph} size={NAV_ICON} />
               </button>
             )
           })}
@@ -816,7 +848,6 @@ export default function App(): React.JSX.Element {
             <Glyph name="terminal" size={NAV_ICON} />
           </button>
         </nav>
-
       </aside>
 
       <main className="stagearea" ref={spaceRef}>
