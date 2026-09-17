@@ -24,6 +24,7 @@ declare global {
       disconnect: () => Promise<ChannelResult<AgentState>>
       approve: (callId: string, approved: boolean) => Promise<ChannelResult<boolean>>
       gateDone: () => void
+      gateClose: () => void
       onApproval: (fn: (request: ApprovalRequest) => void) => () => void
       onStateChanged: (fn: (state: AgentState) => void) => () => void
     }

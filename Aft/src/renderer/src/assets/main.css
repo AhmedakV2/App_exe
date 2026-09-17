@@ -4434,14 +4434,27 @@ body[data-view='splash'] {
   cursor: default;
 }
 
-.gate-link {
+.gate-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
+  border-radius: 8px;
   background: transparent;
-  color: var(--accent);
-  font: inherit;
-  font-size: 12px;
+  color: inherit;
+  opacity: 0.55;
   cursor: pointer;
-  align-self: center;
+  -webkit-app-region: no-drag;
+}
+
+.gate-close:hover {
+  opacity: 1;
+  background: var(--line);
 }
 
 .splash-track {

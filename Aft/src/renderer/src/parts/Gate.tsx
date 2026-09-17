@@ -11,8 +11,6 @@ export default function Gate(): React.JSX.Element {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [baseUrl, setBaseUrl] = useState('')
-  const [serverOpen, setServerOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -25,10 +23,9 @@ export default function Gate(): React.JSX.Element {
     let active = true
 
     const check = async (): Promise<void> => {
-      const [current, settings] = await Promise.all([window.aftApi.state(), window.aftApi.config()])
+      const result = await window.aftApi.state()
       if (!active) return
-      if (settings.ok && settings.data) setBaseUrl(settings.data.config.baseUrl)
-      if (current.ok && current.data?.session.signedIn) enter()
+      if (result.ok && result.data?.session.signedIn) enter()
       else setPhase('auth')
     }
 
@@ -50,14 +47,6 @@ export default function Gate(): React.JSX.Element {
       }
 
       setBusy(true)
-      const target = baseUrl.trim().replace(/\/+$/, '')
-      if (target.length === 0) {
-        setBusy(false)
-        setError('Sunucu adresi bos olamaz')
-        return
-      }
-      await window.aftApi.saveConfig({ baseUrl: target })
-
       const result =
         mode === 'login'
           ? await window.aftApi.login({ email: email.trim(), password })
@@ -72,7 +61,7 @@ export default function Gate(): React.JSX.Element {
       if (result.ok) enter()
       else setError(result.message)
     },
-    [mode, email, password, displayName, baseUrl, enter]
+    [mode, email, password, displayName, enter]
   )
 
   const swap = (next: Mode) => (): void => {
@@ -82,6 +71,23 @@ export default function Gate(): React.JSX.Element {
 
   return (
     <div className="gate">
+      <button
+        className="gate-close"
+        type="button"
+        title="Kapat"
+        aria-label="Kapat"
+        onClick={() => window.aftApi.gateClose()}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M6 6 L18 18 M18 6 L6 18"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+
       <div className="gate-head">
         <svg
           className="gate-logo"
@@ -165,27 +171,6 @@ export default function Gate(): React.JSX.Element {
           <button className="gate-submit" type="submit" disabled={busy}>
             {busy ? 'Lutfen bekleyin' : mode === 'login' ? 'Giris yap' : 'Hesap olustur'}
           </button>
-
-          <button
-            className="gate-link"
-            type="button"
-            onClick={() => setServerOpen((open) => !open)}
-          >
-            {serverOpen ? 'Sunucu adresini gizle' : 'Sunucu adresi'}
-          </button>
-
-          {serverOpen ? (
-            <label className="gate-field">
-              <span>Sunucu adresi</span>
-              <input
-                type="text"
-                value={baseUrl}
-                spellCheck={false}
-                placeholder="http://10.6.100.134:8092"
-                onChange={(e) => setBaseUrl(e.target.value)}
-              />
-            </label>
-          ) : null}
         </form>
       ) : (
         <div className="gate-body gate-wait" role="status" aria-label="Yukleniyor">

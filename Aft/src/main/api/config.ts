@@ -6,7 +6,7 @@ import type { AgentConfig } from './types'
 export type { AgentConfig }
 
 export const DEFAULT_CONFIG: AgentConfig = {
-  baseUrl: '',
+  baseUrl: 'http://10.6.100.134:8092',
   orgId: '',
   deviceKey: '',
   autoConnect: false

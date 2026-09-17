@@ -893,6 +893,10 @@ app.whenReady().then(() => {
   ipcMain.on('aft:state', () => pushState())
 
   ipcMain.on('aft:gate:done', () => passGate())
+  ipcMain.on('aft:gate:close', () => {
+    closeSplash()
+    app.quit()
+  })
 
   openSplash()
   createWindow()

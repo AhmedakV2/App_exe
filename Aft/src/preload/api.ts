@@ -13,6 +13,7 @@ const aftApi = {
   approve: (callId: string, approved: boolean) =>
     ipcRenderer.invoke('aft:api:approve', { callId, approved }),
   gateDone: (): void => ipcRenderer.send('aft:gate:done'),
+  gateClose: (): void => ipcRenderer.send('aft:gate:close'),
   onApproval: (fn: (request: unknown) => void): (() => void) => {
     const handler = (_event: IpcRendererEvent, request: unknown): void => fn(request)
     ipcRenderer.on('aft:api:approval', handler)
