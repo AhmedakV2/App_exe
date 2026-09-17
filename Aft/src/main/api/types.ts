@@ -16,10 +16,8 @@ export interface ToolResult {
 }
 
 export interface AgentConfig {
-  baseUrl: string
   orgId: string
   deviceKey: string
-  autoConnect: boolean
 }
 
 export interface SessionState {
@@ -47,6 +45,12 @@ export interface DeviceInfo {
   appVersion: string
   status: string
   lastSeenAt: string | null
+}
+
+export interface DeviceProvision {
+  orgId: string
+  deviceKey: string
+  device: DeviceInfo
 }
 
 export interface AgentEndpoint {

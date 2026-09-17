@@ -1,9 +1,7 @@
 import type { ChannelResult } from '../main/bridge/types'
 import type {
-  AgentConfig,
   AgentState,
   ApprovalRequest,
-  ConfigPayload,
   LoginPayload,
   ProfilePayload
 } from '../main/bridge/api-types'
@@ -12,8 +10,6 @@ declare global {
   interface Window {
     aftApi: {
       state: () => Promise<ChannelResult<AgentState>>
-      config: () => Promise<ChannelResult<ConfigPayload>>
-      saveConfig: (patch: Partial<AgentConfig>) => Promise<ChannelResult<ConfigPayload>>
       login: (input: { email: string; password: string }) => Promise<ChannelResult<LoginPayload>>
       register: (input: {
         email: string

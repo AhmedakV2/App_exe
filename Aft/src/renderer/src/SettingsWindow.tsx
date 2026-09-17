@@ -4,13 +4,11 @@ import { THEMES, isThemeId, paintTheme, readTheme, storeTheme, themeOf } from '.
 import type { ThemeId } from './themes'
 import { Glyph } from './icons'
 import AccountSection from './settings/AccountSection'
-import ConnectionSection from './settings/ConnectionSection'
 
-type SectionId = 'account' | 'connection' | 'appearance' | 'terminal' | 'playback' | 'shortcuts'
+type SectionId = 'account' | 'appearance' | 'terminal' | 'playback' | 'shortcuts'
 
 const SECTIONS: { id: SectionId; label: string; glyph: string }[] = [
   { id: 'account', label: 'Hesap', glyph: 'shield' },
-  { id: 'connection', label: 'Bağlantı', glyph: 'cloud' },
   { id: 'appearance', label: 'Görünüm', glyph: 'sliders' },
   { id: 'terminal', label: 'Terminal', glyph: 'terminal' },
   { id: 'playback', label: 'Oynatma', glyph: 'play' },
@@ -158,8 +156,6 @@ export default function SettingsWindow(): React.JSX.Element {
           <h2 className="set-title">{active.label}</h2>
 
           {section === 'account' ? <AccountSection /> : null}
-
-          {section === 'connection' ? <ConnectionSection /> : null}
 
           {section === 'appearance' ? (
             <section className="sheet-block">

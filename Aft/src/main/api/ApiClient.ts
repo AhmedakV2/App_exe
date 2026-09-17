@@ -1,9 +1,9 @@
 import type { AuthStore, Session } from './AuthStore'
-import type { ConfigStore } from './config'
-import type { DeviceInfo, Profile } from './types'
+import { API_BASE_URL, type ConfigStore } from './config'
+import type { DeviceInfo, DeviceProvision, Profile } from './types'
 import { ApiError, retryAfterMillis } from './ApiError'
 
-export type { DeviceInfo, Profile }
+export type { DeviceInfo, DeviceProvision, Profile }
 export { ApiError }
 
 export interface LoginInput {
@@ -72,6 +72,15 @@ export class ApiClient {
     return this.call<Profile>('GET', '/api/v1/auth/me', null, true)
   }
 
+  async provisionDevice(hostname: string, os: string, appVersion: string): Promise<DeviceProvision> {
+    return this.call<DeviceProvision>(
+      'POST',
+      '/api/v1/devices/provision',
+      { hostname, os, appVersion },
+      true
+    )
+  }
+
   async registerDevice(hostname: string, os: string, appVersion: string): Promise<DeviceInfo> {
     const settings = await this.config.read()
     return this.call<DeviceInfo>(
@@ -133,12 +142,11 @@ export class ApiClient {
   ): Promise<T> {
     if (authorized) await this.ensureToken()
 
-    const settings = await this.config.read()
     const headers: Record<string, string> = { ...extraHeaders }
     if (body !== null && body !== undefined) headers['Content-Type'] = 'application/json'
     if (authorized) headers.Authorization = 'Bearer ' + this.auth.accessToken()
 
-    const response = await fetch(settings.baseUrl + path, {
+    const response = await fetch(API_BASE_URL + path, {
       method,
       headers,
       body: body === null || body === undefined ? undefined : JSON.stringify(body)

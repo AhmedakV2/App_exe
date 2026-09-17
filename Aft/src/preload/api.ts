@@ -3,8 +3,6 @@ import type { IpcRendererEvent } from 'electron'
 
 const aftApi = {
   state: () => ipcRenderer.invoke('aft:api:state'),
-  config: () => ipcRenderer.invoke('aft:api:config'),
-  saveConfig: (patch: unknown) => ipcRenderer.invoke('aft:api:save-config', patch),
   login: (input: unknown) => ipcRenderer.invoke('aft:api:login', input),
   register: (input: unknown) => ipcRenderer.invoke('aft:api:register', input),
   logout: () => ipcRenderer.invoke('aft:api:logout'),

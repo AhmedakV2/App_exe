@@ -8,6 +8,7 @@ const MIN_PASSWORD = 12
 const EMPTY_STATE: AgentState = {
   session: { signedIn: false, email: '', displayName: '', expiresAt: 0 },
   connected: false,
+  orgId: '',
   device: null,
   capabilities: []
 }
