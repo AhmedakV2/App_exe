@@ -97,17 +97,6 @@ export class ApiClient {
     )
   }
 
-  async registerDevice(hostname: string, os: string, appVersion: string): Promise<DeviceInfo> {
-    const settings = await this.config.read()
-    return this.call<DeviceInfo>(
-      'POST',
-      '/api/v1/devices/register',
-      { hostname, os, appVersion },
-      false,
-      { 'X-Aft-Key': settings.deviceKey }
-    )
-  }
-
   async heartbeat(deviceId: string): Promise<void> {
     const settings = await this.config.read()
     await this.call('POST', '/api/v1/devices/' + deviceId + '/heartbeat', {}, false, {
@@ -253,8 +242,10 @@ export class ApiClient {
     })
 
     if (!response.ok) throw await this.toError(response)
-    if (response.status === 204) return undefined as T
-    return (await response.json()) as T
+
+    const payload = await response.text()
+    if (!payload) return undefined as T
+    return JSON.parse(payload) as T
   }
 
   private async toError(response: Response): Promise<ApiError> {

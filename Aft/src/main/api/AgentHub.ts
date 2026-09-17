@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import type { ApiClient } from './ApiClient'
 import { EMPTY_CHAT } from './agent-types'
-import type { AgentChatState, AgentLogEntry, AgentLogLevel, ChatTurn } from './agent-types'
+import type {
+  AgentChatState,
+  AgentLogEntry,
+  AgentLogLevel,
+  AgentMessageDto,
+  ChatTurn
+} from './agent-types'
 
 export interface AgentHubOptions {
   client: ApiClient
@@ -47,6 +53,18 @@ export class AgentHub {
   bind(orgId: string, deviceId: string | null): void {
     this.orgId = orgId
     this.deviceId = deviceId
+    if (!this.state.model) void this.loadModel()
+  }
+
+  private async loadModel(): Promise<void> {
+    try {
+      const info = await this.options.client.agentModels()
+      if (this.state.model) return
+      this.state.model = info.plannerModel
+      this.publish()
+    } catch {
+      return
+    }
   }
 
   reset(): void {
@@ -95,14 +113,42 @@ export class AgentHub {
 
     try {
       await this.stream(sessionId, text, reply.id)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      this.state.error = message
-      this.finishPending(message, true)
-      this.log('error', 'Ajan istegi basarisiz', [message])
+    } catch (streamError) {
+      this.log('warn', 'Akis kurulamadi, tek seferlik yanit deneniyor', [reason(streamError)])
+      try {
+        const answer = await this.options.client.sendAgentMessage(sessionId, text)
+        this.applyAnswer(reply.id, answer.content)
+        this.state.model = answer.model || this.state.model
+        this.log('info', 'Ajan yaniti tamamlandi')
+      } catch (error) {
+        const message = reason(error)
+        this.state.error = message
+        this.finishPending(message, true)
+        this.log('error', 'Ajan istegi basarisiz', [message])
+        await this.resync()
+      }
     }
 
     return this.snapshot()
+  }
+
+  private applyAnswer(replyId: string, content: string): void {
+    const target = this.state.turns.find((item) => item.id === replyId)
+    if (target) target.text = content
+    this.settle(replyId)
+  }
+
+  private async resync(): Promise<void> {
+    if (!this.state.sessionId) return
+    try {
+      const detail = await this.options.client.agentSession(this.state.sessionId)
+      this.state.title = detail.session.title
+      this.state.model = detail.session.model
+      this.state.turns = detail.messages.filter(visible).map(toTurn)
+      this.publish()
+    } catch {
+      return
+    }
   }
 
   private async ensureSession(text: string): Promise<string> {
@@ -211,6 +257,25 @@ export class AgentHub {
 
 function controllerAborted(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError'
+}
+
+function reason(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function visible(message: AgentMessageDto): boolean {
+  return message.role === 'USER' || message.role === 'ASSISTANT'
+}
+
+function toTurn(message: AgentMessageDto): ChatTurn {
+  return {
+    id: message.id,
+    role: message.role === 'USER' ? 'user' : 'assistant',
+    text: message.content,
+    pending: false,
+    failed: false,
+    at: Date.parse(message.createdAt) || Date.now()
+  }
 }
 
 function turn(role: ChatTurn['role'], text: string, pending: boolean): ChatTurn {
