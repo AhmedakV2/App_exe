@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import PasswordField from './PasswordField'
 
 type Phase = 'checking' | 'auth' | 'loading'
 type Mode = 'login' | 'register'
@@ -150,17 +151,14 @@ export default function Gate(): React.JSX.Element {
             />
           </label>
 
-          <label className="gate-field">
-            <span>Parola</span>
-            <input
-              type="password"
-              value={password}
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              required
-              minLength={mode === 'register' ? MIN_PASSWORD : undefined}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
+          <PasswordField
+            label="Parola"
+            value={password}
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            minLength={mode === 'register' ? MIN_PASSWORD : undefined}
+            required
+            onChange={setPassword}
+          />
 
           {error ? (
             <p className="gate-error" role="alert">

@@ -4425,6 +4425,42 @@ body[data-view='splash'] {
   border-color: var(--accent);
 }
 
+.pass-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pass-wrap input {
+  width: 100%;
+  padding-right: 42px;
+}
+
+.pass-eye {
+  position: absolute;
+  right: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pass-eye:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.pass-eye[aria-pressed='true'] {
+  color: var(--accent);
+}
+
 .gate-error {
   margin: 0;
   font-size: 12px;
