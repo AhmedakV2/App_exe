@@ -3,6 +3,19 @@ import type { AppPrefs } from '../../main/browser/types'
 import { THEMES, isThemeId, paintTheme, readTheme, storeTheme, themeOf } from './themes'
 import type { ThemeId } from './themes'
 import { Glyph } from './icons'
+import AccountSection from './settings/AccountSection'
+import ConnectionSection from './settings/ConnectionSection'
+
+type SectionId = 'account' | 'connection' | 'appearance' | 'terminal' | 'playback' | 'shortcuts'
+
+const SECTIONS: { id: SectionId; label: string; glyph: string }[] = [
+  { id: 'account', label: 'Hesap', glyph: 'shield' },
+  { id: 'connection', label: 'Bağlantı', glyph: 'cloud' },
+  { id: 'appearance', label: 'Görünüm', glyph: 'sliders' },
+  { id: 'terminal', label: 'Terminal', glyph: 'terminal' },
+  { id: 'playback', label: 'Oynatma', glyph: 'play' },
+  { id: 'shortcuts', label: 'Kısayollar', glyph: 'grid' }
+]
 
 const SHORTCUTS: { name: string; code: string }[] = [
   { name: 'Terminal', code: 'Ctrl+K' },
@@ -15,7 +28,20 @@ const SHORTCUTS: { name: string; code: string }[] = [
   { name: 'Komut geçmişi', code: '↑ / ↓' }
 ]
 
+const SECTION_KEY = 'aft:settings-section'
+
+function readSection(): SectionId {
+  try {
+    const raw = window.localStorage.getItem(SECTION_KEY)
+    const match = SECTIONS.find((item) => item.id === raw)
+    return match ? match.id : 'account'
+  } catch {
+    return 'account'
+  }
+}
+
 export default function SettingsWindow(): React.JSX.Element {
+  const [section, setSection] = useState<SectionId>(() => readSection())
   const [theme, setTheme] = useState<ThemeId>(() => readTheme())
   const [autoTerm, setAutoTerm] = useState(true)
   const [autoBack, setAutoBack] = useState(false)
@@ -28,6 +54,14 @@ export default function SettingsWindow(): React.JSX.Element {
     storeTheme(theme)
     window.aft.setChrome(themeOf(theme).chrome)
   }, [theme])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SECTION_KEY, section)
+    } catch {
+      return
+    }
+  }, [section])
 
   useEffect(() => {
     return window.aft.onPrefs((value: AppPrefs) => {
@@ -83,6 +117,8 @@ export default function SettingsWindow(): React.JSX.Element {
     window.aft.patchPrefs({ verifyState: next })
   }, [])
 
+  const active = SECTIONS.find((item) => item.id === section) ?? SECTIONS[0]
+
   return (
     <div className="win">
       <header className="win-head">
@@ -102,104 +138,135 @@ export default function SettingsWindow(): React.JSX.Element {
         </button>
       </header>
 
-      <div className="win-body">
-        <section className="sheet-block">
-          <h3 className="sheet-label">Tema</h3>
-          <div className="theme-grid">
-            {THEMES.map((item) => (
-              <button
-                key={item.id}
-                className={'theme-card' + (item.id === theme ? ' sel' : '')}
-                onClick={() => pickTheme(item.id)}
-                aria-pressed={item.id === theme}
-                type="button"
-              >
-                <span className="theme-swatch">
-                  {item.swatch.map((color) => (
-                    <span key={color} style={{ background: color }} />
-                  ))}
-                </span>
-                <span className="theme-name">{item.label}</span>
-                {item.id === theme ? (
-                  <span className="theme-mark">
-                    <Glyph name="check" size={12} />
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </div>
-        </section>
+      <div className="set-shell">
+        <nav className="set-nav" aria-label="Ayar bölümleri">
+          {SECTIONS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={'set-nav-item' + (item.id === section ? ' sel' : '')}
+              aria-current={item.id === section}
+              onClick={() => setSection(item.id)}
+            >
+              <Glyph name={item.glyph} size={14} />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
 
-        <section className="sheet-block">
-          <h3 className="sheet-label">Terminal</h3>
-          <label className="opt-row">
-            <input
-              type="checkbox"
-              checked={autoTerm}
-              onChange={(event) => toggleAutoTerm(event.target.checked)}
-            />
-            <span className="opt-text">
-              <span className="opt-name">Koşumda terminali aç</span>
-            </span>
-          </label>
-          <label className={'opt-row' + (autoTerm ? '' : ' off')}>
-            <input
-              type="checkbox"
-              checked={autoBack}
-              disabled={!autoTerm}
-              onChange={(event) => toggleAutoBack(event.target.checked)}
-            />
-            <span className="opt-text">
-              <span className="opt-name">Koşum bitince kapat</span>
-            </span>
-          </label>
-        </section>
+        <div className="set-panel">
+          <h2 className="set-title">{active.label}</h2>
 
-        <section className="sheet-block">
-          <h3 className="sheet-label">Oynatma</h3>
-          <label className="opt-row">
-            <input
-              type="checkbox"
-              checked={shotOnFail}
-              onChange={(event) => toggleShot(event.target.checked)}
-            />
-            <span className="opt-text">
-              <span className="opt-name">Hatada ekran görüntüsü al</span>
-            </span>
-          </label>
-          <label className="opt-row">
-            <input
-              type="checkbox"
-              checked={stopOnFail}
-              onChange={(event) => toggleStop(event.target.checked)}
-            />
-            <span className="opt-text">
-              <span className="opt-name">İlk hatada dur</span>
-            </span>
-          </label>
-          <label className="opt-row">
-            <input
-              type="checkbox"
-              checked={verifyState}
-              onChange={(event) => toggleVerify(event.target.checked)}
-            />
-            <span className="opt-text">
-              <span className="opt-name">Sayfa durumunu doğrula</span>
-            </span>
-          </label>
-        </section>
+          {section === 'account' ? <AccountSection /> : null}
 
-        <section className="sheet-block">
-          <h3 className="sheet-label">Kısayollar</h3>
-          <div className="key-rows">
-            {SHORTCUTS.map((item) => (
-              <div key={item.code} className="key-row">
-                <span className="key-name">{item.name}</span>
-                <span className="key-code">{item.code}</span>
+          {section === 'connection' ? <ConnectionSection /> : null}
+
+          {section === 'appearance' ? (
+            <section className="sheet-block">
+              <h3 className="sheet-label">Tema</h3>
+              <div className="theme-grid">
+                {THEMES.map((item) => (
+                  <button
+                    key={item.id}
+                    className={'theme-card' + (item.id === theme ? ' sel' : '')}
+                    onClick={() => pickTheme(item.id)}
+                    aria-pressed={item.id === theme}
+                    type="button"
+                  >
+                    <span className="theme-swatch">
+                      {item.swatch.map((color) => (
+                        <span key={color} style={{ background: color }} />
+                      ))}
+                    </span>
+                    <span className="theme-name">{item.label}</span>
+                    {item.id === theme ? (
+                      <span className="theme-mark">
+                        <Glyph name="check" size={12} />
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
+            </section>
+          ) : null}
+
+          {section === 'terminal' ? (
+            <section className="sheet-block">
+              <h3 className="sheet-label">Terminal</h3>
+              <label className="opt-row">
+                <input
+                  type="checkbox"
+                  checked={autoTerm}
+                  onChange={(event) => toggleAutoTerm(event.target.checked)}
+                />
+                <span className="opt-text">
+                  <span className="opt-name">Koşumda terminali aç</span>
+                </span>
+              </label>
+              <label className={'opt-row' + (autoTerm ? '' : ' off')}>
+                <input
+                  type="checkbox"
+                  checked={autoBack}
+                  disabled={!autoTerm}
+                  onChange={(event) => toggleAutoBack(event.target.checked)}
+                />
+                <span className="opt-text">
+                  <span className="opt-name">Koşum bitince kapat</span>
+                </span>
+              </label>
+            </section>
+          ) : null}
+
+          {section === 'playback' ? (
+            <section className="sheet-block">
+              <h3 className="sheet-label">Oynatma</h3>
+              <label className="opt-row">
+                <input
+                  type="checkbox"
+                  checked={shotOnFail}
+                  onChange={(event) => toggleShot(event.target.checked)}
+                />
+                <span className="opt-text">
+                  <span className="opt-name">Hatada ekran görüntüsü al</span>
+                </span>
+              </label>
+              <label className="opt-row">
+                <input
+                  type="checkbox"
+                  checked={stopOnFail}
+                  onChange={(event) => toggleStop(event.target.checked)}
+                />
+                <span className="opt-text">
+                  <span className="opt-name">İlk hatada dur</span>
+                </span>
+              </label>
+              <label className="opt-row">
+                <input
+                  type="checkbox"
+                  checked={verifyState}
+                  onChange={(event) => toggleVerify(event.target.checked)}
+                />
+                <span className="opt-text">
+                  <span className="opt-name">Sayfa durumunu doğrula</span>
+                </span>
+              </label>
+            </section>
+          ) : null}
+
+          {section === 'shortcuts' ? (
+            <section className="sheet-block">
+              <h3 className="sheet-label">Kısayollar</h3>
+              <div className="key-rows">
+                {SHORTCUTS.map((item) => (
+                  <div key={item.code} className="key-row">
+                    <span className="key-name">{item.name}</span>
+                    <span className="key-code">{item.code}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </div>
       </div>
     </div>
   )

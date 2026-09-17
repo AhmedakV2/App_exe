@@ -76,7 +76,7 @@ export default function Gate(): React.JSX.Element {
         type="button"
         title="Kapat"
         aria-label="Kapat"
-        onClick={() => window.aftApi.gateClose()}
+        onClick={() => window.aftApi.quit()}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path

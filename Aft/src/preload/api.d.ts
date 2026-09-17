@@ -4,7 +4,8 @@ import type {
   AgentState,
   ApprovalRequest,
   ConfigPayload,
-  LoginPayload
+  LoginPayload,
+  ProfilePayload
 } from '../main/bridge/api-types'
 
 declare global {
@@ -20,11 +21,16 @@ declare global {
         displayName: string
       }) => Promise<ChannelResult<LoginPayload>>
       logout: () => Promise<ChannelResult<AgentState>>
+      profile: () => Promise<ChannelResult<ProfilePayload>>
+      changePassword: (input: {
+        currentPassword: string
+        newPassword: string
+      }) => Promise<ChannelResult<boolean>>
       connect: () => Promise<ChannelResult<AgentState>>
       disconnect: () => Promise<ChannelResult<AgentState>>
       approve: (callId: string, approved: boolean) => Promise<ChannelResult<boolean>>
       gateDone: () => void
-      gateClose: () => void
+      quit: () => void
       onApproval: (fn: (request: ApprovalRequest) => void) => () => void
       onStateChanged: (fn: (state: AgentState) => void) => () => void
     }

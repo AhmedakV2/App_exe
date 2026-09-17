@@ -10,6 +10,8 @@ export type ApiChannelName =
   | 'aft:api:disconnect'
   | 'aft:api:approve'
   | 'aft:api:register'
+  | 'aft:api:profile'
+  | 'aft:api:change-password'
 
 export interface AgentState {
   session: SessionState
@@ -21,6 +23,10 @@ export interface AgentState {
 export interface LoginPayload {
   profile: Profile
   state: AgentState
+}
+
+export interface ProfilePayload {
+  profile: Profile
 }
 
 export interface ConfigPayload {

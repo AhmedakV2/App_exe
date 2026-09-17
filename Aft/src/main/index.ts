@@ -42,10 +42,10 @@ const SPLASH_WIDTH = 480
 const SPLASH_HEIGHT = 620
 const SPLASH_MIN_MS = 1200
 const SPLASH_MAX_MS = 16000
-const SETTINGS_WIDTH = 392
-const SETTINGS_HEIGHT = 620
-const SETTINGS_MIN_WIDTH = 320
-const SETTINGS_MIN_HEIGHT = 280
+const SETTINGS_WIDTH = 820
+const SETTINGS_HEIGHT = 640
+const SETTINGS_MIN_WIDTH = 640
+const SETTINGS_MIN_HEIGHT = 440
 const DEVTOOLS_RATIO = 0.45
 const DEVTOOLS_MIN_RATIO = 0.15
 const DEVTOOLS_MAX_RATIO = 0.8
@@ -893,11 +893,11 @@ app.whenReady().then(() => {
   ipcMain.on('aft:state', () => pushState())
 
   ipcMain.on('aft:gate:done', () => passGate())
-  ipcMain.on('aft:gate:close', () => {
+
+  ipcMain.on('aft:app:quit', () => {
     closeSplash()
     app.quit()
   })
-
   openSplash()
   createWindow()
 })

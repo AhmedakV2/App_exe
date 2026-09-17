@@ -8,7 +8,8 @@ export const PAGE_IDS = [
   'stats',
   'identity',
   'coverage',
-  'data'
+  'data',
+  'agent'
 ] as const
 
 export type PageId = (typeof PAGE_IDS)[number]

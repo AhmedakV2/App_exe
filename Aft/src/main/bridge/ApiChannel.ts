@@ -10,7 +10,13 @@ import type { Indexer } from '../data'
 import type { DescriptorStore } from '../identity'
 import type { ContextStore, ScenarioStore } from '../scenario'
 import { guard } from './guard'
-import type { AgentState, ApprovalRequest, ConfigPayload, LoginPayload } from './api-types'
+import type {
+  AgentState,
+  ApprovalRequest,
+  ConfigPayload,
+  LoginPayload,
+  ProfilePayload
+} from './api-types'
 
 const APPROVAL_EVENT = 'aft:api:approval'
 const STATE_EVENT = 'aft:api:state-changed'
@@ -79,6 +85,18 @@ export class ApiChannel {
           input as { email: string; password: string; displayName: string }
         )
         return { profile, state: this.state() }
+      })
+    )
+
+    ipcMain.handle('aft:api:profile', () =>
+      guard('profil', async (): Promise<ProfilePayload> => ({ profile: await this.client.me() }))
+    )
+
+    ipcMain.handle('aft:api:change-password', (_event, input: unknown) =>
+      guard('parola', async (): Promise<boolean> => {
+        const change = input as { currentPassword: string; newPassword: string }
+        await this.client.changePassword(change.currentPassword, change.newPassword)
+        return true
       })
     )
 

@@ -12,7 +12,8 @@ export const NAV: NavItem[] = [
   { id: 'stats', label: 'İstatistik', glyph: 'spark' },
   { id: 'identity', label: 'Kimlik', glyph: 'pulse' },
   { id: 'coverage', label: 'Kapsam', glyph: 'radar' },
-  { id: 'data', label: 'Veri', glyph: 'database' }
+  { id: 'data', label: 'Veri', glyph: 'database' },
+  { id: 'agent', label: 'Ajan', glyph: 'chat' }
 ]
 
 export const PAGE_LABELS: Record<PageId, string> = {
@@ -22,5 +23,6 @@ export const PAGE_LABELS: Record<PageId, string> = {
   stats: 'İstatistik',
   identity: 'Kimlik',
   coverage: 'Kapsam',
-  data: 'Veri'
+  data: 'Veri',
+  agent: 'Ajan'
 }

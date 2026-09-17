@@ -7,6 +7,7 @@ import type {
   StageBox,
   WindowAction
 } from '../../main/browser/types'
+import { AgentPanel } from './parts/AgentPanel'
 import { isThemeId, paintTheme, readTheme, storeTheme, THEMES, themeOf } from './themes'
 import type { ThemeId } from './themes'
 import { Glyph, IconButton } from './icons'
@@ -900,6 +901,7 @@ export default function App(): React.JSX.Element {
           {page === 'identity' ? <IdentityPage revision={library} onReport={report} /> : null}
           {page === 'coverage' ? <CoveragePage revision={library} onReport={report} /> : null}
           {page === 'data' ? <DataPage revision={library} onReport={report} /> : null}
+          {page === 'agent' ? <AgentPanel /> : null}
         </div>
 
         {terminalOpen ? (

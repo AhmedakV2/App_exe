@@ -64,6 +64,10 @@ export class ApiClient {
     await this.auth.clear()
   }
 
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await this.call('POST', '/api/v1/auth/password', { currentPassword, newPassword }, true)
+  }
+
   async me(): Promise<Profile> {
     return this.call<Profile>('GET', '/api/v1/auth/me', null, true)
   }

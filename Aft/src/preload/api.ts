@@ -8,12 +8,14 @@ const aftApi = {
   login: (input: unknown) => ipcRenderer.invoke('aft:api:login', input),
   register: (input: unknown) => ipcRenderer.invoke('aft:api:register', input),
   logout: () => ipcRenderer.invoke('aft:api:logout'),
+  profile: () => ipcRenderer.invoke('aft:api:profile'),
+  changePassword: (input: unknown) => ipcRenderer.invoke('aft:api:change-password', input),
   connect: () => ipcRenderer.invoke('aft:api:connect'),
   disconnect: () => ipcRenderer.invoke('aft:api:disconnect'),
   approve: (callId: string, approved: boolean) =>
     ipcRenderer.invoke('aft:api:approve', { callId, approved }),
   gateDone: (): void => ipcRenderer.send('aft:gate:done'),
-  gateClose: (): void => ipcRenderer.send('aft:gate:close'),
+  quit: (): void => ipcRenderer.send('aft:app:quit'),
   onApproval: (fn: (request: unknown) => void): (() => void) => {
     const handler = (_event: IpcRendererEvent, request: unknown): void => fn(request)
     ipcRenderer.on('aft:api:approval', handler)
