@@ -1221,6 +1221,15 @@ textarea {
   padding: 0 var(--sp-3) var(--sp-3);
 }
 
+.rec-panel,
+.run-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
 .side-list {
   flex: 1;
   min-height: 0;
@@ -4051,6 +4060,12 @@ textarea {
 .rec-list + .dock-block,
 .side-list + .dock-block {
   border-top: var(--hair) solid var(--line);
+}
+
+.dock-foot {
+  flex: 0 0 auto;
+  max-height: 46%;
+  overflow-y: auto;
 }
 
 .dock-label {
