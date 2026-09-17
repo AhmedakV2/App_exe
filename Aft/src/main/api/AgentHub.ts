@@ -221,6 +221,14 @@ export class AgentHub {
       return
     }
 
+    if (event.name === 'error') {
+      const message = event.data || 'Model yanit veremedi'
+      this.state.error = message
+      this.finishPending(message, true)
+      this.log('error', 'Ajan yaniti basarisiz', [message])
+      return
+    }
+
     if (event.name === 'done') {
       this.finishPending('', false)
       this.log('info', 'Ajan yaniti tamamlandi')
@@ -328,8 +336,19 @@ function stale(error: unknown): boolean {
   return status === 400 || status === 404 || status === 422
 }
 
+const SOCKET_HINTS: Record<string, string> = {
+  terminated: 'Sunucu yaniti tamamlamadan baglantiyi kapatti',
+  'fetch failed': 'Sunucuya ulasilamadi',
+  'other side closed': 'Sunucu baglantiyi kapatti'
+}
+
 function reason(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  if (!(error instanceof Error)) return String(error)
+  const hint = SOCKET_HINTS[error.message]
+  if (!hint) return error.message
+  const cause = (error as { cause?: unknown }).cause
+  const detail = cause instanceof Error ? cause.message : ''
+  return detail ? hint + ' (' + detail + ')' : hint
 }
 
 function visible(message: AgentMessageDto): boolean {
