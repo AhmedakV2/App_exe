@@ -241,6 +241,7 @@ export class ApiChannel {
   private async establish(): Promise<AgentState> {
     const session = this.auth.current()
     if (!session) throw new Error('Once giris yapin')
+    if (this.connected) return this.state()
 
     this.failure = ''
     unmountAgent()
