@@ -74,7 +74,9 @@ export default function RunPanel({
   const [running, setRunning] = useState(false)
 
   const selected = picked === null ? request : picked
+  const activeId = live.length ? live[live.length - 1].stepId : ''
   const listRef = useRef<HTMLDivElement | null>(null)
+  const activeRef = useRef<HTMLDivElement | null>(null)
   const pickRef = useRef<HTMLDivElement | null>(null)
   const reportRef = useRef(onReport)
   const busyRef = useRef(onBusy)
@@ -142,8 +144,17 @@ export default function RunPanel({
 
   useEffect(() => {
     const list = listRef.current
-    if (list) list.scrollTop = list.scrollHeight
-  }, [live.length])
+    const node = activeRef.current
+    if (!list) return
+
+    if (!node) {
+      list.scrollTop = list.scrollHeight
+      return
+    }
+
+    const target = node.offsetTop - list.clientHeight / 2 + node.clientHeight / 2
+    list.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
+  }, [activeId, live.length])
 
   const start = useCallback(async (): Promise<void> => {
     if (!selected) return
@@ -238,7 +249,6 @@ export default function RunPanel({
 
   const shown = useMemo(() => (run ? flatten(run.steps) : live), [live, run])
   const percentDone = progress.total ? progress.done / progress.total : 0
-  const activeId = live.length ? live[live.length - 1].stepId : ''
 
   return (
     <section className="run-panel">
@@ -322,6 +332,7 @@ export default function RunPanel({
           shown.map((item) => (
             <div
               key={item.stepId + item.index}
+              ref={item.stepId === activeId ? activeRef : null}
               className={
                 'run-step ' +
                 statusTone(item.status) +
@@ -347,7 +358,7 @@ export default function RunPanel({
       </div>
 
       {run ? (
-        <div className="dock-block">
+        <div className="dock-block dock-foot">
           <span className="dock-label">Özet</span>
 
           <div className="metric-row tight">

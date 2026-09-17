@@ -20,6 +20,13 @@ interface SseEvent {
   data: string
 }
 
+class StreamOpenError extends Error {
+  constructor(readonly source: unknown) {
+    super(reason(source))
+    this.name = 'StreamOpenError'
+  }
+}
+
 function parseBlock(block: string): SseEvent | null {
   let name = 'message'
   const lines: string[] = []
@@ -56,17 +63,6 @@ export class AgentHub {
     if (!this.state.model) void this.loadModel()
   }
 
-  private async loadModel(): Promise<void> {
-    try {
-      const info = await this.options.client.agentModels()
-      if (this.state.model) return
-      this.state.model = info.plannerModel
-      this.publish()
-    } catch {
-      return
-    }
-  }
-
   reset(): void {
     this.stop()
     this.state = { ...EMPTY_CHAT, turns: [] }
@@ -100,54 +96,134 @@ export class AgentHub {
     if (!text) return this.snapshot()
     if (this.state.busy) throw new Error('Onceki istek hala suruyor')
 
-    const sessionId = await this.ensureSession(text)
-
     this.state.turns.push(turn('user', text, false))
     const reply = turn('assistant', '', true)
     this.state.turns.push(reply)
     this.state.busy = true
     this.state.error = ''
     this.publish()
-
     this.log('info', 'Ajan istegi gonderildi', [text])
 
-    try {
-      await this.stream(sessionId, text, reply.id)
-    } catch (streamError) {
-      this.log('warn', 'Akis kurulamadi, tek seferlik yanit deneniyor', [reason(streamError)])
-      try {
-        const answer = await this.options.client.sendAgentMessage(sessionId, text)
-        this.applyAnswer(reply.id, answer.content)
-        this.state.model = answer.model || this.state.model
-        this.log('info', 'Ajan yaniti tamamlandi')
-      } catch (error) {
-        const message = reason(error)
-        this.state.error = message
-        this.finishPending(message, true)
-        this.log('error', 'Ajan istegi basarisiz', [message])
-        await this.resync()
-      }
-    }
-
+    await this.deliver(text, reply.id, true)
     return this.snapshot()
   }
 
-  private applyAnswer(replyId: string, content: string): void {
-    const target = this.state.turns.find((item) => item.id === replyId)
-    if (target) target.text = content
-    this.settle(replyId)
+  private async deliver(text: string, replyId: string, retry: boolean): Promise<void> {
+    let sessionId = ''
+    try {
+      sessionId = await this.ensureSession(text)
+    } catch (error) {
+      this.fail(reason(error))
+      return
+    }
+
+    try {
+      await this.stream(sessionId, text, replyId)
+      return
+    } catch (error) {
+      if (aborted(error)) return
+      if (stale(error) && retry) {
+        this.forget()
+        await this.deliver(text, replyId, false)
+        return
+      }
+      if (!(error instanceof StreamOpenError)) {
+        this.fail(reason(error))
+        await this.resync()
+        return
+      }
+      this.log('warn', 'Akis kurulamadi, tek seferlik yanit deneniyor', [reason(error)])
+    }
+
+    try {
+      const answer = await this.options.client.sendAgentMessage(sessionId, text)
+      this.state.model = answer.model || this.state.model
+      this.applyAnswer(replyId, answer.content)
+      this.log('info', 'Ajan yaniti tamamlandi')
+    } catch (error) {
+      if (stale(error) && retry) {
+        this.forget()
+        await this.deliver(text, replyId, false)
+        return
+      }
+      this.fail(reason(error))
+      await this.resync()
+    }
   }
 
-  private async resync(): Promise<void> {
-    if (!this.state.sessionId) return
+  private async stream(sessionId: string, content: string, replyId: string): Promise<void> {
+    const controller = new AbortController()
+    this.abort = controller
+
+    let response: Response
     try {
-      const detail = await this.options.client.agentSession(this.state.sessionId)
-      this.state.title = detail.session.title
-      this.state.model = detail.session.model
-      this.state.turns = detail.messages.filter(visible).map(toTurn)
+      response = await this.options.client.openAgentStream(sessionId, controller.signal)
+    } catch (error) {
+      if (this.abort === controller) this.abort = null
+      throw aborted(error) ? error : new StreamOpenError(error)
+    }
+
+    let failure: unknown = null
+    const pump = this.consume(response, controller, replyId).catch((error: unknown) => {
+      failure = error
+    })
+
+    try {
+      await this.options.client.startAgentStream(sessionId, content)
+    } catch (error) {
+      controller.abort()
+      await pump
+      throw error
+    }
+
+    await pump
+    if (failure) throw failure
+  }
+
+  private async consume(
+    response: Response,
+    controller: AbortController,
+    replyId: string
+  ): Promise<void> {
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    try {
+      for (;;) {
+        const chunk = await reader.read()
+        if (chunk.done) break
+        buffer += decoder.decode(chunk.value, { stream: true })
+
+        let split = buffer.indexOf('\n\n')
+        while (split >= 0) {
+          const event = parseBlock(buffer.slice(0, split))
+          buffer = buffer.slice(split + 2)
+          if (event) this.apply(event, replyId)
+          split = buffer.indexOf('\n\n')
+        }
+      }
+    } catch (error) {
+      if (!aborted(error)) throw error
+    } finally {
+      reader.cancel().catch(() => undefined)
+      if (this.abort === controller) this.abort = null
+      this.settle(replyId)
+    }
+  }
+
+  private apply(event: SseEvent, replyId: string): void {
+    if (event.name === 'delta') {
+      const target = this.state.turns.find((item) => item.id === replyId)
+      if (!target) return
+      target.text += event.data
       this.publish()
-    } catch {
       return
+    }
+
+    if (event.name === 'done') {
+      this.finishPending('', false)
+      this.log('info', 'Ajan yaniti tamamlandi')
     }
   }
 
@@ -170,58 +246,46 @@ export class AgentHub {
     return session.id
   }
 
-  private async stream(sessionId: string, content: string, replyId: string): Promise<void> {
-    const controller = new AbortController()
-    this.abort = controller
-
-    const response = await this.options.client.openAgentStream(sessionId, controller.signal)
-    const pump = this.consume(response, replyId)
-
-    await this.options.client.startAgentStream(sessionId, content)
-    await pump
+  private forget(): void {
+    this.state.sessionId = ''
+    this.state.title = ''
+    this.log('warn', 'Sunucudaki oturum gecersiz, yenisi aciliyor')
   }
 
-  private async consume(response: Response, replyId: string): Promise<void> {
-    const reader = (response.body as ReadableStream<Uint8Array>).getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
+  private async loadModel(): Promise<void> {
     try {
-      for (;;) {
-        const chunk = await reader.read()
-        if (chunk.done) break
-        buffer += decoder.decode(chunk.value, { stream: true })
-
-        let split = buffer.indexOf('\n\n')
-        while (split >= 0) {
-          const event = parseBlock(buffer.slice(0, split))
-          buffer = buffer.slice(split + 2)
-          if (event) this.apply(event, replyId)
-          split = buffer.indexOf('\n\n')
-        }
-      }
-    } catch (error) {
-      if (!controllerAborted(error)) throw error
-    } finally {
-      reader.cancel().catch(() => undefined)
-      this.abort = null
-      this.settle(replyId)
-    }
-  }
-
-  private apply(event: SseEvent, replyId: string): void {
-    if (event.name === 'delta') {
-      const target = this.state.turns.find((item) => item.id === replyId)
-      if (!target) return
-      target.text += event.data
+      const info = await this.options.client.agentModels()
+      if (this.state.model) return
+      this.state.model = info.plannerModel
       this.publish()
+    } catch {
       return
     }
+  }
 
-    if (event.name === 'done') {
-      this.finishPending('', false)
-      this.log('info', 'Ajan yaniti tamamlandi')
+  private async resync(): Promise<void> {
+    if (!this.state.sessionId) return
+    try {
+      const detail = await this.options.client.agentSession(this.state.sessionId)
+      this.state.title = detail.session.title
+      this.state.model = detail.session.model
+      this.state.turns = detail.messages.filter(visible).map(toTurn)
+      this.publish()
+    } catch {
+      return
     }
+  }
+
+  private applyAnswer(replyId: string, content: string): void {
+    const target = this.state.turns.find((item) => item.id === replyId)
+    if (target) target.text = content
+    this.settle(replyId)
+  }
+
+  private fail(message: string): void {
+    this.state.error = message
+    this.finishPending(message, true)
+    this.log('error', 'Ajan istegi basarisiz', [message])
   }
 
   private settle(replyId: string): void {
@@ -255,8 +319,13 @@ export class AgentHub {
   }
 }
 
-function controllerAborted(error: unknown): boolean {
+function aborted(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError'
+}
+
+function stale(error: unknown): boolean {
+  const status = (error as { status?: unknown }).status
+  return status === 400 || status === 404 || status === 422
 }
 
 function reason(error: unknown): string {

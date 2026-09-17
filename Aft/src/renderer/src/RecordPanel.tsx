@@ -664,7 +664,7 @@ export default function RecordPanel({
         </div>
       ) : null}
 
-      <div className="dock-block">
+      <div className="dock-block dock-foot">
         <label className="field">
           <span className="field-label">Senaryo adı</span>
           <input
