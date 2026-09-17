@@ -38,9 +38,9 @@ const FRAME_COLOR = '#101114'
 const AGENT_PARTITION = 'persist:aft-agent'
 const DRAG_TICK = 16
 const DRAG_MAX_MS = 30000
-const SPLASH_WIDTH = 420
-const SPLASH_HEIGHT = 320
-const SPLASH_MIN_MS = 10000
+const SPLASH_WIDTH = 480
+const SPLASH_HEIGHT = 620
+const SPLASH_MIN_MS = 1200
 const SPLASH_MAX_MS = 16000
 const SETTINGS_WIDTH = 392
 const SETTINGS_HEIGHT = 620
@@ -72,6 +72,9 @@ let pageHold = false
 let settingsWin: BrowserWindow | null = null
 let splashWin: BrowserWindow | null = null
 let revealed = false
+let gatePassed = false
+let shellReady = false
+let gateAt = 0
 let settingsSpot: { x: number; y: number } | null = null
 let settingsSize = { width: SETTINGS_WIDTH, height: SETTINGS_HEIGHT }
 let chromeColor = FRAME_COLOR
@@ -464,6 +467,7 @@ function respond(
     }
   )
 }
+
 function normalizeLevel(value: unknown): ScanLevel {
   const level = Number(value)
   if (level === 0 || level === 1 || level === 2 || level === 3) return level
@@ -685,6 +689,19 @@ function closeSplash(): void {
   target.destroy()
 }
 
+function maybeReveal(): void {
+  if (!gatePassed || !shellReady) return
+  setTimeout(reveal, Math.max(0, SPLASH_MIN_MS - (Date.now() - gateAt)))
+}
+
+function passGate(): void {
+  if (gatePassed) return
+  gatePassed = true
+  gateAt = Date.now()
+  setTimeout(reveal, SPLASH_MAX_MS)
+  maybeReveal()
+}
+
 function reveal(): void {
   if (revealed) return
   revealed = true
@@ -787,13 +804,10 @@ function createWindow(): void {
       .finally(() => controller.dispose())
   })
 
-  const opened = Date.now()
-
   chatView.webContents.once('did-finish-load', () => {
-    setTimeout(reveal, Math.max(0, SPLASH_MIN_MS - (Date.now() - opened)))
+    shellReady = true
+    maybeReveal()
   })
-
-  setTimeout(reveal, SPLASH_MAX_MS)
 }
 
 app.whenReady().then(() => {
@@ -877,6 +891,8 @@ app.whenReady().then(() => {
   ipcMain.on('aft:chrome', (_e, color: unknown) => setChrome(color))
 
   ipcMain.on('aft:state', () => pushState())
+
+  ipcMain.on('aft:gate:done', () => passGate())
 
   openSplash()
   createWindow()

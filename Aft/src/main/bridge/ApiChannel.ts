@@ -73,6 +73,15 @@ export class ApiChannel {
       })
     )
 
+    ipcMain.handle('aft:api:register', (_event, input: unknown) =>
+      guard('kayit', async (): Promise<LoginPayload> => {
+        const profile = await this.client.register(
+          input as { email: string; password: string; displayName: string }
+        )
+        return { profile, state: this.state() }
+      })
+    )
+
     ipcMain.handle('aft:api:logout', () =>
       guard('cikis', async (): Promise<AgentState> => {
         unmountAgent()

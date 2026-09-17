@@ -11,6 +11,12 @@ export interface LoginInput {
   password: string
 }
 
+export interface RegisterInput {
+  email: string
+  password: string
+  displayName: string
+}
+
 export interface TokenResponse {
   accessToken: string
   refreshToken: string
@@ -35,6 +41,15 @@ export class ApiClient {
   async login(input: LoginInput): Promise<Profile> {
     const tokens = await this.call<TokenResponse>('POST', '/api/v1/auth/login', input, false)
     await this.persist(tokens, { id: '', email: input.email, displayName: '' })
+
+    const profile = await this.me()
+    await this.persist(tokens, profile)
+    return profile
+  }
+
+  async register(input: RegisterInput): Promise<Profile> {
+    const tokens = await this.call<TokenResponse>('POST', '/api/v1/auth/register', input, false)
+    await this.persist(tokens, { id: '', email: input.email, displayName: input.displayName })
 
     const profile = await this.me()
     await this.persist(tokens, profile)

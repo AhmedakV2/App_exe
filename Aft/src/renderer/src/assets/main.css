@@ -63,6 +63,7 @@
   --line: #262930;
   --edge-line: #383c45;
   --text: #f0f2f5;
+  --text-dim: #c2c9d3;
   --muted: #a8afba;
   --faint: #737a86;
   --accent: #ff7a29;
@@ -71,6 +72,7 @@
   --accent-ink: #17130d;
   --ok: #4cc38a;
   --warn: #e8a838;
+  --danger: #f2585d;
   --bad: #f2585d;
   --shadow: rgba(0, 0, 0, 0.45);
   --scroll: #3d434c;
@@ -89,6 +91,7 @@
   --line: #212c3c;
   --edge-line: #35455c;
   --text: #f2f6fc;
+  --text-dim: #c9d8ea;
   --muted: #9fb0c8;
   --faint: #6c7d96;
   --accent: #38bdf8;
@@ -97,6 +100,7 @@
   --accent-ink: #04121f;
   --ok: #34d399;
   --warn: #fbbf24;
+  --danger: #f87171;
   --bad: #f87171;
   --shadow: rgba(0, 0, 0, 0.55);
   --scroll: #35455c;
@@ -115,6 +119,7 @@
   --line: #e4e4e7;
   --edge-line: #d4d4d8;
   --text: #09090b;
+  --text-dim: #3f3f46;
   --muted: #52525b;
   --faint: #71717a;
   --accent: #2563eb;
@@ -123,6 +128,7 @@
   --accent-ink: #ffffff;
   --ok: #15803d;
   --warn: #b45309;
+  --danger: #b91c1c;
   --bad: #b91c1c;
   --shadow: rgba(9, 9, 11, 0.1);
   --scroll: #c9c9cf;
@@ -141,6 +147,7 @@
   --line: #1e3227;
   --edge-line: #315040;
   --text: #eefaf3;
+  --text-dim: #c8e0d2;
   --muted: #a5c4b3;
   --faint: #6f8d7d;
   --accent: #10b981;
@@ -149,6 +156,7 @@
   --accent-ink: #04120b;
   --ok: #34d399;
   --warn: #d9b45a;
+  --danger: #f87171;
   --bad: #f87171;
   --shadow: rgba(0, 0, 0, 0.5);
   --scroll: #315040;
@@ -4304,6 +4312,126 @@ body[data-view='splash'] {
 .splash-logo {
   color: var(--accent);
   animation: splash-rise 520ms var(--ease-out) both;
+}
+
+.gate {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-7);
+  padding: var(--sp-7);
+  background: var(--void);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.gate-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  animation: splash-rise 520ms var(--ease-out) both;
+}
+
+.gate-logo {
+  color: var(--accent);
+}
+
+.gate-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--text-dim, currentColor);
+}
+
+.gate-body {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  -webkit-app-region: no-drag;
+  animation: splash-rise 520ms 100ms var(--ease-out) both;
+}
+
+.gate-wait {
+  align-items: center;
+  min-height: 132px;
+  justify-content: center;
+}
+
+.gate-tabs {
+  display: flex;
+  gap: var(--sp-2);
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--line);
+}
+
+.gate-tab {
+  flex: 1;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.gate-tab.is-on {
+  background: var(--void);
+  color: var(--accent);
+}
+
+.gate-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.gate-field input {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.gate-field input:focus {
+  border-color: var(--accent);
+}
+
+.gate-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--danger, #e5484d);
+}
+
+.gate-submit {
+  height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--void);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.gate-submit:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .splash-track {

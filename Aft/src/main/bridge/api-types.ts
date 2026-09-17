@@ -9,6 +9,7 @@ export type ApiChannelName =
   | 'aft:api:connect'
   | 'aft:api:disconnect'
   | 'aft:api:approve'
+  | 'aft:api:register'
 
 export interface AgentState {
   session: SessionState
