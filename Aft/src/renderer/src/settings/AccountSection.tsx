@@ -9,6 +9,7 @@ const EMPTY_STATE: AgentState = {
   session: { signedIn: false, username: '', email: '', displayName: '', expiresAt: 0 },
   connected: false,
   orgId: '',
+  error: '',
   device: null,
   capabilities: []
 }

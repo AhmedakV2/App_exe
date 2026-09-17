@@ -30,6 +30,15 @@ export interface ApiChannelOptions {
   descriptors: DescriptorStore
 }
 
+function describe(error: unknown): string {
+  if (!(error instanceof Error)) return String(error)
+  const detail = error as { status?: unknown; code?: unknown }
+  const status = typeof detail.status === 'number' ? 'HTTP ' + detail.status : ''
+  const code = typeof detail.code === 'string' && detail.code !== 'UNKNOWN' ? detail.code : ''
+  const tag = [status, code].filter(Boolean).join(' · ')
+  return tag ? tag + ' · ' + error.message : error.message
+}
+
 export class ApiChannel {
   private readonly config: ConfigStore
   private readonly auth: AuthStore
@@ -43,6 +52,7 @@ export class ApiChannel {
   private orgId = ''
   private heartbeat: ReturnType<typeof setInterval> | null = null
   private connecting: Promise<AgentState> | null = null
+  private failure = ''
 
   constructor(private readonly options: ApiChannelOptions) {
     this.config = new ConfigStore(options.userDataDir)
@@ -63,7 +73,7 @@ export class ApiChannel {
     await this.auth.load()
     const settings = await this.config.read()
     this.orgId = settings.orgId
-    if (this.auth.current()) void this.connect().catch(() => undefined)
+    if (this.auth.current()) void this.tryConnect()
   }
 
   register(): void {
@@ -72,7 +82,7 @@ export class ApiChannel {
     ipcMain.handle('aft:api:login', (_event, input: unknown) =>
       guard('giris', async (): Promise<LoginPayload> => {
         const profile = await this.client.login(input as { username: string; password: string })
-        void this.connect().catch(() => undefined)
+        void this.tryConnect()
         return { profile, state: this.state() }
       })
     )
@@ -82,7 +92,7 @@ export class ApiChannel {
         const profile = await this.client.register(
           input as { username: string; email: string; password: string; displayName: string }
         )
-        void this.connect().catch(() => undefined)
+        void this.tryConnect()
         return { profile, state: this.state() }
       })
     )
@@ -111,7 +121,17 @@ export class ApiChannel {
       })
     )
 
-    ipcMain.handle('aft:api:connect', () => guard('baglanti', () => this.connect()))
+    ipcMain.handle('aft:api:connect', () =>
+      guard('baglanti', async (): Promise<AgentState> => {
+        try {
+          return await this.connect()
+        } catch (error) {
+          this.failure = describe(error)
+          this.publish()
+          throw error
+        }
+      })
+    )
 
     ipcMain.handle('aft:api:disconnect', () =>
       guard('kopar', (): AgentState => {
@@ -168,6 +188,21 @@ export class ApiChannel {
     this.pendingApprovals.clear()
   }
 
+  private async tryConnect(): Promise<void> {
+    try {
+      await this.connect()
+    } catch (error) {
+      this.failure = describe(error)
+      this.pushLog({
+        at: Date.now(),
+        level: 'error',
+        text: 'Ajan baglantisi kurulamadi',
+        detail: [this.failure]
+      })
+      this.publish()
+    }
+  }
+
   private pushLog(entry: AgentLogEntry): void {
     this.viewer?.send(LOG_EVENT, entry)
   }
@@ -206,6 +241,7 @@ export class ApiChannel {
   private async establish(): Promise<AgentState> {
     const session = this.auth.current()
     if (!session) throw new Error('Once giris yapin')
+    this.failure = ''
 
     const provision = await this.client.provisionDevice(
       hostname(),
@@ -286,6 +322,7 @@ export class ApiChannel {
       session: this.auth.state(),
       connected: this.connected,
       orgId: this.orgId,
+      error: this.connected ? '' : this.failure,
       device: this.device,
       capabilities: agentBridge()?.capabilities ?? []
     }
