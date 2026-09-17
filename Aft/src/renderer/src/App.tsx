@@ -765,6 +765,16 @@ export default function App(): React.JSX.Element {
 
         <div className="title-drag" onDoubleClick={maximizeWindow} />
 
+        <div className="title-tools">
+          <IconButton
+            name="settings"
+            title="Ayarlar"
+            onClick={toggleSettings}
+            active={settingsOpen}
+            small
+          />
+        </div>
+
         <div className="title-win">
           <IconButton name="minimize" title="Küçült" onClick={minimizeWindow} small />
           <IconButton
@@ -834,20 +844,6 @@ export default function App(): React.JSX.Element {
           </button>
         </nav>
 
-        <span className="rail-gap" />
-
-        <nav className="rail-group" aria-label="Ayarlar">
-          <button
-            className={'nav-item' + (settingsOpen ? ' sel' : '')}
-            title="Ayarlar"
-            aria-label="Ayarlar"
-            aria-pressed={settingsOpen}
-            onClick={toggleSettings}
-            type="button"
-          >
-            <Glyph name="settings" size={NAV_ICON} />
-          </button>
-        </nav>
       </aside>
 
       <main className="stagearea" ref={spaceRef}>

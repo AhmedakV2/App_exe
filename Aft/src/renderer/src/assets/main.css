@@ -295,6 +295,15 @@ textarea {
   height: 100%;
 }
 
+.title-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: 0 0 auto;
+  margin-right: var(--sp-6);
+  -webkit-app-region: no-drag;
+}
+
 .title-win {
   display: flex;
   align-items: center;
