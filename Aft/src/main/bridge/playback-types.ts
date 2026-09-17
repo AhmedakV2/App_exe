@@ -4,6 +4,7 @@ import type {
   RunResult,
   Scenario,
   ScenarioReport,
+  StepResult,
   StoredContext
 } from '../scenario/types'
 import type { ScenarioEntry, ScenarioFolder } from '../scenario/ScenarioStore'
@@ -25,6 +26,12 @@ export type PlaybackChannelName =
   | 'aft:playback:folder-remove'
 
 export const PLAYBACK_PROGRESS_EVENT = 'aft:playback:progress'
+
+export interface ProgressPayload {
+  done: number
+  total: number
+  step: StepResult
+}
 
 export interface ScenarioPayload {
   scenario: Scenario

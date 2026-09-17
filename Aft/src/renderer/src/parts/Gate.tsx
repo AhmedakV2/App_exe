@@ -11,6 +11,8 @@ export default function Gate(): React.JSX.Element {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
+  const [serverOpen, setServerOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -23,9 +25,10 @@ export default function Gate(): React.JSX.Element {
     let active = true
 
     const check = async (): Promise<void> => {
-      const result = await window.aftApi.state()
+      const [current, settings] = await Promise.all([window.aftApi.state(), window.aftApi.config()])
       if (!active) return
-      if (result.ok && result.data?.session.signedIn) enter()
+      if (settings.ok && settings.data) setBaseUrl(settings.data.config.baseUrl)
+      if (current.ok && current.data?.session.signedIn) enter()
       else setPhase('auth')
     }
 
@@ -47,6 +50,14 @@ export default function Gate(): React.JSX.Element {
       }
 
       setBusy(true)
+      const target = baseUrl.trim().replace(/\/+$/, '')
+      if (target.length === 0) {
+        setBusy(false)
+        setError('Sunucu adresi bos olamaz')
+        return
+      }
+      await window.aftApi.saveConfig({ baseUrl: target })
+
       const result =
         mode === 'login'
           ? await window.aftApi.login({ email: email.trim(), password })
@@ -61,7 +72,7 @@ export default function Gate(): React.JSX.Element {
       if (result.ok) enter()
       else setError(result.message)
     },
-    [mode, email, password, displayName, enter]
+    [mode, email, password, displayName, baseUrl, enter]
   )
 
   const swap = (next: Mode) => (): void => {
@@ -154,6 +165,27 @@ export default function Gate(): React.JSX.Element {
           <button className="gate-submit" type="submit" disabled={busy}>
             {busy ? 'Lutfen bekleyin' : mode === 'login' ? 'Giris yap' : 'Hesap olustur'}
           </button>
+
+          <button
+            className="gate-link"
+            type="button"
+            onClick={() => setServerOpen((open) => !open)}
+          >
+            {serverOpen ? 'Sunucu adresini gizle' : 'Sunucu adresi'}
+          </button>
+
+          {serverOpen ? (
+            <label className="gate-field">
+              <span>Sunucu adresi</span>
+              <input
+                type="text"
+                value={baseUrl}
+                spellCheck={false}
+                placeholder="http://10.6.100.134:8092"
+                onChange={(e) => setBaseUrl(e.target.value)}
+              />
+            </label>
+          ) : null}
         </form>
       ) : (
         <div className="gate-body gate-wait" role="status" aria-label="Yukleniyor">

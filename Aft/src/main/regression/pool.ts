@@ -148,3 +148,10 @@ export function poolCoverage(): Record<CaseKind, number> {
   for (const entry of POOL) out[entry.kind]++
   return out
 }
+export function caseById(id: string): PoolCase | undefined {
+  return POOL.find((entry) => entry.id === id)
+}
+
+export function casesByKind(kind: CaseKind): readonly PoolCase[] {
+  return POOL.filter((entry) => entry.kind === kind)
+}

@@ -14,7 +14,7 @@ import {
   type RunOptions
 } from './types'
 
-type ProgressHandler = (done: number, total: number, result: CaseResult) => void
+export type ProgressHandler = (done: number, total: number, result: CaseResult) => void
 
 export class PoolRunner {
   private readonly runner: CaseRunner

@@ -4434,6 +4434,16 @@ body[data-view='splash'] {
   cursor: default;
 }
 
+.gate-link {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  align-self: center;
+}
+
 .splash-track {
   width: 168px;
   height: 4px;

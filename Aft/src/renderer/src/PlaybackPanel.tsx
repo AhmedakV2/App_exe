@@ -13,7 +13,7 @@ import type {
   StepResult,
   StepStatus,
   StoredContext
-} from '../../main/scenario/types'
+} from '../../main/scenario/'
 import { Glyph, IconButton } from './icons'
 
 type ReportLevel = 'ok' | 'err' | 'note'
