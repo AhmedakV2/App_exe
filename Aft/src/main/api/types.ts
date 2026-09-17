@@ -22,6 +22,7 @@ export interface AgentConfig {
 
 export interface SessionState {
   signedIn: boolean
+  username: string
   email: string
   displayName: string
   expiresAt: number
@@ -29,6 +30,7 @@ export interface SessionState {
 
 export interface Profile {
   id: string
+  username: string
   email: string
   displayName: string
   locale: string

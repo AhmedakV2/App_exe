@@ -60,7 +60,7 @@ export class ApiChannel {
 
     ipcMain.handle('aft:api:login', (_event, input: unknown) =>
       guard('giris', async (): Promise<LoginPayload> => {
-        const profile = await this.client.login(input as { email: string; password: string })
+        const profile = await this.client.login(input as { username: string; password: string })
         await this.connect().catch(() => undefined)
         return { profile, state: this.state() }
       })
@@ -69,7 +69,7 @@ export class ApiChannel {
     ipcMain.handle('aft:api:register', (_event, input: unknown) =>
       guard('kayit', async (): Promise<LoginPayload> => {
         const profile = await this.client.register(
-          input as { email: string; password: string; displayName: string }
+          input as { username: string; email: string; password: string; displayName: string }
         )
         await this.connect().catch(() => undefined)
         return { profile, state: this.state() }

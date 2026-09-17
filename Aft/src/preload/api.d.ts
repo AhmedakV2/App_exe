@@ -10,8 +10,9 @@ declare global {
   interface Window {
     aftApi: {
       state: () => Promise<ChannelResult<AgentState>>
-      login: (input: { email: string; password: string }) => Promise<ChannelResult<LoginPayload>>
+      login: (input: { username: string; password: string }) => Promise<ChannelResult<LoginPayload>>
       register: (input: {
+        username: string
         email: string
         password: string
         displayName: string

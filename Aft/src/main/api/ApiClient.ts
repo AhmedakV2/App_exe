@@ -7,11 +7,12 @@ export type { DeviceInfo, DeviceProvision, Profile }
 export { ApiError }
 
 export interface LoginInput {
-  email: string
+  username: string
   password: string
 }
 
 export interface RegisterInput {
+  username: string
   email: string
   password: string
   displayName: string
@@ -40,7 +41,7 @@ export class ApiClient {
 
   async login(input: LoginInput): Promise<Profile> {
     const tokens = await this.call<TokenResponse>('POST', '/api/v1/auth/login', input, false)
-    await this.persist(tokens, { id: '', email: input.email, displayName: '' })
+    await this.persist(tokens, { id: '', username: input.username, email: '', displayName: '' })
 
     const profile = await this.me()
     await this.persist(tokens, profile)
@@ -49,7 +50,12 @@ export class ApiClient {
 
   async register(input: RegisterInput): Promise<Profile> {
     const tokens = await this.call<TokenResponse>('POST', '/api/v1/auth/register', input, false)
-    await this.persist(tokens, { id: '', email: input.email, displayName: input.displayName })
+    await this.persist(tokens, {
+      id: '',
+      username: input.username,
+      email: input.email,
+      displayName: input.displayName
+    })
 
     const profile = await this.me()
     await this.persist(tokens, profile)
@@ -113,6 +119,7 @@ export class ApiClient {
     const current = this.auth.current()
     await this.persist(tokens, {
       id: current?.userId ?? '',
+      username: current?.username ?? '',
       email: current?.email ?? '',
       displayName: current?.displayName ?? ''
     })
@@ -120,13 +127,14 @@ export class ApiClient {
 
   private async persist(
     tokens: TokenResponse,
-    who: { id: string; email: string; displayName: string }
+    who: { id: string; username: string; email: string; displayName: string }
   ): Promise<void> {
     const session: Session = {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       expiresAt: Date.now() + tokens.expiresIn * 1000,
       userId: who.id,
+      username: who.username,
       email: who.email,
       displayName: who.displayName
     }

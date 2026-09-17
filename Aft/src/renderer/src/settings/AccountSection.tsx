@@ -6,7 +6,7 @@ import PasswordField from '../parts/PasswordField'
 const MIN_PASSWORD = 12
 
 const EMPTY_STATE: AgentState = {
-  session: { signedIn: false, email: '', displayName: '', expiresAt: 0 },
+  session: { signedIn: false, username: '', email: '', displayName: '', expiresAt: 0 },
   connected: false,
   orgId: '',
   device: null,
@@ -133,15 +133,19 @@ export default function AccountSection(): React.JSX.Element {
         <h3 className="sheet-label">Hesap</h3>
         <div className="set-identity">
           <span className="set-avatar">
-            {(state.session.displayName || state.session.email).slice(0, 1).toUpperCase()}
+            {(state.session.displayName || state.session.username).slice(0, 1).toUpperCase()}
           </span>
           <div>
-            <strong>{state.session.displayName || state.session.email}</strong>
+            <strong>{state.session.displayName || state.session.username}</strong>
             <span className="set-muted">{state.session.email}</span>
           </div>
         </div>
 
         <dl className="set-facts">
+          <div>
+            <dt>Kullanici adi</dt>
+            <dd>{state.session.username || profile?.username || '-'}</dd>
+          </div>
           <div>
             <dt>Roller</dt>
             <dd>{profile?.roles.length ? profile.roles.join(', ') : '-'}</dd>
