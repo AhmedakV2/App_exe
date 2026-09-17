@@ -20,7 +20,7 @@ const SECTIONS: { id: SectionId; label: string; glyph: string }[] = [
 const SHORTCUTS: { name: string; code: string }[] = [
   { name: 'Terminal', code: 'Ctrl+K' },
   { name: 'Adres çubuğu', code: 'Ctrl+L' },
-  { name: 'Sayfayı incele', code: 'F12' },
+  { name: 'Sayfayı incele (aç/kapat)', code: 'F12' },
   { name: 'Tam ekran', code: 'F11' },
   { name: 'Kayıtta imleç adımları', code: 'Ctrl+H' },
   { name: 'Seçili öğeyi sil', code: 'Del' },

@@ -403,6 +403,10 @@ export default function App(): React.JSX.Element {
     window.aft.setDevtoolsSplit(devSize / stageWidth)
   }, [devSize, devtoolsOpen, stageWidth])
 
+  useEffect(() => {
+    if (devtoolsOpen) setPage('browser')
+  }, [devtoolsOpen])
+
   const nav = useCallback((kind: NavKind): void => window.aft.nav(kind), [])
   const winAction = useCallback((action: WindowAction): void => window.aft.window(action), [])
 
@@ -432,11 +436,6 @@ export default function App(): React.JSX.Element {
   const toggleSettings = useCallback((): void => {
     window.aft.setSettings(!settingsOpen)
   }, [settingsOpen])
-
-  const toggleDevtools = useCallback((): void => {
-    setPage('browser')
-    window.aft.setDevtools(!devtoolsOpen)
-  }, [devtoolsOpen])
 
   const beginDrag = useCallback(
     (axis: DragAxis, event: React.PointerEvent<HTMLDivElement>): void => {
@@ -611,14 +610,6 @@ export default function App(): React.JSX.Element {
         keywords: 'ogeler eleman element liste'
       },
       {
-        id: 'panel:devtools',
-        group: 'Paneller',
-        label: 'İnceleme panelini aç veya kapat',
-        glyph: 'inspect',
-        hint: 'F12',
-        keywords: 'incele devtools gelistirici'
-      },
-      {
         id: 'panel:terminal',
         group: 'Paneller',
         label: 'Yardımcı paneli aç veya kapat',
@@ -720,7 +711,6 @@ export default function App(): React.JSX.Element {
 
       if (scope === 'panel') {
         if (key === 'elements') toggleList()
-        else if (key === 'devtools') toggleDevtools()
         else if (key === 'terminal') toggleDrawer()
         else toggleSettings()
         return
@@ -738,7 +728,7 @@ export default function App(): React.JSX.Element {
       }
       nav(key as NavKind)
     },
-    [goPage, nav, onVision, toggleDevtools, toggleDrawer, toggleList, toggleSettings]
+    [goPage, nav, onVision, toggleDrawer, toggleList, toggleSettings]
   )
 
   const status = useMemo(() => {
@@ -821,16 +811,6 @@ export default function App(): React.JSX.Element {
             type="button"
           >
             <Glyph name="grid" size={NAV_ICON} />
-          </button>
-          <button
-            className={'nav-item' + (devtoolsOpen && page === 'browser' ? ' sel' : '')}
-            title="Sayfayı incele (F12)"
-            aria-label="Sayfayı incele"
-            aria-pressed={devtoolsOpen && page === 'browser'}
-            onClick={toggleDevtools}
-            type="button"
-          >
-            <Glyph name="inspect" size={NAV_ICON} />
           </button>
           <button
             className={'nav-item' + (terminalOpen ? ' sel' : '')}
