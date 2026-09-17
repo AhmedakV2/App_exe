@@ -832,20 +832,17 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.aft.agent')
   mountHome(AGENT_PARTITION)
 
-  ipcMain.handle(
-    'aft:execute',
-    (_e, action: AgentAction): Promise<ExecuteResult> => respond(() => controller.execute(action))
+  ipcMain.handle('aft:execute', (_e, action: AgentAction): Promise<ExecuteResult> =>
+    respond(() => controller.execute(action))
   )
 
-  ipcMain.handle(
-    'aft:scan',
-    (_e, level: unknown): Promise<ExecuteResult> =>
-      respond(async () => {
-        const target = normalizeLevel(level)
-        controller.setLevel(target)
-        const page = await controller.scan(target)
-        return { result: 'Tarama tamamlandı: seviye ' + target, page, outcome: null }
-      })
+  ipcMain.handle('aft:scan', (_e, level: unknown): Promise<ExecuteResult> =>
+    respond(async () => {
+      const target = normalizeLevel(level)
+      controller.setLevel(target)
+      const page = await controller.scan(target)
+      return { result: 'Tarama tamamlandı: seviye ' + target, page, outcome: null }
+    })
   )
 
   ipcMain.handle('aft:coverage', async (): Promise<ScanReport | null> => {
@@ -872,13 +869,11 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle(
-    'aft:vision',
-    (_e, on: boolean): Promise<ExecuteResult> =>
-      respond(async () => {
-        const page = await controller.setVision(on)
-        return { result: on ? 'Görüş açıldı' : 'Görüş kapatıldı', page, outcome: null }
-      })
+  ipcMain.handle('aft:vision', (_e, on: boolean): Promise<ExecuteResult> =>
+    respond(async () => {
+      const page = await controller.setVision(on)
+      return { result: on ? 'Görüş açıldı' : 'Görüş kapatıldı', page, outcome: null }
+    })
   )
 
   ipcMain.on('aft:nav', (_e, kind: NavKind) => navigate(kind))

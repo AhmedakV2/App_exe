@@ -103,13 +103,10 @@ export class PlaybackChannel {
     this.registered = true
 
     ipcMain.handle('aft:playback:list', () =>
-      guard(
-        'Senaryo listesi hazir',
-        (): ScenarioListPayload => ({
-          entries: this.scenarios.entries(),
-          folders: this.scenarios.folders()
-        })
-      )
+      guard('Senaryo listesi hazir', (): ScenarioListPayload => ({
+        entries: this.scenarios.entries(),
+        folders: this.scenarios.folders()
+      }))
     )
 
     ipcMain.handle('aft:playback:get', (_event, id: unknown) =>
@@ -146,12 +143,9 @@ export class PlaybackChannel {
     ipcMain.handle('aft:playback:last', () => guard('Son kosum okundu', () => this.engine.last()))
 
     ipcMain.handle('aft:playback:contexts', () =>
-      guard(
-        'Baglam listesi hazir',
-        async (): Promise<ContextListPayload> => ({
-          contexts: await this.engine.store().list()
-        })
-      )
+      guard('Baglam listesi hazir', async (): Promise<ContextListPayload> => ({
+        contexts: await this.engine.store().list()
+      }))
     )
 
     ipcMain.handle('aft:playback:move', (_event, request: unknown) =>

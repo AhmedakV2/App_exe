@@ -147,7 +147,7 @@ export function AgentPanel(): React.JSX.Element {
   )
 
   return (
-    <div className={'gem' + (empty ? ' is-empty' : '')}>
+    <div className="gem">
       <header className="gem-head">
         <span className="gem-title">{chat.title || 'AFT Ajanı'}</span>
         <span className={connected ? 'gem-dot on' : 'gem-dot'} />

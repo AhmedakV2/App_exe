@@ -239,8 +239,8 @@ export class AgentHub {
     for (const item of this.state.turns) {
       if (!item.pending) continue
       item.pending = false
-      item.failed = failed
-      if (failed && !item.text) item.text = message
+      item.failed = failed && !item.text
+      if (item.failed) item.text = message
     }
     this.state.busy = false
     this.publish()

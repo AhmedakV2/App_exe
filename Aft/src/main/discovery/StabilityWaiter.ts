@@ -125,8 +125,7 @@ export class StabilityWaiter {
   constructor(private readonly tp: Transport) {
     tp.on('Runtime.executionContextCreated', (params, sessionId) => {
       const ctx = params.context as
-        | { id: number; name: string; auxData?: { frameId?: string } }
-        | undefined
+        { id: number; name: string; auxData?: { frameId?: string } } | undefined
       if (!ctx || ctx.name !== WORLD) return
       this.contexts.set(this.ck(sessionId, ctx.auxData?.frameId ?? ''), ctx.id)
     })
