@@ -799,9 +799,11 @@ export default function App(): React.JSX.Element {
           })}
         </nav>
 
+        <span className="rail-gap" />
+
         <span className="rail-split" />
 
-        <nav className="rail-group" aria-label="Yardımcı araçlar">
+        <nav className="rail-group rail-bottom" aria-label="Yardımcı araçlar">
           <button
             className={'nav-item' + (listOpen && page === 'browser' ? ' sel' : '')}
             title="Öğeler"
