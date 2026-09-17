@@ -1,9 +1,11 @@
+import type { AgentActivity } from './agent-types'
 import { fail, ok, MAX_RESULT_BYTES } from './types'
 import type { ApprovalGate, ToolHandler, ToolInvocation, ToolResult } from './types'
 
 export interface ToolDispatcherOptions {
   handlers: Record<string, ToolHandler>
   approve: ApprovalGate
+  onActivity?: (activity: AgentActivity) => void
 }
 
 export class ToolDispatcher {
@@ -14,20 +16,45 @@ export class ToolDispatcher {
   }
 
   async handle(invocation: ToolInvocation): Promise<ToolResult> {
+    this.report('invocation', invocation, true, invocation.argumentsJson)
+
     const handler = this.options.handlers[invocation.toolName]
-    if (!handler) return fail(invocation.callId, 'Bilinmeyen arac: ' + invocation.toolName)
+    if (!handler) return this.reject(invocation, 'Bilinmeyen arac: ' + invocation.toolName)
 
     if (invocation.approvalRequired) {
       const approved = await this.options.approve(invocation)
+      this.report('approval', invocation, approved, approved ? 'onaylandi' : 'reddedildi')
       if (!approved) return fail(invocation.callId, 'Kullanici bu islemi reddetti')
     }
 
     try {
       const payload = await this.race(handler, invocation)
-      return this.clip(invocation.callId, payload)
+      const result = this.clip(invocation.callId, payload)
+      this.report('result', invocation, true, result.truncated ? 'kirpilmis sonuc' : 'tamamlandi')
+      return result
     } catch (error) {
-      return fail(invocation.callId, error instanceof Error ? error.message : String(error))
+      return this.reject(invocation, error instanceof Error ? error.message : String(error))
     }
+  }
+
+  private reject(invocation: ToolInvocation, message: string): ToolResult {
+    this.report('result', invocation, false, message)
+    return fail(invocation.callId, message)
+  }
+
+  private report(
+    kind: AgentActivity['kind'],
+    invocation: ToolInvocation,
+    ok: boolean,
+    detail: string
+  ): void {
+    this.options.onActivity?.({
+      kind,
+      toolName: invocation.toolName,
+      callId: invocation.callId,
+      ok,
+      detail
+    })
   }
 
   private race(handler: ToolHandler, invocation: ToolInvocation): Promise<unknown> {

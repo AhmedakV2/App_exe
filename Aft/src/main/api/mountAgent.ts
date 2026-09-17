@@ -9,6 +9,7 @@ import { browserTools } from './tools/browserTools'
 import { identityTools } from './tools/identityTools'
 import { runTools } from './tools/runTools'
 import { scenarioTools } from './tools/scenarioTools'
+import type { AgentActivity } from './agent-types'
 import type { AgentEndpoint, ApprovalGate } from './types'
 
 const MAX_RETRY_AFTER_MS = 60_000
@@ -22,6 +23,7 @@ export interface AgentMountOptions {
   descriptors: DescriptorStore
   approve: ApprovalGate
   onStateChange?: (connected: boolean) => void
+  onActivity?: (activity: AgentActivity) => void
 }
 
 export interface AgentBridge {
@@ -37,6 +39,7 @@ export async function mountAgent(options: AgentMountOptions): Promise<AgentBridg
 
   const dispatcher = new ToolDispatcher({
     approve: options.approve,
+    onActivity: options.onActivity,
     handlers: {
       ...scenarioTools(options.scenarios),
       ...runTools(options.indexer, options.contexts),
@@ -54,7 +57,13 @@ export async function mountAgent(options: AgentMountOptions): Promise<AgentBridg
   })
 
   await socket.start()
-  await publishCapabilities(options.endpoint, dispatcher.supported())
+
+  try {
+    await publishCapabilities(options.endpoint, dispatcher.supported())
+  } catch (error) {
+    socket.stop()
+    throw error
+  }
 
   bridge = { socket, dispatcher, capabilities: dispatcher.supported() }
   return bridge

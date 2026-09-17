@@ -2,6 +2,11 @@ import type { DeviceInfo, Profile, SessionState, ToolInvocation } from '../api/t
 
 export type ApiChannelName =
   | 'aft:api:state'
+  | 'aft:agent:chat'
+  | 'aft:agent:send'
+  | 'aft:agent:cancel'
+  | 'aft:agent:reset'
+  | 'aft:agent:remove'
   | 'aft:api:login'
   | 'aft:api:logout'
   | 'aft:api:connect'
@@ -33,5 +38,7 @@ export interface ApprovalRequest {
   toolName: string
   summary: string
 }
+
+export type { AgentChatState, AgentLogEntry, AgentLogLevel, ChatTurn } from '../api/agent-types'
 
 export type { ToolInvocation }

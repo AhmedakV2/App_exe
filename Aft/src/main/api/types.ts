@@ -58,8 +58,8 @@ export interface DeviceProvision {
 export interface AgentEndpoint {
   baseUrl: string
   deviceId: string
-  accessToken: string
   deviceKey: string
+  ticket: () => Promise<string>
 }
 
 export type ApprovalGate = (invocation: ToolInvocation) => Promise<boolean>

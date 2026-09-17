@@ -1,5 +1,7 @@
 import type { ChannelResult } from '../main/bridge/types'
 import type {
+  AgentChatState,
+  AgentLogEntry,
   AgentState,
   ApprovalRequest,
   LoginPayload,
@@ -26,6 +28,13 @@ declare global {
       connect: () => Promise<ChannelResult<AgentState>>
       disconnect: () => Promise<ChannelResult<AgentState>>
       approve: (callId: string, approved: boolean) => Promise<ChannelResult<boolean>>
+      chat: () => Promise<ChannelResult<AgentChatState>>
+      ask: (content: string) => Promise<ChannelResult<AgentChatState>>
+      cancelAsk: () => Promise<ChannelResult<boolean>>
+      newChat: () => Promise<ChannelResult<AgentChatState>>
+      removeChat: () => Promise<ChannelResult<AgentChatState>>
+      onChat: (fn: (state: AgentChatState) => void) => () => void
+      onAgentLog: (fn: (entry: AgentLogEntry) => void) => () => void
       gateDone: () => void
       quit: () => void
       onApproval: (fn: (request: ApprovalRequest) => void) => () => void

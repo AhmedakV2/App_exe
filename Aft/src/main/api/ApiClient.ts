@@ -1,6 +1,12 @@
 import type { AuthStore, Session } from './AuthStore'
 import { API_BASE_URL, type ConfigStore } from './config'
 import type { DeviceInfo, DeviceProvision, Profile } from './types'
+import type {
+  AgentReplyDto,
+  AgentSessionDetailDto,
+  AgentSessionDto,
+  ModelInfoDto
+} from './agent-types'
 import { ApiError, retryAfterMillis } from './ApiError'
 
 export type { DeviceInfo, DeviceProvision, Profile }
@@ -107,6 +113,88 @@ export class ApiClient {
     await this.call('POST', '/api/v1/devices/' + deviceId + '/heartbeat', {}, false, {
       'X-Aft-Key': settings.deviceKey
     })
+  }
+
+  async createAgentSession(input: {
+    orgId: string
+    deviceId: string | null
+    title: string
+    mode: string
+  }): Promise<AgentSessionDto> {
+    return this.call<AgentSessionDto>('POST', '/api/v1/agent/sessions', input, true)
+  }
+
+  async agentSession(sessionId: string): Promise<AgentSessionDetailDto> {
+    return this.call<AgentSessionDetailDto>(
+      'GET',
+      '/api/v1/agent/sessions/' + sessionId,
+      null,
+      true
+    )
+  }
+
+  async deleteAgentSession(sessionId: string): Promise<void> {
+    await this.call('DELETE', '/api/v1/agent/sessions/' + sessionId, null, true)
+  }
+
+  async cancelAgentSession(sessionId: string): Promise<boolean> {
+    const result = await this.call<{ cancelled: boolean }>(
+      'POST',
+      '/api/v1/agent/sessions/' + sessionId + '/cancel',
+      null,
+      true
+    )
+    return result.cancelled === true
+  }
+
+  async sendAgentMessage(sessionId: string, content: string): Promise<AgentReplyDto> {
+    return this.call<AgentReplyDto>(
+      'POST',
+      '/api/v1/agent/sessions/' + sessionId + '/messages',
+      { content },
+      true
+    )
+  }
+
+  async startAgentStream(sessionId: string, content: string): Promise<void> {
+    await this.call(
+      'POST',
+      '/api/v1/agent/sessions/' + sessionId + '/messages?stream=true',
+      { content },
+      true
+    )
+  }
+
+  async agentModels(): Promise<ModelInfoDto> {
+    return this.call<ModelInfoDto>('GET', '/api/v1/agent/models', null, true)
+  }
+
+  async openAgentStream(sessionId: string, signal: AbortSignal): Promise<Response> {
+    await this.ensureToken()
+    const response = await fetch(API_BASE_URL + '/api/v1/agent/sessions/' + sessionId + '/stream', {
+      method: 'GET',
+      headers: {
+        Authorization: 'Bearer ' + this.auth.accessToken(),
+        Accept: 'text/event-stream'
+      },
+      signal
+    })
+    if (!response.ok || !response.body) throw await this.toError(response)
+    return response
+  }
+
+  async wsTicket(): Promise<string> {
+    const payload = await this.call<{ ticket: string; expiresIn: number }>(
+      'POST',
+      '/api/v1/auth/ws-ticket',
+      null,
+      true
+    )
+    return payload.ticket
+  }
+
+  accessToken(): string {
+    return this.auth.accessToken()
   }
 
   private async ensureToken(): Promise<void> {

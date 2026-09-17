@@ -15,6 +15,7 @@ import { clamp, formatMs } from './format'
 import { useConsole } from './useConsole'
 import type { Report } from './report'
 import type { PlaybackOptions } from '../../main/scenario/types'
+import type { AgentLogEntry, AgentLogLevel } from '../../main/bridge/api-types'
 import BrowserPage from './pages/BrowserPage'
 import type { DockTab } from './pages/BrowserPage'
 import ScenarioPage from './pages/ScenarioPage'
@@ -67,6 +68,15 @@ import {
   storeSize
 } from './shell/prefs'
 
+const AGENT_LOG_MAX = 200
+
+const LOG_KIND: Record<AgentLogLevel, 'ok' | 'err' | 'note'> = {
+  info: 'note',
+  tool: 'ok',
+  warn: 'note',
+  error: 'err'
+}
+
 const EMPTY_STATE: BrowserState = {
   url: '',
   title: '',
@@ -112,6 +122,7 @@ export default function App(): React.JSX.Element {
   const [space, setSpace] = useState({ width: 0, height: 0 })
   const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null)
   const [stageWidth, setStageWidth] = useState(0)
+  const [agentLog, setAgentLog] = useState<AgentLogEntry[]>([])
 
   const term = useConsole()
   const { push: pushLine, absorb: absorbResult } = term
@@ -338,6 +349,15 @@ export default function App(): React.JSX.Element {
       offUpdate()
       offNotice()
     }
+  }, [pushLine])
+
+  useEffect(() => {
+    return window.aftApi.onAgentLog((entry) => {
+      setAgentLog((prev) => prev.concat(entry).slice(-AGENT_LOG_MAX))
+      pushLine(LOG_KIND[entry.level] ?? 'note', 'Ajan · ' + entry.text, {
+        detail: entry.detail.length ? entry.detail : undefined
+      })
+    })
   }, [pushLine])
 
   useEffect(() => {
@@ -908,6 +928,7 @@ export default function App(): React.JSX.Element {
         {terminalOpen ? (
           <Drawer
             api={term}
+            agentLog={agentLog}
             height={termSize}
             focusSeed={focusSeed}
             onGrip={beginTermDrag}

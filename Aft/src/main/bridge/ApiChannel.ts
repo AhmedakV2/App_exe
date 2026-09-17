@@ -3,6 +3,8 @@ import { hostname, platform, release } from 'node:os'
 import { ApiClient } from '../api/ApiClient'
 import { AuthStore } from '../api/AuthStore'
 import { API_BASE_URL, ConfigStore } from '../api/config'
+import { AgentHub } from '../api/AgentHub'
+import type { AgentActivity, AgentChatState, AgentLogEntry } from '../api/agent-types'
 import { mountAgent, unmountAgent, agentBridge } from '../api/mountAgent'
 import type { ToolInvocation } from '../api/types'
 import type { BrowserController } from '../browser/BrowserController'
@@ -14,6 +16,8 @@ import type { AgentState, ApprovalRequest, LoginPayload, ProfilePayload } from '
 
 const APPROVAL_EVENT = 'aft:api:approval'
 const STATE_EVENT = 'aft:api:state-changed'
+const CHAT_EVENT = 'aft:agent:chat'
+const LOG_EVENT = 'aft:agent:log'
 const HEARTBEAT_MS = 60_000
 
 export interface ApiChannelOptions {
@@ -30,6 +34,7 @@ export class ApiChannel {
   private readonly config: ConfigStore
   private readonly auth: AuthStore
   private readonly client: ApiClient
+  private readonly hub: AgentHub
   private readonly pendingApprovals = new Map<string, (approved: boolean) => void>()
 
   private viewer: WebContents | null = null
@@ -42,6 +47,11 @@ export class ApiChannel {
     this.config = new ConfigStore(options.userDataDir)
     this.auth = new AuthStore(options.userDataDir)
     this.client = new ApiClient(this.config, this.auth)
+    this.hub = new AgentHub({
+      client: this.client,
+      onChange: (chat) => this.viewer?.send(CHAT_EVENT, chat),
+      onLog: (entry) => this.pushLog(entry)
+    })
   }
 
   bindViewer(contents: WebContents): void {
@@ -91,6 +101,7 @@ export class ApiChannel {
     ipcMain.handle('aft:api:logout', () =>
       guard('cikis', async (): Promise<AgentState> => {
         this.stopSession()
+        this.hub.reset()
         await this.client.logout()
         await this.config.clear()
         this.orgId = ''
@@ -105,6 +116,36 @@ export class ApiChannel {
       guard('kopar', (): AgentState => {
         this.stopSession()
         return this.publish()
+      })
+    )
+
+    ipcMain.handle('aft:agent:chat', () =>
+      guard('ajan durumu', (): AgentChatState => this.hub.snapshot())
+    )
+
+    ipcMain.handle('aft:agent:send', (_event, input: unknown) =>
+      guard('ajan mesaji', async (): Promise<AgentChatState> => {
+        if (!this.connected) throw new Error('Ajan baglantisi yok')
+        const payload = input as { content: string }
+        return this.hub.send(payload.content)
+      })
+    )
+
+    ipcMain.handle('aft:agent:cancel', () =>
+      guard('ajan durdurma', (): Promise<boolean> => this.hub.cancel())
+    )
+
+    ipcMain.handle('aft:agent:reset', () =>
+      guard('yeni sohbet', (): AgentChatState => {
+        this.hub.reset()
+        return this.hub.snapshot()
+      })
+    )
+
+    ipcMain.handle('aft:agent:remove', () =>
+      guard('sohbet silme', async (): Promise<AgentChatState> => {
+        await this.hub.remove()
+        return this.hub.snapshot()
       })
     )
 
@@ -126,8 +167,23 @@ export class ApiChannel {
     this.pendingApprovals.clear()
   }
 
+  private pushLog(entry: AgentLogEntry): void {
+    this.viewer?.send(LOG_EVENT, entry)
+  }
+
+  private onActivity(activity: AgentActivity): void {
+    const level = activity.ok ? 'tool' : 'error'
+    this.pushLog({
+      at: Date.now(),
+      level,
+      text: activity.toolName + ' · ' + activity.kind,
+      detail: activity.detail ? [activity.detail] : []
+    })
+  }
+
   private stopSession(): void {
     unmountAgent()
+    this.hub.stop()
     this.connected = false
     if (this.heartbeat) {
       clearInterval(this.heartbeat)
@@ -149,13 +205,14 @@ export class ApiChannel {
     await this.config.write({ orgId: provision.orgId, deviceKey: provision.deviceKey })
     this.orgId = provision.orgId
     this.device = provision.device
+    this.hub.bind(provision.orgId, provision.device.id)
 
     await mountAgent({
       endpoint: {
         baseUrl: API_BASE_URL,
         deviceId: provision.device.id,
-        accessToken: session.accessToken,
-        deviceKey: provision.deviceKey
+        deviceKey: provision.deviceKey,
+        ticket: () => this.client.wsTicket()
       },
       controller: this.options.controller,
       scenarios: this.options.scenarios,
@@ -163,8 +220,15 @@ export class ApiChannel {
       contexts: this.options.contexts,
       descriptors: this.options.descriptors,
       approve: (invocation) => this.askUser(invocation),
+      onActivity: (activity) => this.onActivity(activity),
       onStateChange: (connected) => {
         this.connected = connected
+        this.pushLog({
+          at: Date.now(),
+          level: connected ? 'info' : 'warn',
+          text: connected ? 'Arac kanali acildi' : 'Arac kanali kapandi',
+          detail: []
+        })
         this.publish()
       }
     })
