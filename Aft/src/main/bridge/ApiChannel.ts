@@ -241,7 +241,9 @@ export class ApiChannel {
   private async establish(): Promise<AgentState> {
     const session = this.auth.current()
     if (!session) throw new Error('Once giris yapin')
+
     this.failure = ''
+    unmountAgent()
 
     const provision = await this.client.provisionDevice(
       hostname(),
@@ -280,7 +282,6 @@ export class ApiChannel {
       }
     })
 
-    this.connected = true
     this.startHeartbeat()
     return this.publish()
   }
