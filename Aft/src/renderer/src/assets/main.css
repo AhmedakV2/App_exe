@@ -1140,6 +1140,16 @@ textarea {
   padding: 0 var(--sp-2) 0 var(--sp-2);
 }
 
+.dock-name {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-2);
+  color: var(--text);
+  font: 600 var(--fs-meta) var(--ui);
+  letter-spacing: var(--track);
+}
+
 .dock-tab {
   position: relative;
   display: flex;

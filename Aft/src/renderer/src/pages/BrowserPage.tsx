@@ -120,24 +120,12 @@ export default function BrowserPage({
           />
 
           <header className="dock-head">
-            <button
-              className={'dock-tab' + (dock === 'record' ? ' sel' : '')}
-              onClick={() => onDock('record')}
-              type="button"
-            >
-              <Glyph name="record" size={13} />
-              Kayıt
-              {recording ? <span className="dock-dot rec" /> : null}
-            </button>
-            <button
-              className={'dock-tab' + (dock === 'playback' ? ' sel' : '')}
-              onClick={() => onDock('playback')}
-              type="button"
-            >
-              <Glyph name="play" size={13} />
-              Oynatma
-              {playing ? <span className="dock-dot run" /> : null}
-            </button>
+            <span className="dock-name">
+              <Glyph name={dock === 'record' ? 'record' : 'play'} size={13} />
+              {dock === 'record' ? 'Kayıt' : 'Oynatma'}
+              {dock === 'record' && recording ? <span className="dock-dot rec" /> : null}
+              {dock === 'playback' && playing ? <span className="dock-dot run" /> : null}
+            </span>
             <span className="dock-push" />
             <button
               className="ghost-btn"
