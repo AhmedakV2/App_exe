@@ -10,6 +10,7 @@ export interface Session {
   refreshToken: string
   expiresAt: number
   userId: string
+  username: string
   email: string
   displayName: string
 }
@@ -24,6 +25,7 @@ export class AuthStore {
   state(): SessionState {
     return {
       signedIn: this.session !== null,
+      username: this.session?.username ?? '',
       email: this.session?.email ?? '',
       displayName: this.session?.displayName ?? '',
       expiresAt: this.session?.expiresAt ?? 0

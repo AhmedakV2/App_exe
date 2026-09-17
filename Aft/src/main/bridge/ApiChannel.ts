@@ -2,7 +2,9 @@ import { ipcMain, type WebContents } from 'electron'
 import { hostname, platform, release } from 'node:os'
 import { ApiClient } from '../api/ApiClient'
 import { AuthStore } from '../api/AuthStore'
-import { ConfigStore } from '../api/config'
+import { API_BASE_URL, ConfigStore } from '../api/config'
+import { AgentHub } from '../api/AgentHub'
+import type { AgentActivity, AgentChatState, AgentLogEntry } from '../api/agent-types'
 import { mountAgent, unmountAgent, agentBridge } from '../api/mountAgent'
 import type { ToolInvocation } from '../api/types'
 import type { BrowserController } from '../browser/BrowserController'
@@ -10,16 +12,13 @@ import type { Indexer } from '../data'
 import type { DescriptorStore } from '../identity'
 import type { ContextStore, ScenarioStore } from '../scenario'
 import { guard } from './guard'
-import type {
-  AgentState,
-  ApprovalRequest,
-  ConfigPayload,
-  LoginPayload,
-  ProfilePayload
-} from './api-types'
+import type { AgentState, ApprovalRequest, LoginPayload, ProfilePayload } from './api-types'
 
 const APPROVAL_EVENT = 'aft:api:approval'
 const STATE_EVENT = 'aft:api:state-changed'
+const CHAT_EVENT = 'aft:agent:chat'
+const LOG_EVENT = 'aft:agent:log'
+const HEARTBEAT_MS = 60_000
 
 export interface ApiChannelOptions {
   userDataDir: string
@@ -35,16 +34,24 @@ export class ApiChannel {
   private readonly config: ConfigStore
   private readonly auth: AuthStore
   private readonly client: ApiClient
+  private readonly hub: AgentHub
   private readonly pendingApprovals = new Map<string, (approved: boolean) => void>()
 
   private viewer: WebContents | null = null
   private connected = false
   private device: AgentState['device'] = null
+  private orgId = ''
+  private heartbeat: ReturnType<typeof setInterval> | null = null
 
   constructor(private readonly options: ApiChannelOptions) {
     this.config = new ConfigStore(options.userDataDir)
     this.auth = new AuthStore(options.userDataDir)
     this.client = new ApiClient(this.config, this.auth)
+    this.hub = new AgentHub({
+      client: this.client,
+      onChange: (chat) => this.viewer?.send(CHAT_EVENT, chat),
+      onLog: (entry) => this.pushLog(entry)
+    })
   }
 
   bindViewer(contents: WebContents): void {
@@ -54,27 +61,17 @@ export class ApiChannel {
   async start(): Promise<void> {
     await this.auth.load()
     const settings = await this.config.read()
-    if (settings.autoConnect && this.auth.current()) {
-      await this.connect().catch(() => undefined)
-    }
+    this.orgId = settings.orgId
+    if (this.auth.current()) await this.connect().catch(() => undefined)
   }
 
   register(): void {
     ipcMain.handle('aft:api:state', () => guard('durum', () => this.state()))
 
-    ipcMain.handle('aft:api:config', () =>
-      guard('ayar', async (): Promise<ConfigPayload> => ({ config: await this.config.read() }))
-    )
-
-    ipcMain.handle('aft:api:save-config', (_event, patch: unknown) =>
-      guard('ayar kaydi', async (): Promise<ConfigPayload> => ({
-        config: await this.config.write((patch ?? {}) as Record<string, never>)
-      }))
-    )
-
     ipcMain.handle('aft:api:login', (_event, input: unknown) =>
       guard('giris', async (): Promise<LoginPayload> => {
-        const profile = await this.client.login(input as { email: string; password: string })
+        const profile = await this.client.login(input as { username: string; password: string })
+        await this.connect().catch(() => undefined)
         return { profile, state: this.state() }
       })
     )
@@ -82,8 +79,9 @@ export class ApiChannel {
     ipcMain.handle('aft:api:register', (_event, input: unknown) =>
       guard('kayit', async (): Promise<LoginPayload> => {
         const profile = await this.client.register(
-          input as { email: string; password: string; displayName: string }
+          input as { username: string; email: string; password: string; displayName: string }
         )
+        await this.connect().catch(() => undefined)
         return { profile, state: this.state() }
       })
     )
@@ -102,9 +100,12 @@ export class ApiChannel {
 
     ipcMain.handle('aft:api:logout', () =>
       guard('cikis', async (): Promise<AgentState> => {
-        unmountAgent()
-        this.connected = false
+        this.stopSession()
+        this.hub.reset()
         await this.client.logout()
+        await this.config.clear()
+        this.orgId = ''
+        this.device = null
         return this.publish()
       })
     )
@@ -113,9 +114,38 @@ export class ApiChannel {
 
     ipcMain.handle('aft:api:disconnect', () =>
       guard('kopar', (): AgentState => {
-        unmountAgent()
-        this.connected = false
+        this.stopSession()
         return this.publish()
+      })
+    )
+
+    ipcMain.handle('aft:agent:chat', () =>
+      guard('ajan durumu', (): AgentChatState => this.hub.snapshot())
+    )
+
+    ipcMain.handle('aft:agent:send', (_event, input: unknown) =>
+      guard('ajan mesaji', async (): Promise<AgentChatState> => {
+        if (!this.connected) throw new Error('Ajan baglantisi yok')
+        const payload = input as { content: string }
+        return this.hub.send(payload.content)
+      })
+    )
+
+    ipcMain.handle('aft:agent:cancel', () =>
+      guard('ajan durdurma', (): Promise<boolean> => this.hub.cancel())
+    )
+
+    ipcMain.handle('aft:agent:reset', () =>
+      guard('yeni sohbet', (): AgentChatState => {
+        this.hub.reset()
+        return this.hub.snapshot()
+      })
+    )
+
+    ipcMain.handle('aft:agent:remove', () =>
+      guard('sohbet silme', async (): Promise<AgentChatState> => {
+        await this.hub.remove()
+        return this.hub.snapshot()
       })
     )
 
@@ -132,31 +162,57 @@ export class ApiChannel {
   }
 
   async dispose(): Promise<void> {
-    unmountAgent()
-    this.connected = false
+    this.stopSession()
     this.pendingApprovals.forEach((resolve) => resolve(false))
     this.pendingApprovals.clear()
+  }
+
+  private pushLog(entry: AgentLogEntry): void {
+    this.viewer?.send(LOG_EVENT, entry)
+  }
+
+  private onActivity(activity: AgentActivity): void {
+    const level = activity.ok ? 'tool' : 'error'
+    this.pushLog({
+      at: Date.now(),
+      level,
+      text: activity.toolName + ' · ' + activity.kind,
+      detail: activity.detail ? [activity.detail] : []
+    })
+  }
+
+  private stopSession(): void {
+    unmountAgent()
+    this.hub.stop()
+    this.connected = false
+    if (this.heartbeat) {
+      clearInterval(this.heartbeat)
+      this.heartbeat = null
+    }
   }
 
   private async connect(): Promise<AgentState> {
     const session = this.auth.current()
     if (!session) throw new Error('Once giris yapin')
+    if (this.connected) return this.state()
 
-    const settings = await this.config.read()
-    if (!settings.deviceKey) throw new Error('Cihaz anahtari tanimli degil')
-
-    this.device = await this.client.registerDevice(
+    const provision = await this.client.provisionDevice(
       hostname(),
       platform() + ' ' + release(),
       this.options.appVersion
     )
 
+    await this.config.write({ orgId: provision.orgId, deviceKey: provision.deviceKey })
+    this.orgId = provision.orgId
+    this.device = provision.device
+    this.hub.bind(provision.orgId, provision.device.id)
+
     await mountAgent({
       endpoint: {
-        baseUrl: settings.baseUrl,
-        deviceId: this.device.id,
-        accessToken: session.accessToken,
-        deviceKey: settings.deviceKey
+        baseUrl: API_BASE_URL,
+        deviceId: provision.device.id,
+        deviceKey: provision.deviceKey,
+        ticket: () => this.client.wsTicket()
       },
       controller: this.options.controller,
       scenarios: this.options.scenarios,
@@ -164,14 +220,31 @@ export class ApiChannel {
       contexts: this.options.contexts,
       descriptors: this.options.descriptors,
       approve: (invocation) => this.askUser(invocation),
+      onActivity: (activity) => this.onActivity(activity),
       onStateChange: (connected) => {
         this.connected = connected
+        this.pushLog({
+          at: Date.now(),
+          level: connected ? 'info' : 'warn',
+          text: connected ? 'Arac kanali acildi' : 'Arac kanali kapandi',
+          detail: []
+        })
         this.publish()
       }
     })
 
     this.connected = true
+    this.startHeartbeat()
     return this.publish()
+  }
+
+  private startHeartbeat(): void {
+    if (this.heartbeat) clearInterval(this.heartbeat)
+    this.heartbeat = setInterval(() => {
+      const deviceId = this.device?.id
+      if (!deviceId) return
+      void this.client.heartbeat(deviceId).catch(() => undefined)
+    }, HEARTBEAT_MS)
   }
 
   private askUser(invocation: ToolInvocation): Promise<boolean> {
@@ -201,6 +274,7 @@ export class ApiChannel {
     return {
       session: this.auth.state(),
       connected: this.connected,
+      orgId: this.orgId,
       device: this.device,
       capabilities: agentBridge()?.capabilities ?? []
     }

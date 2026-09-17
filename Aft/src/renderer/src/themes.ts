@@ -1,4 +1,4 @@
-export type ThemeId = 'grafit' | 'gece' | 'kagit' | 'orman'
+export type ThemeId = 'dark' | 'light'
 
 interface Theme {
   id: ThemeId
@@ -10,36 +10,22 @@ interface Theme {
 
 export const THEMES: Theme[] = [
   {
-    id: 'grafit',
-    label: 'Grafit',
-    note: 'Koyu gri yüzey, turuncu vurgu',
-    chrome: '#101114',
-    swatch: ['#101114', '#23262c', '#ff7a29']
+    id: 'dark',
+    label: 'Karanlık',
+    note: 'Google Material karanlık paleti',
+    chrome: '#131314',
+    swatch: ['#131314', '#1e1f20', '#a8c7fa']
   },
   {
-    id: 'gece',
-    label: 'Gece Mavisi',
-    note: 'Derin lacivert, gök mavisi vurgu',
-    chrome: '#080b12',
-    swatch: ['#080b12', '#131a26', '#38bdf8']
-  },
-  {
-    id: 'kagit',
-    label: 'Kağıt',
-    note: 'Açık zemin, indigo vurgu',
-    chrome: '#f4f4f5',
-    swatch: ['#f4f4f5', '#ffffff', '#2563eb']
-  },
-  {
-    id: 'orman',
-    label: 'Orman',
-    note: 'Koyu yeşil yüzey, zümrüt vurgu',
-    chrome: '#070f0b',
-    swatch: ['#070f0b', '#111c16', '#10b981']
+    id: 'light',
+    label: 'Aydınlık',
+    note: 'Google Material aydınlık paleti',
+    chrome: '#f0f4f9',
+    swatch: ['#f0f4f9', '#ffffff', '#0b57d0']
   }
 ]
 
-const DEFAULT_THEME: ThemeId = 'grafit'
+const DEFAULT_THEME: ThemeId = 'dark'
 
 const STORAGE_KEY = 'aft:theme'
 
@@ -70,5 +56,5 @@ export function themeOf(id: ThemeId): Theme {
 
 export function paintTheme(id: ThemeId): void {
   document.documentElement.dataset.theme = id
-  document.documentElement.style.colorScheme = id === 'kagit' ? 'light' : 'dark'
+  document.documentElement.style.colorScheme = id === 'light' ? 'light' : 'dark'
 }

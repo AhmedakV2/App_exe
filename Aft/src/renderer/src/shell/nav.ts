@@ -1,12 +1,11 @@
 import type { PageId } from './prefs'
 
-export type NavItem = { id: PageId; label: string; glyph: string; suite?: boolean }
+export type NavItem = { id: PageId; label: string; glyph: string }
 
 export const NAV_ICON = 22
 
 export const NAV: NavItem[] = [
   { id: 'browser', label: 'Tarayıcı', glyph: 'globe' },
-  { id: 'browser', label: 'Kayıt ve oynatma', glyph: 'suite', suite: true },
   { id: 'scenarios', label: 'Senaryolar', glyph: 'library' },
   { id: 'results', label: 'Sonuçlar', glyph: 'history' },
   { id: 'stats', label: 'İstatistik', glyph: 'spark' },

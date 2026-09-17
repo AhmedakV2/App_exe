@@ -1,11 +1,10 @@
-import { ApiError, retryAfterMillis } from './ApiError'
+import { ApiError } from './ApiError'
 import { decode, encode } from './stomp'
 import type { AgentEndpoint, ToolInvocation, ToolResult } from './types'
 
 const TOOL_QUEUE = '/user/queue/tools'
 const RESULT_DESTINATION = '/app/tool-results'
 const MAX_BACKOFF_MS = 30_000
-const MAX_RETRY_AFTER_MS = 60_000
 
 export interface ToolSocketOptions {
   endpoint: AgentEndpoint
@@ -108,20 +107,11 @@ export class ToolSocket {
   }
 
   private async fetchTicket(): Promise<string> {
-    const response = await fetch(this.options.endpoint.baseUrl + '/api/v1/auth/ws-ticket', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + this.options.endpoint.accessToken }
-    })
-    if (!response.ok) {
-      this.cooldownMs = retryAfterMillis(response, MAX_RETRY_AFTER_MS)
-      throw new ApiError(
-        response.status,
-        response.status === 429 ? 'RATE_LIMIT_EXCEEDED' : 'WS_TICKET_FAILED',
-        'WebSocket bileti alinamadi: ' + response.status,
-        this.cooldownMs
-      )
+    try {
+      return await this.options.endpoint.ticket()
+    } catch (error) {
+      if (error instanceof ApiError && error.retryAfterMs > 0) this.cooldownMs = error.retryAfterMs
+      throw error
     }
-    const payload = (await response.json()) as { ticket: string }
-    return payload.ticket
   }
 }

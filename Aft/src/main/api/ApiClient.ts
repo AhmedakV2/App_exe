@@ -1,17 +1,24 @@
 import type { AuthStore, Session } from './AuthStore'
-import type { ConfigStore } from './config'
-import type { DeviceInfo, Profile } from './types'
+import { API_BASE_URL, type ConfigStore } from './config'
+import type { DeviceInfo, DeviceProvision, Profile } from './types'
+import type {
+  AgentReplyDto,
+  AgentSessionDetailDto,
+  AgentSessionDto,
+  ModelInfoDto
+} from './agent-types'
 import { ApiError, retryAfterMillis } from './ApiError'
 
-export type { DeviceInfo, Profile }
+export type { DeviceInfo, DeviceProvision, Profile }
 export { ApiError }
 
 export interface LoginInput {
-  email: string
+  username: string
   password: string
 }
 
 export interface RegisterInput {
+  username: string
   email: string
   password: string
   displayName: string
@@ -40,7 +47,7 @@ export class ApiClient {
 
   async login(input: LoginInput): Promise<Profile> {
     const tokens = await this.call<TokenResponse>('POST', '/api/v1/auth/login', input, false)
-    await this.persist(tokens, { id: '', email: input.email, displayName: '' })
+    await this.persist(tokens, { id: '', username: input.username, email: '', displayName: '' })
 
     const profile = await this.me()
     await this.persist(tokens, profile)
@@ -49,7 +56,12 @@ export class ApiClient {
 
   async register(input: RegisterInput): Promise<Profile> {
     const tokens = await this.call<TokenResponse>('POST', '/api/v1/auth/register', input, false)
-    await this.persist(tokens, { id: '', email: input.email, displayName: input.displayName })
+    await this.persist(tokens, {
+      id: '',
+      username: input.username,
+      email: input.email,
+      displayName: input.displayName
+    })
 
     const profile = await this.me()
     await this.persist(tokens, profile)
@@ -72,14 +84,16 @@ export class ApiClient {
     return this.call<Profile>('GET', '/api/v1/auth/me', null, true)
   }
 
-  async registerDevice(hostname: string, os: string, appVersion: string): Promise<DeviceInfo> {
-    const settings = await this.config.read()
-    return this.call<DeviceInfo>(
+  async provisionDevice(
+    hostname: string,
+    os: string,
+    appVersion: string
+  ): Promise<DeviceProvision> {
+    return this.call<DeviceProvision>(
       'POST',
-      '/api/v1/devices/register',
+      '/api/v1/devices/provision',
       { hostname, os, appVersion },
-      false,
-      { 'X-Aft-Key': settings.deviceKey }
+      true
     )
   }
 
@@ -88,6 +102,88 @@ export class ApiClient {
     await this.call('POST', '/api/v1/devices/' + deviceId + '/heartbeat', {}, false, {
       'X-Aft-Key': settings.deviceKey
     })
+  }
+
+  async createAgentSession(input: {
+    orgId: string
+    deviceId: string | null
+    title: string
+    mode: string
+  }): Promise<AgentSessionDto> {
+    return this.call<AgentSessionDto>('POST', '/api/v1/agent/sessions', input, true)
+  }
+
+  async agentSession(sessionId: string): Promise<AgentSessionDetailDto> {
+    return this.call<AgentSessionDetailDto>(
+      'GET',
+      '/api/v1/agent/sessions/' + sessionId,
+      null,
+      true
+    )
+  }
+
+  async deleteAgentSession(sessionId: string): Promise<void> {
+    await this.call('DELETE', '/api/v1/agent/sessions/' + sessionId, null, true)
+  }
+
+  async cancelAgentSession(sessionId: string): Promise<boolean> {
+    const result = await this.call<{ cancelled: boolean }>(
+      'POST',
+      '/api/v1/agent/sessions/' + sessionId + '/cancel',
+      null,
+      true
+    )
+    return result.cancelled === true
+  }
+
+  async sendAgentMessage(sessionId: string, content: string): Promise<AgentReplyDto> {
+    return this.call<AgentReplyDto>(
+      'POST',
+      '/api/v1/agent/sessions/' + sessionId + '/messages',
+      { content },
+      true
+    )
+  }
+
+  async startAgentStream(sessionId: string, content: string): Promise<void> {
+    await this.call(
+      'POST',
+      '/api/v1/agent/sessions/' + sessionId + '/messages?stream=true',
+      { content },
+      true
+    )
+  }
+
+  async agentModels(): Promise<ModelInfoDto> {
+    return this.call<ModelInfoDto>('GET', '/api/v1/agent/models', null, true)
+  }
+
+  async openAgentStream(sessionId: string, signal: AbortSignal): Promise<Response> {
+    await this.ensureToken()
+    const response = await fetch(API_BASE_URL + '/api/v1/agent/sessions/' + sessionId + '/stream', {
+      method: 'GET',
+      headers: {
+        Authorization: 'Bearer ' + this.auth.accessToken(),
+        Accept: 'text/event-stream'
+      },
+      signal
+    })
+    if (!response.ok || !response.body) throw await this.toError(response)
+    return response
+  }
+
+  async wsTicket(): Promise<string> {
+    const payload = await this.call<{ ticket: string; expiresIn: number }>(
+      'POST',
+      '/api/v1/auth/ws-ticket',
+      null,
+      true
+    )
+    return payload.ticket
+  }
+
+  accessToken(): string {
+    return this.auth.accessToken()
   }
 
   private async ensureToken(): Promise<void> {
@@ -104,6 +200,7 @@ export class ApiClient {
     const current = this.auth.current()
     await this.persist(tokens, {
       id: current?.userId ?? '',
+      username: current?.username ?? '',
       email: current?.email ?? '',
       displayName: current?.displayName ?? ''
     })
@@ -111,13 +208,14 @@ export class ApiClient {
 
   private async persist(
     tokens: TokenResponse,
-    who: { id: string; email: string; displayName: string }
+    who: { id: string; username: string; email: string; displayName: string }
   ): Promise<void> {
     const session: Session = {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       expiresAt: Date.now() + tokens.expiresIn * 1000,
       userId: who.id,
+      username: who.username,
       email: who.email,
       displayName: who.displayName
     }
@@ -133,20 +231,21 @@ export class ApiClient {
   ): Promise<T> {
     if (authorized) await this.ensureToken()
 
-    const settings = await this.config.read()
     const headers: Record<string, string> = { ...extraHeaders }
     if (body !== null && body !== undefined) headers['Content-Type'] = 'application/json'
     if (authorized) headers.Authorization = 'Bearer ' + this.auth.accessToken()
 
-    const response = await fetch(settings.baseUrl + path, {
+    const response = await fetch(API_BASE_URL + path, {
       method,
       headers,
       body: body === null || body === undefined ? undefined : JSON.stringify(body)
     })
 
     if (!response.ok) throw await this.toError(response)
-    if (response.status === 204) return undefined as T
-    return (await response.json()) as T
+
+    const payload = await response.text()
+    if (!payload) return undefined as T
+    return JSON.parse(payload) as T
   }
 
   private async toError(response: Response): Promise<ApiError> {

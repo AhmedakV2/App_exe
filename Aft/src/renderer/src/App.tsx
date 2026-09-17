@@ -15,6 +15,7 @@ import { clamp, formatMs } from './format'
 import { useConsole } from './useConsole'
 import type { Report } from './report'
 import type { PlaybackOptions } from '../../main/scenario/types'
+import type { AgentLogEntry, AgentLogLevel } from '../../main/bridge/api-types'
 import BrowserPage from './pages/BrowserPage'
 import type { DockTab } from './pages/BrowserPage'
 import ScenarioPage from './pages/ScenarioPage'
@@ -29,6 +30,8 @@ import type { Command } from './parts/CommandPalette'
 import Brand from './shell/Brand'
 import { NAV, NAV_ICON, PAGE_LABELS } from './shell/nav'
 import type { NavItem } from './shell/nav'
+import { matchShortcut, normalizeRail, railEntries, readRail, storeRail } from './shell/rail'
+import type { RailItem } from './shell/rail'
 import { STEP_LABELS, stepDetail } from './shell/steps'
 import type { PageId } from './shell/prefs'
 import {
@@ -64,6 +67,15 @@ import {
   storeFlag,
   storeSize
 } from './shell/prefs'
+
+const AGENT_LOG_MAX = 200
+
+const LOG_KIND: Record<AgentLogLevel, 'ok' | 'err' | 'note'> = {
+  info: 'note',
+  tool: 'ok',
+  warn: 'note',
+  error: 'err'
+}
 
 const EMPTY_STATE: BrowserState = {
   url: '',
@@ -106,9 +118,11 @@ export default function App(): React.JSX.Element {
   const [dockWidth, setDockWidth] = useState(() => readSize(DOCK_KEY, DOCK_SIZE))
   const [devWidth, setDevWidth] = useState(() => readSize(DEV_KEY, DEV_SIZE))
   const [dock, setDock] = useState<DockTab>(() => readDock())
+  const [rail, setRail] = useState<RailItem[]>(() => readRail())
   const [space, setSpace] = useState({ width: 0, height: 0 })
   const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null)
   const [stageWidth, setStageWidth] = useState(0)
+  const [agentLog, setAgentLog] = useState<AgentLogEntry[]>([])
 
   const term = useConsole()
   const { push: pushLine, absorb: absorbResult } = term
@@ -172,7 +186,10 @@ export default function App(): React.JSX.Element {
   }, [stageEl])
 
   useEffect(() => {
-    const off = window.aft.onState((next) => setState(next))
+    const off = window.aft.onState((next) => {
+      setState(next)
+      if (next.devtoolsOpen) setPage('browser')
+    })
     window.aft.requestState()
     return off
   }, [])
@@ -259,21 +276,34 @@ export default function App(): React.JSX.Element {
   }, [playOptions])
 
   useEffect(() => {
+    storeRail(rail)
+  }, [rail])
+
+  useEffect(() => {
     window.aft.publishPrefs({
       theme,
       autoTerminal: autoTerm,
       autoTerminalRestore: autoBack,
       screenshotOnFailure: Boolean(playOptions.screenshotOnFailure),
       stopOnFailure: Boolean(playOptions.stopOnFailure),
-      verifyState: Boolean(playOptions.verifyState)
+      verifyState: Boolean(playOptions.verifyState),
+      rail
     })
-  }, [autoBack, autoTerm, playOptions, theme])
+  }, [autoBack, autoTerm, playOptions, rail, theme])
 
   useEffect(() => {
     return window.aft.onPrefsPatch((patch) => {
       if (isThemeId(patch.theme)) setTheme(patch.theme)
       if (typeof patch.autoTerminal === 'boolean') setAutoTerm(patch.autoTerminal)
       if (typeof patch.autoTerminalRestore === 'boolean') setAutoBack(patch.autoTerminalRestore)
+      if (Array.isArray(patch.rail)) {
+        const next = normalizeRail(patch.rail)
+        const shown = railEntries(next).filter((entry) => !entry.hidden)
+        setRail(next)
+        setPage((current) =>
+          shown.some((entry) => entry.id === current) ? current : (shown[0]?.id ?? current)
+        )
+      }
 
       const keys = ['screenshotOnFailure', 'stopOnFailure', 'verifyState'] as const
       const next: Partial<PlaybackOptions> = {}
@@ -319,6 +349,15 @@ export default function App(): React.JSX.Element {
       offUpdate()
       offNotice()
     }
+  }, [pushLine])
+
+  useEffect(() => {
+    return window.aftApi.onAgentLog((entry) => {
+      setAgentLog((prev) => prev.concat(entry).slice(-AGENT_LOG_MAX))
+      pushLine(LOG_KIND[entry.level] ?? 'note', 'Ajan · ' + entry.text, {
+        detail: entry.detail.length ? entry.detail : undefined
+      })
+    })
   }, [pushLine])
 
   useEffect(() => {
@@ -403,6 +442,22 @@ export default function App(): React.JSX.Element {
     window.aft.setDevtoolsSplit(devSize / stageWidth)
   }, [devSize, devtoolsOpen, stageWidth])
 
+  const visibleRail = useMemo(() => railEntries(rail).filter((entry) => !entry.hidden), [rail])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      const combo = matchShortcut(event)
+      if (!combo) return
+      const target = visibleRail.find((entry) => entry.shortcut === combo)
+      if (!target) return
+      event.preventDefault()
+      setPage(target.id)
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [visibleRail])
+
   const nav = useCallback((kind: NavKind): void => window.aft.nav(kind), [])
   const winAction = useCallback((action: WindowAction): void => window.aft.window(action), [])
 
@@ -432,11 +487,6 @@ export default function App(): React.JSX.Element {
   const toggleSettings = useCallback((): void => {
     window.aft.setSettings(!settingsOpen)
   }, [settingsOpen])
-
-  const toggleDevtools = useCallback((): void => {
-    setPage('browser')
-    window.aft.setDevtools(!devtoolsOpen)
-  }, [devtoolsOpen])
 
   const beginDrag = useCallback(
     (axis: DragAxis, event: React.PointerEvent<HTMLDivElement>): void => {
@@ -485,21 +535,11 @@ export default function App(): React.JSX.Element {
     setDock(tab)
   }, [])
 
-  const pick = useCallback(
-    (item: NavItem): void => {
-      if (!item.suite) {
-        setPage(item.id)
-        return
-      }
-      if (page === 'browser' && dock) {
-        setDock(null)
-        return
-      }
-      setPage('browser')
-      setDock(dock ?? lastTabRef.current)
-    },
-    [dock, page]
-  )
+  const pick = useCallback((item: NavItem): void => setPage(item.id), [])
+
+  const toggleDock = useCallback((tab: Exclude<DockTab, null>): void => {
+    setDock((current) => (current === tab ? null : tab))
+  }, [])
 
   const onSaved = useCallback((): void => {
     setLibrary((prev) => prev + 1)
@@ -544,11 +584,12 @@ export default function App(): React.JSX.Element {
   const goPage = useCallback((id: PageId): void => setPage(id), [])
 
   const commands = useMemo((): Command[] => {
-    const pages: Command[] = NAV.filter((item) => !item.suite).map((item) => ({
+    const pages: Command[] = NAV.map((item) => ({
       id: 'page:' + item.id,
       group: 'Sayfalar',
       label: item.label + ' sekmesini aç',
       glyph: item.glyph,
+      hint: rail.find((entry) => entry.id === item.id)?.shortcut || undefined,
       keywords: item.id
     }))
 
@@ -611,14 +652,6 @@ export default function App(): React.JSX.Element {
         keywords: 'ogeler eleman element liste'
       },
       {
-        id: 'panel:devtools',
-        group: 'Paneller',
-        label: 'İnceleme panelini aç veya kapat',
-        glyph: 'inspect',
-        hint: 'F12',
-        keywords: 'incele devtools gelistirici'
-      },
-      {
         id: 'panel:terminal',
         group: 'Paneller',
         label: 'Yardımcı paneli aç veya kapat',
@@ -671,7 +704,7 @@ export default function App(): React.JSX.Element {
         keywords: 'tema renk ' + item.id
       }))
     )
-  }, [state.vision])
+  }, [rail, state.vision])
 
   const runCommand = useCallback(
     (id: string): void => {
@@ -720,7 +753,6 @@ export default function App(): React.JSX.Element {
 
       if (scope === 'panel') {
         if (key === 'elements') toggleList()
-        else if (key === 'devtools') toggleDevtools()
         else if (key === 'terminal') toggleDrawer()
         else toggleSettings()
         return
@@ -738,7 +770,7 @@ export default function App(): React.JSX.Element {
       }
       nav(key as NavKind)
     },
-    [goPage, nav, onVision, toggleDevtools, toggleDrawer, toggleList, toggleSettings]
+    [goPage, nav, onVision, toggleDrawer, toggleList, toggleSettings]
   )
 
   const status = useMemo(() => {
@@ -765,6 +797,16 @@ export default function App(): React.JSX.Element {
 
         <div className="title-drag" onDoubleClick={maximizeWindow} />
 
+        <div className="title-tools">
+          <IconButton
+            name="settings"
+            title="Ayarlar"
+            onClick={toggleSettings}
+            active={settingsOpen}
+            small
+          />
+        </div>
+
         <div className="title-win">
           <IconButton name="minimize" title="Küçült" onClick={minimizeWindow} small />
           <IconButton
@@ -779,29 +821,32 @@ export default function App(): React.JSX.Element {
 
       <aside className="sidebar">
         <nav className="rail-group" aria-label="Ana gezinme">
-          {NAV.map((item) => {
-            const on = item.suite ? Boolean(dock) : item.id === page && !item.suite
+          {visibleRail.map((entry) => {
+            const on = entry.id === page
+            const label = entry.shortcut
+              ? entry.nav.label + ' (' + entry.shortcut + ')'
+              : entry.nav.label
             return (
               <button
-                key={item.label}
+                key={entry.id}
                 className={'nav-item' + (on ? ' sel' : '')}
-                title={item.label}
-                aria-label={item.label}
+                title={label}
+                aria-label={label}
                 aria-pressed={on}
-                onClick={() => pick(item)}
+                onClick={() => pick(entry.nav)}
                 type="button"
               >
-                <Glyph name={item.glyph} size={NAV_ICON} />
-                {item.suite && recording ? <span className="nav-dot rec" /> : null}
-                {item.suite && !recording && playing ? <span className="nav-dot run" /> : null}
+                <Glyph name={entry.nav.glyph} size={NAV_ICON} />
               </button>
             )
           })}
         </nav>
 
+        <span className="rail-gap" />
+
         <span className="rail-split" />
 
-        <nav className="rail-group" aria-label="Yardımcı araçlar">
+        <nav className="rail-group rail-bottom" aria-label="Yardımcı araçlar">
           <button
             className={'nav-item' + (listOpen && page === 'browser' ? ' sel' : '')}
             title="Öğeler"
@@ -813,16 +858,6 @@ export default function App(): React.JSX.Element {
             <Glyph name="grid" size={NAV_ICON} />
           </button>
           <button
-            className={'nav-item' + (devtoolsOpen && page === 'browser' ? ' sel' : '')}
-            title="Sayfayı incele (F12)"
-            aria-label="Sayfayı incele"
-            aria-pressed={devtoolsOpen && page === 'browser'}
-            onClick={toggleDevtools}
-            type="button"
-          >
-            <Glyph name="inspect" size={NAV_ICON} />
-          </button>
-          <button
             className={'nav-item' + (terminalOpen ? ' sel' : '')}
             title="Yardımcı panel (Ctrl+K)"
             aria-label="Yardımcı panel"
@@ -831,21 +866,6 @@ export default function App(): React.JSX.Element {
             type="button"
           >
             <Glyph name="terminal" size={NAV_ICON} />
-          </button>
-        </nav>
-
-        <span className="rail-gap" />
-
-        <nav className="rail-group" aria-label="Ayarlar">
-          <button
-            className={'nav-item' + (settingsOpen ? ' sel' : '')}
-            title="Ayarlar"
-            aria-label="Ayarlar"
-            aria-pressed={settingsOpen}
-            onClick={toggleSettings}
-            type="button"
-          >
-            <Glyph name="settings" size={NAV_ICON} />
           </button>
         </nav>
       </aside>
@@ -872,6 +892,7 @@ export default function App(): React.JSX.Element {
               playOptions={playOptions}
               onNav={nav}
               onVision={onVision}
+              onDockToggle={toggleDock}
               onListGrip={beginListDrag}
               onDockGrip={beginDockDrag}
               onDevGrip={beginDevDrag}
@@ -907,6 +928,7 @@ export default function App(): React.JSX.Element {
         {terminalOpen ? (
           <Drawer
             api={term}
+            agentLog={agentLog}
             height={termSize}
             focusSeed={focusSeed}
             onGrip={beginTermDrag}

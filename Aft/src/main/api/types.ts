@@ -16,14 +16,13 @@ export interface ToolResult {
 }
 
 export interface AgentConfig {
-  baseUrl: string
   orgId: string
   deviceKey: string
-  autoConnect: boolean
 }
 
 export interface SessionState {
   signedIn: boolean
+  username: string
   email: string
   displayName: string
   expiresAt: number
@@ -31,6 +30,7 @@ export interface SessionState {
 
 export interface Profile {
   id: string
+  username: string
   email: string
   displayName: string
   locale: string
@@ -49,11 +49,17 @@ export interface DeviceInfo {
   lastSeenAt: string | null
 }
 
+export interface DeviceProvision {
+  orgId: string
+  deviceKey: string
+  device: DeviceInfo
+}
+
 export interface AgentEndpoint {
   baseUrl: string
   deviceId: string
-  accessToken: string
   deviceKey: string
+  ticket: () => Promise<string>
 }
 
 export type ApprovalGate = (invocation: ToolInvocation) => Promise<boolean>

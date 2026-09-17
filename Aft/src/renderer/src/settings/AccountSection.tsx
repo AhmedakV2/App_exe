@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import type { AgentState } from '../../../main/bridge/api-types'
 import type { Profile } from '../../../main/api/types'
+import PasswordField from '../parts/PasswordField'
 
 const MIN_PASSWORD = 12
 
 const EMPTY_STATE: AgentState = {
-  session: { signedIn: false, email: '', displayName: '', expiresAt: 0 },
+  session: { signedIn: false, username: '', email: '', displayName: '', expiresAt: 0 },
   connected: false,
+  orgId: '',
   device: null,
   capabilities: []
 }
@@ -131,15 +133,19 @@ export default function AccountSection(): React.JSX.Element {
         <h3 className="sheet-label">Hesap</h3>
         <div className="set-identity">
           <span className="set-avatar">
-            {(state.session.displayName || state.session.email).slice(0, 1).toUpperCase()}
+            {(state.session.displayName || state.session.username).slice(0, 1).toUpperCase()}
           </span>
           <div>
-            <strong>{state.session.displayName || state.session.email}</strong>
+            <strong>{state.session.displayName || state.session.username}</strong>
             <span className="set-muted">{state.session.email}</span>
           </div>
         </div>
 
         <dl className="set-facts">
+          <div>
+            <dt>Kullanici adi</dt>
+            <dd>{state.session.username || profile?.username || '-'}</dd>
+          </div>
           <div>
             <dt>Roller</dt>
             <dd>{profile?.roles.length ? profile.roles.join(', ') : '-'}</dd>
@@ -170,38 +176,29 @@ export default function AccountSection(): React.JSX.Element {
       <section className="sheet-block">
         <h3 className="sheet-label">Parola</h3>
         <form className="set-form" onSubmit={onChangePassword}>
-          <label>
-            Mevcut parola
-            <input
-              type="password"
-              value={currentPassword}
-              autoComplete="current-password"
-              required
-              onChange={(event) => setCurrentPassword(event.target.value)}
-            />
-          </label>
-          <label>
-            Yeni parola
-            <input
-              type="password"
-              value={newPassword}
-              autoComplete="new-password"
-              required
-              minLength={MIN_PASSWORD}
-              onChange={(event) => setNewPassword(event.target.value)}
-            />
-          </label>
-          <label>
-            Yeni parola tekrar
-            <input
-              type="password"
-              value={repeatPassword}
-              autoComplete="new-password"
-              required
-              minLength={MIN_PASSWORD}
-              onChange={(event) => setRepeatPassword(event.target.value)}
-            />
-          </label>
+          <PasswordField
+            label="Mevcut parola"
+            value={currentPassword}
+            autoComplete="current-password"
+            required
+            onChange={setCurrentPassword}
+          />
+          <PasswordField
+            label="Yeni parola"
+            value={newPassword}
+            autoComplete="new-password"
+            minLength={MIN_PASSWORD}
+            required
+            onChange={setNewPassword}
+          />
+          <PasswordField
+            label="Yeni parola tekrar"
+            value={repeatPassword}
+            autoComplete="new-password"
+            minLength={MIN_PASSWORD}
+            required
+            onChange={setRepeatPassword}
+          />
           <button type="submit" disabled={busy}>
             Parolayi degistir
           </button>

@@ -104,6 +104,12 @@ export interface BrowserState {
   fullscreen: boolean
 }
 
+export interface RailItemPref {
+  id: string
+  hidden: boolean
+  shortcut: string
+}
+
 export interface AppPrefs {
   theme: string
   autoTerminal: boolean
@@ -111,4 +117,5 @@ export interface AppPrefs {
   screenshotOnFailure: boolean
   stopOnFailure: boolean
   verifyState: boolean
+  rail: RailItemPref[]
 }

@@ -1,7 +1,9 @@
 import React, { memo, useState } from 'react'
 import type { Console as ConsoleApi } from '../useConsole'
+import type { AgentLogEntry } from '../../../main/bridge/api-types'
 import ConsoleStream from './Console'
 import { Glyph } from '../icons'
+import { formatClock } from '../format'
 import { Empty } from '../ui'
 
 type DrawerTab = 'terminal' | 'agent'
@@ -13,12 +15,14 @@ const TABS: { id: DrawerTab; label: string; glyph: string }[] = [
 
 export default memo(function Drawer({
   api,
+  agentLog,
   height,
   focusSeed,
   onGrip,
   onClose
 }: {
   api: ConsoleApi
+  agentLog: AgentLogEntry[]
   height: number
   focusSeed: number
   onGrip: (event: React.PointerEvent<HTMLDivElement>) => void
@@ -86,11 +90,25 @@ export default memo(function Drawer({
       </div>
 
       <div className="drawer-pane" hidden={tab !== 'agent'}>
-        <Empty
-          glyph="spark"
-          text="Ajan akışı beklemede"
-          hint="Otonom ajan devreye alındığında plan, adım ve karar akışı bu panelde canlı olarak listelenecek."
-        />
+        {agentLog.length ? (
+          <ol className="agent-feed">
+            {agentLog.map((entry, index) => (
+              <li key={entry.at + ':' + index} className={'agent-feed-row ' + entry.level}>
+                <span className="agent-feed-time">{formatClock(entry.at)}</span>
+                <span className="agent-feed-text">{entry.text}</span>
+                {entry.detail.length ? (
+                  <span className="agent-feed-detail">{entry.detail.join(' · ')}</span>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <Empty
+            glyph="spark"
+            text="Ajan akışı beklemede"
+            hint="Ajan bir araç çalıştırdığında plan, adım ve karar akışı burada canlı olarak listelenir."
+          />
+        )}
       </div>
     </section>
   )

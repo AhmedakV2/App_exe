@@ -4,14 +4,16 @@ import { THEMES, isThemeId, paintTheme, readTheme, storeTheme, themeOf } from '.
 import type { ThemeId } from './themes'
 import { Glyph } from './icons'
 import AccountSection from './settings/AccountSection'
-import ConnectionSection from './settings/ConnectionSection'
+import RailSection from './settings/RailSection'
+import { normalizeRail, readRail, storeRail } from './shell/rail'
+import type { RailItem } from './shell/rail'
 
-type SectionId = 'account' | 'connection' | 'appearance' | 'terminal' | 'playback' | 'shortcuts'
+type SectionId = 'account' | 'appearance' | 'rail' | 'terminal' | 'playback' | 'shortcuts'
 
 const SECTIONS: { id: SectionId; label: string; glyph: string }[] = [
   { id: 'account', label: 'Hesap', glyph: 'shield' },
-  { id: 'connection', label: 'Bağlantı', glyph: 'cloud' },
   { id: 'appearance', label: 'Görünüm', glyph: 'sliders' },
+  { id: 'rail', label: 'Sol panel', glyph: 'list' },
   { id: 'terminal', label: 'Terminal', glyph: 'terminal' },
   { id: 'playback', label: 'Oynatma', glyph: 'play' },
   { id: 'shortcuts', label: 'Kısayollar', glyph: 'grid' }
@@ -20,7 +22,7 @@ const SECTIONS: { id: SectionId; label: string; glyph: string }[] = [
 const SHORTCUTS: { name: string; code: string }[] = [
   { name: 'Terminal', code: 'Ctrl+K' },
   { name: 'Adres çubuğu', code: 'Ctrl+L' },
-  { name: 'Sayfayı incele', code: 'F12' },
+  { name: 'Sayfayı incele (aç/kapat)', code: 'F12' },
   { name: 'Tam ekran', code: 'F11' },
   { name: 'Kayıtta imleç adımları', code: 'Ctrl+H' },
   { name: 'Seçili öğeyi sil', code: 'Del' },
@@ -48,6 +50,7 @@ export default function SettingsWindow(): React.JSX.Element {
   const [shotOnFail, setShotOnFail] = useState(true)
   const [stopOnFail, setStopOnFail] = useState(true)
   const [verifyState, setVerifyState] = useState(true)
+  const [rail, setRail] = useState<RailItem[]>(() => readRail())
 
   useEffect(() => {
     paintTheme(theme)
@@ -71,6 +74,7 @@ export default function SettingsWindow(): React.JSX.Element {
       setShotOnFail(value.screenshotOnFailure)
       setStopOnFail(value.stopOnFailure)
       setVerifyState(value.verifyState)
+      if (value.rail.length) setRail(normalizeRail(value.rail))
     })
   }, [])
 
@@ -117,6 +121,12 @@ export default function SettingsWindow(): React.JSX.Element {
     window.aft.patchPrefs({ verifyState: next })
   }, [])
 
+  const changeRail = useCallback((next: RailItem[]): void => {
+    setRail(next)
+    storeRail(next)
+    window.aft.patchPrefs({ rail: next })
+  }, [])
+
   const active = SECTIONS.find((item) => item.id === section) ?? SECTIONS[0]
 
   return (
@@ -159,8 +169,6 @@ export default function SettingsWindow(): React.JSX.Element {
 
           {section === 'account' ? <AccountSection /> : null}
 
-          {section === 'connection' ? <ConnectionSection /> : null}
-
           {section === 'appearance' ? (
             <section className="sheet-block">
               <h3 className="sheet-label">Tema</h3>
@@ -189,6 +197,8 @@ export default function SettingsWindow(): React.JSX.Element {
               </div>
             </section>
           ) : null}
+
+          {section === 'rail' ? <RailSection rail={rail} onChange={changeRail} /> : null}
 
           {section === 'terminal' ? (
             <section className="sheet-block">

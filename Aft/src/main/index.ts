@@ -24,6 +24,7 @@ import {
   DragAxis,
   ExecuteResult,
   NavKind,
+  RailItemPref,
   ScanReport,
   StageBox,
   WindowAction
@@ -360,11 +361,28 @@ function publishPrefs(value: unknown): void {
     autoTerminalRestore: Boolean(raw.autoTerminalRestore),
     screenshotOnFailure: Boolean(raw.screenshotOnFailure),
     stopOnFailure: Boolean(raw.stopOnFailure),
-    verifyState: Boolean(raw.verifyState)
+    verifyState: Boolean(raw.verifyState),
+    rail: readRail(raw.rail)
   }
 
   if (settingsAlive()) (settingsWin as BrowserWindow).webContents.send('aft:prefs', prefs)
   if (setHomeTheme(prefs.theme)) repaintHome()
+}
+
+function readRail(value: unknown): RailItemPref[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return []
+    const item = entry as Partial<RailItemPref>
+    if (typeof item.id !== 'string') return []
+    return [
+      {
+        id: item.id,
+        hidden: item.hidden === true,
+        shortcut: typeof item.shortcut === 'string' ? item.shortcut : ''
+      }
+    ]
+  })
 }
 
 function patchPrefs(patch: unknown): void {

@@ -3,8 +3,6 @@ import type { IpcRendererEvent } from 'electron'
 
 const aftApi = {
   state: () => ipcRenderer.invoke('aft:api:state'),
-  config: () => ipcRenderer.invoke('aft:api:config'),
-  saveConfig: (patch: unknown) => ipcRenderer.invoke('aft:api:save-config', patch),
   login: (input: unknown) => ipcRenderer.invoke('aft:api:login', input),
   register: (input: unknown) => ipcRenderer.invoke('aft:api:register', input),
   logout: () => ipcRenderer.invoke('aft:api:logout'),
@@ -14,6 +12,25 @@ const aftApi = {
   disconnect: () => ipcRenderer.invoke('aft:api:disconnect'),
   approve: (callId: string, approved: boolean) =>
     ipcRenderer.invoke('aft:api:approve', { callId, approved }),
+  chat: () => ipcRenderer.invoke('aft:agent:chat'),
+  ask: (content: string) => ipcRenderer.invoke('aft:agent:send', { content }),
+  cancelAsk: () => ipcRenderer.invoke('aft:agent:cancel'),
+  newChat: () => ipcRenderer.invoke('aft:agent:reset'),
+  removeChat: () => ipcRenderer.invoke('aft:agent:remove'),
+  onChat: (fn: (state: unknown) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, state: unknown): void => fn(state)
+    ipcRenderer.on('aft:agent:chat', handler)
+    return (): void => {
+      ipcRenderer.removeListener('aft:agent:chat', handler)
+    }
+  },
+  onAgentLog: (fn: (entry: unknown) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, entry: unknown): void => fn(entry)
+    ipcRenderer.on('aft:agent:log', handler)
+    return (): void => {
+      ipcRenderer.removeListener('aft:agent:log', handler)
+    }
+  },
   gateDone: (): void => ipcRenderer.send('aft:gate:done'),
   quit: (): void => ipcRenderer.send('aft:app:quit'),
   onApproval: (fn: (request: unknown) => void): (() => void) => {

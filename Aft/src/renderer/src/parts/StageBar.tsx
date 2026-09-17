@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentAction, BrowserState, NavKind } from '../../../main/browser/types'
+import type { DockTab } from '../pages/BrowserPage'
 import { IconButton } from '../icons'
 import { shortUrl, toUrl } from '../format'
 import { isHomeUrl } from '../../../main/home/search'
@@ -8,16 +9,24 @@ export default memo(function StageBar({
   state,
   visionCount,
   urlSeed,
+  dock,
+  recording,
+  playing,
   onNav,
   onAction,
-  onVision
+  onVision,
+  onDockToggle
 }: {
   state: BrowserState
   visionCount: number
   urlSeed: number
+  dock: DockTab
+  recording: boolean
+  playing: boolean
   onNav: (kind: NavKind) => void
   onAction: (action: AgentAction) => void
   onVision: () => void
+  onDockToggle: (tab: Exclude<DockTab, null>) => void
 }): React.JSX.Element {
   const [focused, setFocused] = useState(false)
   const [draft, setDraft] = useState('')
@@ -112,6 +121,20 @@ export default memo(function StageBar({
           onClick={onVision}
           active={state.vision}
           badge={state.vision ? visionCount : 0}
+          small
+        />
+        <IconButton
+          name="record"
+          title={recording ? 'Kayıt paneli · kayıtta' : 'Kayıt paneli'}
+          onClick={() => onDockToggle('record')}
+          active={dock === 'record' || recording}
+          small
+        />
+        <IconButton
+          name="play"
+          title={playing ? 'Oynatma paneli · koşumda' : 'Oynatma paneli'}
+          onClick={() => onDockToggle('playback')}
+          active={dock === 'playback' || playing}
           small
         />
       </div>

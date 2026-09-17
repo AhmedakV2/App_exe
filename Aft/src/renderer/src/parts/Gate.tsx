@@ -1,13 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import PasswordField from './PasswordField'
 
 type Phase = 'checking' | 'auth' | 'loading'
 type Mode = 'login' | 'register'
 
 const MIN_PASSWORD = 12
+const MIN_USERNAME = 3
+const USERNAME_PATTERN = /^[A-Za-z0-9._-]+$/
 
 export default function Gate(): React.JSX.Element {
   const [phase, setPhase] = useState<Phase>('checking')
   const [mode, setMode] = useState<Mode>('login')
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -41,6 +45,11 @@ export default function Gate(): React.JSX.Element {
       event.preventDefault()
       setError('')
 
+      const account = username.trim()
+      if (account.length < MIN_USERNAME || !USERNAME_PATTERN.test(account)) {
+        setError('Kullanici adi en az 3 karakter olmali ve yalnizca harf, rakam, nokta, alt tire')
+        return
+      }
       if (mode === 'register' && password.length < MIN_PASSWORD) {
         setError('Parola en az ' + MIN_PASSWORD + ' karakter olmali')
         return
@@ -49,8 +58,9 @@ export default function Gate(): React.JSX.Element {
       setBusy(true)
       const result =
         mode === 'login'
-          ? await window.aftApi.login({ email: email.trim(), password })
+          ? await window.aftApi.login({ username: account, password })
           : await window.aftApi.register({
+              username: account,
               email: email.trim(),
               password,
               displayName: displayName.trim()
@@ -61,7 +71,7 @@ export default function Gate(): React.JSX.Element {
       if (result.ok) enter()
       else setError(result.message)
     },
-    [mode, email, password, displayName, enter]
+    [mode, username, email, password, displayName, enter]
   )
 
   const swap = (next: Mode) => (): void => {
@@ -140,27 +150,40 @@ export default function Gate(): React.JSX.Element {
           ) : null}
 
           <label className="gate-field">
-            <span>E-posta</span>
+            <span>Kullanici adi</span>
             <input
-              type="email"
-              value={email}
+              type="text"
+              value={username}
               autoComplete="username"
+              spellCheck={false}
               required
-              onChange={(e) => setEmail(e.target.value)}
+              minLength={MIN_USERNAME}
+              maxLength={64}
+              onChange={(e) => setUsername(e.target.value)}
             />
           </label>
 
-          <label className="gate-field">
-            <span>Parola</span>
-            <input
-              type="password"
-              value={password}
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              required
-              minLength={mode === 'register' ? MIN_PASSWORD : undefined}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
+          {mode === 'register' ? (
+            <label className="gate-field">
+              <span>E-posta</span>
+              <input
+                type="email"
+                value={email}
+                autoComplete="email"
+                required
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </label>
+          ) : null}
+
+          <PasswordField
+            label="Parola"
+            value={password}
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            minLength={mode === 'register' ? MIN_PASSWORD : undefined}
+            required
+            onChange={setPassword}
+          />
 
           {error ? (
             <p className="gate-error" role="alert">

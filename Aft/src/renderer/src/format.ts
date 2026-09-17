@@ -41,8 +41,8 @@ export function formatShortDate(at: number): string {
   )
 }
 
-export function formatClock(): string {
-  const now = new Date()
+export function formatClock(at?: number): string {
+  const now = at ? new Date(at) : new Date()
   const pad = (part: number): string => String(part).padStart(2, '0')
   return pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds())
 }
