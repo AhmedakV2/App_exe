@@ -36,19 +36,24 @@ export class ToolSocket {
       clearTimeout(this.timer)
       this.timer = null
     }
-    this.socket?.close()
+    const socket = this.socket
     this.socket = null
+    if (socket && socket.readyState !== WebSocket.CLOSED) socket.close()
   }
 
   send(result: ToolResult): boolean {
     if (!this.connected()) return false
-    this.socket?.send(
-      encode(
-        'SEND',
-        { destination: RESULT_DESTINATION, 'content-type': 'application/json' },
-        JSON.stringify(result)
+    try {
+      this.socket?.send(
+        encode(
+          'SEND',
+          { destination: RESULT_DESTINATION, 'content-type': 'application/json' },
+          JSON.stringify(result)
+        )
       )
-    )
+    } catch {
+      return false
+    }
     return true
   }
 
@@ -59,23 +64,30 @@ export class ToolSocket {
     this.socket = socket
 
     socket.onopen = () => {
-      socket.send(
-        encode('CONNECT', {
-          'accept-version': '1.2',
-          host: new URL(this.options.endpoint.baseUrl).host,
-          'X-Aft-Ticket': ticket,
-          'X-Aft-Device': this.options.endpoint.deviceId
-        })
-      )
+      try {
+        socket.send(
+          encode('CONNECT', {
+            'accept-version': '1.2',
+            host: new URL(this.options.endpoint.baseUrl).host,
+            'X-Aft-Ticket': ticket,
+            'X-Aft-Device': this.options.endpoint.deviceId
+          })
+        )
+      } catch {
+        return
+      }
+    }
+
+    const drop = (): void => {
+      if (this.socket !== socket) return
+      this.socket = null
+      this.options.onStateChange?.(false)
+      this.scheduleReconnect()
     }
 
     socket.onmessage = (event) => this.onFrame(String(event.data))
-    socket.onerror = () => socket.close()
-    socket.onclose = () => {
-      this.options.onStateChange?.(false)
-      this.socket = null
-      this.scheduleReconnect()
-    }
+    socket.onerror = drop
+    socket.onclose = drop
   }
 
   private onFrame(raw: string): void {
@@ -84,13 +96,19 @@ export class ToolSocket {
 
     if (frame.command === 'CONNECTED') {
       this.attempt = 0
-      this.socket?.send(encode('SUBSCRIBE', { id: 'tools', destination: TOOL_QUEUE }))
-      this.options.onStateChange?.(true)
+      if (this.connected()) {
+        this.socket?.send(encode('SUBSCRIBE', { id: 'tools', destination: TOOL_QUEUE }))
+        this.options.onStateChange?.(true)
+      }
       return
     }
 
-    if (frame.command === 'MESSAGE' && frame.body) {
+    if (frame.command !== 'MESSAGE' || !frame.body) return
+
+    try {
       this.options.onInvocation(JSON.parse(frame.body) as ToolInvocation)
+    } catch {
+      return
     }
   }
 

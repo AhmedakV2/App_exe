@@ -42,6 +42,7 @@ export class ApiChannel {
   private device: AgentState['device'] = null
   private orgId = ''
   private heartbeat: ReturnType<typeof setInterval> | null = null
+  private connecting: Promise<AgentState> | null = null
 
   constructor(private readonly options: ApiChannelOptions) {
     this.config = new ConfigStore(options.userDataDir)
@@ -62,7 +63,7 @@ export class ApiChannel {
     await this.auth.load()
     const settings = await this.config.read()
     this.orgId = settings.orgId
-    if (this.auth.current()) await this.connect().catch(() => undefined)
+    if (this.auth.current()) void this.connect().catch(() => undefined)
   }
 
   register(): void {
@@ -71,7 +72,7 @@ export class ApiChannel {
     ipcMain.handle('aft:api:login', (_event, input: unknown) =>
       guard('giris', async (): Promise<LoginPayload> => {
         const profile = await this.client.login(input as { username: string; password: string })
-        await this.connect().catch(() => undefined)
+        void this.connect().catch(() => undefined)
         return { profile, state: this.state() }
       })
     )
@@ -81,7 +82,7 @@ export class ApiChannel {
         const profile = await this.client.register(
           input as { username: string; email: string; password: string; displayName: string }
         )
-        await this.connect().catch(() => undefined)
+        void this.connect().catch(() => undefined)
         return { profile, state: this.state() }
       })
     )
@@ -185,16 +186,26 @@ export class ApiChannel {
     unmountAgent()
     this.hub.stop()
     this.connected = false
+    this.connecting = null
     if (this.heartbeat) {
       clearInterval(this.heartbeat)
       this.heartbeat = null
     }
   }
 
-  private async connect(): Promise<AgentState> {
+  private connect(): Promise<AgentState> {
+    if (this.connected) return Promise.resolve(this.state())
+    if (this.connecting) return this.connecting
+
+    this.connecting = this.establish().finally(() => {
+      this.connecting = null
+    })
+    return this.connecting
+  }
+
+  private async establish(): Promise<AgentState> {
     const session = this.auth.current()
     if (!session) throw new Error('Once giris yapin')
-    if (this.connected) return this.state()
 
     const provision = await this.client.provisionDevice(
       hostname(),
