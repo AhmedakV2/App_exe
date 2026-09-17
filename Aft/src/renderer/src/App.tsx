@@ -484,20 +484,13 @@ export default function App(): React.JSX.Element {
     setDock(tab)
   }, [])
 
-  const pick = useCallback(
-    (item: NavItem): void => {
-      if (!item.suite) {
-        setPage(item.id)
-        return
-      }
-      if (page === 'browser' && dock) {
-        setDock(null)
-        return
-      }
-      setPage('browser')
-      setDock(dock ?? lastTabRef.current)
+  const pick = useCallback((item: NavItem): void => setPage(item.id), [])
+
+  const toggleDock = useCallback(
+    (tab: Exclude<DockTab, null>): void => {
+      setDock((current) => (current === tab ? null : tab))
     },
-    [dock, page]
+    []
   )
 
   const onSaved = useCallback((): void => {
@@ -543,7 +536,7 @@ export default function App(): React.JSX.Element {
   const goPage = useCallback((id: PageId): void => setPage(id), [])
 
   const commands = useMemo((): Command[] => {
-    const pages: Command[] = NAV.filter((item) => !item.suite).map((item) => ({
+    const pages: Command[] = NAV.map((item) => ({
       id: 'page:' + item.id,
       group: 'Sayfalar',
       label: item.label + ' sekmesini aç',
@@ -780,10 +773,10 @@ export default function App(): React.JSX.Element {
       <aside className="sidebar">
         <nav className="rail-group" aria-label="Ana gezinme">
           {NAV.map((item) => {
-            const on = item.suite ? Boolean(dock) : item.id === page && !item.suite
+            const on = item.id === page
             return (
               <button
-                key={item.label}
+                key={item.id}
                 className={'nav-item' + (on ? ' sel' : '')}
                 title={item.label}
                 aria-label={item.label}
@@ -792,8 +785,6 @@ export default function App(): React.JSX.Element {
                 type="button"
               >
                 <Glyph name={item.glyph} size={NAV_ICON} />
-                {item.suite && recording ? <span className="nav-dot rec" /> : null}
-                {item.suite && !recording && playing ? <span className="nav-dot run" /> : null}
               </button>
             )
           })}
@@ -850,6 +841,7 @@ export default function App(): React.JSX.Element {
               playOptions={playOptions}
               onNav={nav}
               onVision={onVision}
+              onDockToggle={toggleDock}
               onListGrip={beginListDrag}
               onDockGrip={beginDockDrag}
               onDevGrip={beginDevDrag}

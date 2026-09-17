@@ -29,6 +29,7 @@ export default function BrowserPage({
   playOptions,
   onNav,
   onVision,
+  onDockToggle,
   onListGrip,
   onDockGrip,
   onDevGrip,
@@ -57,6 +58,7 @@ export default function BrowserPage({
   playOptions: Partial<PlaybackOptions>
   onNav: (kind: NavKind) => void
   onVision: () => void
+  onDockToggle: (tab: Exclude<DockTab, null>) => void
   onListGrip: (event: React.PointerEvent<HTMLDivElement>) => void
   onDockGrip: (event: React.PointerEvent<HTMLDivElement>) => void
   onDevGrip: (event: React.PointerEvent<HTMLDivElement>) => void
@@ -85,9 +87,13 @@ export default function BrowserPage({
           state={state}
           visionCount={visionCount}
           urlSeed={urlSeed}
+          dock={dock}
+          recording={recording}
+          playing={playing}
           onNav={onNav}
           onAction={onAction}
           onVision={onVision}
+          onDockToggle={onDockToggle}
         />
         <div className="stage" ref={stageRef}>
           {devtoolsOpen ? (
