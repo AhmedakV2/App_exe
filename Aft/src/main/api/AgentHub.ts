@@ -32,8 +32,8 @@ class StreamOpenError extends Error {
 }
 
 class StreamClosedBeforeDoneError extends Error {
-  constructor() {
-    super('stream-closed-before-done')
+  constructor(readonly source: unknown = null) {
+    super(source ? reason(source) : 'Akis tamamlanmadan kapandi')
     this.name = 'StreamClosedBeforeDoneError'
   }
 }
@@ -239,7 +239,7 @@ export class AgentHub {
         return
       }
       if (error instanceof StreamClosedBeforeDoneError) {
-        this.log('warn', 'Akis done olmadan kapandi, tek seferlik yanit deneniyor')
+        this.log('warn', 'Akis done olmadan kapandi, tek seferlik yanit deneniyor', [error.message])
       } else if (!(error instanceof StreamOpenError)) {
         this.fail(reason(error))
         await this.resync()
@@ -280,6 +280,7 @@ export class AgentHub {
     let failure: unknown = null
     const pump = this.consume(response, controller, replyId, () => {
       doneReceived = true
+      controller.abort()
     }).catch((error: unknown) => {
       failure = error
     })
@@ -290,7 +291,7 @@ export class AgentHub {
         content,
         this.state.model
       )
-      if (fallback?.content) {
+      if (fallback?.content && !doneReceived) {
         controller.abort()
         await pump
         this.state.model = fallback.model || this.state.model
@@ -301,12 +302,23 @@ export class AgentHub {
     } catch (error) {
       controller.abort()
       await pump
+      if (doneReceived) return
       throw error
     }
 
     await pump
-    if (failure) throw failure
-    if (!doneReceived) throw new StreamClosedBeforeDoneError()
+    if (doneReceived) {
+      if (failure) {
+        this.log('warn', 'Yanit tamamlandiktan sonra baglanti kapandi', [reason(failure)])
+      }
+      return
+    }
+    if (controller.signal.aborted) {
+      const stopped = new Error('Uretim durduruldu')
+      stopped.name = 'AbortError'
+      throw stopped
+    }
+    throw new StreamClosedBeforeDoneError(failure)
   }
 
   private async consume(
