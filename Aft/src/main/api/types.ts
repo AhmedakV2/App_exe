@@ -27,6 +27,15 @@ export interface ToolInvocation {
   timeoutMs: number
 }
 
+export interface ChatFrame {
+  turnId: string
+  sessionId: string
+  kind: 'delta' | 'done' | 'error'
+  text: string | null
+  messageId: string | null
+  model: string | null
+}
+
 export interface ToolResult {
   callId: string
   ok: boolean

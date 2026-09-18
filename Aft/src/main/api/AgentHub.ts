@@ -3,15 +3,19 @@ import type { ApiClient } from './ApiClient'
 import { EMPTY_CHAT } from './agent-types'
 import type {
   AgentActivity,
-  AgentSessionDto,
-  ChatSummary,
   AgentChatState,
   AgentLogEntry,
   AgentLogLevel,
   AgentMessageDto,
+  AgentSessionDto,
+  ChatSummary,
   ChatTurn,
   ToolAction
 } from './agent-types'
+import type { ChatFrame } from './types'
+
+const TURN_TIMEOUT_MS = 600_000
+const CANCELLED = '\u0000cancelled'
 
 export interface AgentHubOptions {
   client: ApiClient
@@ -19,62 +23,15 @@ export interface AgentHubOptions {
   onLog: (entry: AgentLogEntry) => void
 }
 
-interface SseEvent {
-  name: string
-  data: string
-}
-
-class StreamOpenError extends Error {
-  constructor(readonly source: unknown) {
-    super(reason(source))
-    this.name = 'StreamOpenError'
-  }
-}
-
-class StreamClosedBeforeDoneError extends Error {
-  constructor() {
-    super('stream-closed-before-done')
-    this.name = 'StreamClosedBeforeDoneError'
-  }
-}
-
-function deltaText(data: string): string {
-  try {
-    const parsed: unknown = JSON.parse(data)
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      typeof (parsed as { text?: unknown }).text === 'string'
-    ) {
-      return (parsed as { text: string }).text
-    }
-  } catch {
-    return data
-  }
-  return data
-}
-
-function parseBlock(block: string): SseEvent | null {
-  let name = 'message'
-  const lines: string[] = []
-
-  for (const raw of block.split('\n')) {
-    if (raw.startsWith('event:')) {
-      name = raw.slice(6).trim()
-      continue
-    }
-    if (!raw.startsWith('data:')) continue
-    const value = raw.slice(5)
-    lines.push(value.startsWith(' ') ? value.slice(1) : value)
-  }
-
-  if (!lines.length && name === 'message') return null
-  return { name, data: lines.join('\n') }
+interface PendingTurn {
+  replyId: string
+  settle: (failure: string) => void
+  timer: ReturnType<typeof setTimeout>
 }
 
 export class AgentHub {
   private state: AgentChatState = { ...EMPTY_CHAT, turns: [] }
-  private abort: AbortController | null = null
+  private readonly pending = new Map<string, PendingTurn>()
   private orgId = ''
   private deviceId: string | null = null
 
@@ -134,9 +91,10 @@ export class AgentHub {
   }
 
   stop(): void {
-    if (!this.abort) return
-    this.abort.abort()
-    this.abort = null
+    for (const turn of [...this.pending.values()]) {
+      turn.settle(CANCELLED)
+    }
+    this.pending.clear()
   }
 
   async cancel(): Promise<boolean> {
@@ -228,26 +186,36 @@ export class AgentHub {
       return
     }
 
+    const turnId = randomUUID()
+    const settled = this.watch(turnId, replyId)
+
     try {
-      await this.stream(sessionId, text, replyId)
-      return
+      await this.options.client.startAgentStream(sessionId, text, this.state.model, turnId)
     } catch (error) {
-      if (aborted(error)) return
+      this.release(turnId)
       if (stale(error) && retry) {
         this.forget()
         await this.deliver(text, replyId, false)
         return
       }
-      if (error instanceof StreamClosedBeforeDoneError) {
-        this.log('warn', 'Akis done olmadan kapandi, tek seferlik yanit deneniyor')
-      } else if (!(error instanceof StreamOpenError)) {
-        this.fail(reason(error))
-        await this.resync()
-        return
-      }
-      this.log('warn', 'Akis kurulamadi, tek seferlik yanit deneniyor', [reason(error)])
+      this.log('warn', 'Akis baslatilamadi, tek seferlik yanit deneniyor', [reason(error)])
+      await this.fallback(sessionId, text, replyId, retry)
+      return
     }
 
+    const failure = await settled
+    if (!failure || failure === CANCELLED) return
+
+    this.log('warn', 'Akis tamamlanmadi, tek seferlik yanit deneniyor', [failure])
+    await this.fallback(sessionId, text, replyId, retry)
+  }
+
+  private async fallback(
+    sessionId: string,
+    text: string,
+    replyId: string,
+    retry: boolean
+  ): Promise<void> {
     try {
       const answer = await this.options.client.sendAgentMessage(sessionId, text, this.state.model)
       this.state.model = answer.model || this.state.model
@@ -264,105 +232,54 @@ export class AgentHub {
     }
   }
 
-  private async stream(sessionId: string, content: string, replyId: string): Promise<void> {
-    const controller = new AbortController()
-    this.abort = controller
+  private watch(turnId: string, replyId: string): Promise<string> {
+    return new Promise<string>((resolve) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(turnId)
+        resolve('Yanit suresi asildi')
+      }, TURN_TIMEOUT_MS)
 
-    let response: Response
-    try {
-      response = await this.options.client.openAgentStream(sessionId, controller.signal)
-    } catch (error) {
-      if (this.abort === controller) this.abort = null
-      throw aborted(error) ? error : new StreamOpenError(error)
-    }
-
-    let doneReceived = false
-    let failure: unknown = null
-    const pump = this.consume(response, controller, replyId, () => {
-      doneReceived = true
-    }).catch((error: unknown) => {
-      failure = error
-    })
-
-    try {
-      const fallback = await this.options.client.startAgentStream(
-        sessionId,
-        content,
-        this.state.model
-      )
-      if (fallback?.content) {
-        controller.abort()
-        await pump
-        this.state.model = fallback.model || this.state.model
-        this.applyAnswer(replyId, fallback.content)
-        this.log('info', 'Ajan yaniti tamamlandi')
-        return
-      }
-    } catch (error) {
-      controller.abort()
-      await pump
-      throw error
-    }
-
-    await pump
-    if (failure) throw failure
-    if (!doneReceived) throw new StreamClosedBeforeDoneError()
-  }
-
-  private async consume(
-    response: Response,
-    controller: AbortController,
-    replyId: string,
-    onDone: () => void
-  ): Promise<void> {
-    const reader = (response.body as ReadableStream<Uint8Array>).getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    try {
-      for (;;) {
-        const chunk = await reader.read()
-        if (chunk.done) break
-        buffer += decoder.decode(chunk.value, { stream: true })
-
-        let split = buffer.indexOf('\n\n')
-        while (split >= 0) {
-          const event = parseBlock(buffer.slice(0, split))
-          buffer = buffer.slice(split + 2)
-          if (event) this.apply(event, replyId, onDone)
-          split = buffer.indexOf('\n\n')
+      this.pending.set(turnId, {
+        replyId,
+        timer,
+        settle: (failure: string) => {
+          clearTimeout(timer)
+          this.pending.delete(turnId)
+          resolve(failure)
         }
-      }
-    } catch (error) {
-      if (!aborted(error)) throw error
-    } finally {
-      reader.cancel().catch(() => undefined)
-      if (this.abort === controller) this.abort = null
-    }
+      })
+    })
   }
 
-  private apply(event: SseEvent, replyId: string, onDone: () => void): void {
-    if (event.name === 'delta') {
-      const target = this.state.turns.find((item) => item.id === replyId)
+  private release(turnId: string): void {
+    const turn = this.pending.get(turnId)
+    if (!turn) return
+    clearTimeout(turn.timer)
+    this.pending.delete(turnId)
+  }
+
+  accept(frame: ChatFrame): void {
+    const turn = this.pending.get(frame.turnId)
+    if (!turn) return
+
+    if (frame.kind === 'delta') {
+      const target = this.state.turns.find((item) => item.id === turn.replyId)
       if (!target) return
-      target.text += deltaText(event.data)
+      target.text += frame.text ?? ''
       this.publish()
       return
     }
 
-    if (event.name === 'error') {
-      const message = event.data || 'Model yanit veremedi'
-      this.state.error = message
-      this.finishPending(message, true)
-      this.log('error', 'Ajan yaniti basarisiz', [message])
+    if (frame.kind === 'error') {
+      const message = frame.text || 'Model yanit veremedi'
+      turn.settle(message)
       return
     }
 
-    if (event.name === 'done') {
-      onDone()
-      this.finishPending('', false)
-      this.log('info', 'Ajan yaniti tamamlandi')
-    }
+    if (frame.model) this.state.model = frame.model
+    this.settle(turn.replyId)
+    this.log('info', 'Ajan yaniti tamamlandi')
+    turn.settle('')
   }
 
   private async ensureSession(text: string): Promise<string> {
@@ -474,10 +391,6 @@ function abandon(target: ChatTurn): void {
     action.state = 'failed'
     action.detail = action.detail || 'Sonuc alinamadi'
   }
-}
-
-function aborted(error: unknown): boolean {
-  return error instanceof Error && error.name === 'AbortError'
 }
 
 function stale(error: unknown): boolean {

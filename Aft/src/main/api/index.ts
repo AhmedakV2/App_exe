@@ -5,6 +5,7 @@ export type { AgentBridge, AgentMountOptions } from './mountAgent'
 export type {
   AgentEndpoint,
   ApprovalGate,
+  ChatFrame,
   PlaybackAccess,
   PlaybackRunInput,
   PlaybackRunOutput,

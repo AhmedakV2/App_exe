@@ -164,6 +164,7 @@ export function AgentPanel(): React.JSX.Element {
   )
 
   const dropChat = useCallback((id: string): void => {
+    if (!window.confirm('Bu sohbet kalici olarak silinecek. Onayliyor musunuz?')) return
     setHistoryBusy(true)
     void window.aftApi
       .deleteChat(id)
@@ -477,7 +478,7 @@ export function AgentPanel(): React.JSX.Element {
                   type="button"
                   title="Sohbeti sil"
                   aria-label="Sohbeti sil"
-                  disabled={chat.busy}
+                  disabled={chat.busy || historyBusy}
                   onClick={() => dropChat(item.id)}
                 >
                   <Glyph name="trash" size={14} />

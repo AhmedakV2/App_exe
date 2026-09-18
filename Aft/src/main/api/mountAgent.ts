@@ -11,7 +11,7 @@ import { playbackTools } from './tools/playbackTools'
 import { runTools } from './tools/runTools'
 import { scenarioTools } from './tools/scenarioTools'
 import type { AgentActivity } from './agent-types'
-import type { AgentEndpoint, ApprovalGate, PlaybackAccess } from './types'
+import type { AgentEndpoint, ApprovalGate, ChatFrame, PlaybackAccess } from './types'
 
 const MAX_RETRY_AFTER_MS = 60_000
 
@@ -24,6 +24,7 @@ export interface AgentMountOptions {
   descriptors: DescriptorStore
   playback?: PlaybackAccess | null
   approve: ApprovalGate
+  onChatFrame?: (frame: ChatFrame) => void
   onStateChange?: (connected: boolean) => void
   onActivity?: (activity: AgentActivity) => void
 }
@@ -56,6 +57,7 @@ export async function mountAgent(options: AgentMountOptions): Promise<AgentBridg
   const socket = new ToolSocket({
     endpoint: options.endpoint,
     onStateChange: options.onStateChange,
+    onChatFrame: options.onChatFrame,
     onInvocation: (invocation) => {
       void dispatcher.handle(invocation).then((result) => socket.send(result))
     }

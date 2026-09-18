@@ -286,6 +286,7 @@ export class ApiChannel {
       descriptors: this.options.descriptors,
       playback: this.options.playback ?? null,
       approve: (invocation) => this.askUser(invocation),
+      onChatFrame: (frame) => this.hub.accept(frame),
       onActivity: (activity) => this.onActivity(activity),
       onStateChange: (connected) => {
         this.connected = connected
