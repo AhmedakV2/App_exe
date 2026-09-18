@@ -145,8 +145,8 @@ export class ApiClient {
     )
   }
 
-  async startAgentStream(sessionId: string, content: string): Promise<void> {
-    await this.call(
+  async startAgentStream(sessionId: string, content: string): Promise<AgentReplyDto | undefined> {
+    return this.call<AgentReplyDto | undefined>(
       'POST',
       '/api/v1/agent/sessions/' + sessionId + '/messages?stream=true',
       { content },

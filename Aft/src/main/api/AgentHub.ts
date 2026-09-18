@@ -29,6 +29,13 @@ class StreamOpenError extends Error {
   }
 }
 
+class StreamClosedBeforeDoneError extends Error {
+  constructor() {
+    super('stream-closed-before-done')
+    this.name = 'StreamClosedBeforeDoneError'
+  }
+}
+
 function parseBlock(block: string): SseEvent | null {
   let name = 'message'
   const lines: string[] = []
@@ -165,7 +172,9 @@ export class AgentHub {
         await this.deliver(text, replyId, false)
         return
       }
-      if (!(error instanceof StreamOpenError)) {
+      if (error instanceof StreamClosedBeforeDoneError) {
+        this.log('warn', 'Akis done olmadan kapandi, tek seferlik yanit deneniyor')
+      } else if (!(error instanceof StreamOpenError)) {
         this.fail(reason(error))
         await this.resync()
         return
@@ -201,13 +210,24 @@ export class AgentHub {
       throw aborted(error) ? error : new StreamOpenError(error)
     }
 
+    let doneReceived = false
     let failure: unknown = null
-    const pump = this.consume(response, controller, replyId).catch((error: unknown) => {
+    const pump = this.consume(response, controller, replyId, () => {
+      doneReceived = true
+    }).catch((error: unknown) => {
       failure = error
     })
 
     try {
-      await this.options.client.startAgentStream(sessionId, content)
+      const fallback = await this.options.client.startAgentStream(sessionId, content)
+      if (fallback?.content) {
+        controller.abort()
+        await pump
+        this.state.model = fallback.model || this.state.model
+        this.applyAnswer(replyId, fallback.content)
+        this.log('info', 'Ajan yaniti tamamlandi')
+        return
+      }
     } catch (error) {
       controller.abort()
       await pump
@@ -216,12 +236,14 @@ export class AgentHub {
 
     await pump
     if (failure) throw failure
+    if (!doneReceived) throw new StreamClosedBeforeDoneError()
   }
 
   private async consume(
     response: Response,
     controller: AbortController,
-    replyId: string
+    replyId: string,
+    onDone: () => void
   ): Promise<void> {
     const reader = (response.body as ReadableStream<Uint8Array>).getReader()
     const decoder = new TextDecoder()
@@ -237,7 +259,7 @@ export class AgentHub {
         while (split >= 0) {
           const event = parseBlock(buffer.slice(0, split))
           buffer = buffer.slice(split + 2)
-          if (event) this.apply(event, replyId)
+          if (event) this.apply(event, replyId, onDone)
           split = buffer.indexOf('\n\n')
         }
       }
@@ -246,11 +268,10 @@ export class AgentHub {
     } finally {
       reader.cancel().catch(() => undefined)
       if (this.abort === controller) this.abort = null
-      this.settle(replyId)
     }
   }
 
-  private apply(event: SseEvent, replyId: string): void {
+  private apply(event: SseEvent, replyId: string, onDone: () => void): void {
     if (event.name === 'delta') {
       const target = this.state.turns.find((item) => item.id === replyId)
       if (!target) return
@@ -268,6 +289,7 @@ export class AgentHub {
     }
 
     if (event.name === 'done') {
+      onDone()
       this.finishPending('', false)
       this.log('info', 'Ajan yaniti tamamlandi')
     }
