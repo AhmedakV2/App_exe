@@ -33,6 +33,13 @@ class StreamOpenError extends Error {
   }
 }
 
+class StreamClosedBeforeDoneError extends Error {
+  constructor() {
+    super('stream-closed-before-done')
+    this.name = 'StreamClosedBeforeDoneError'
+  }
+}
+
 function parseBlock(block: string): SseEvent | null {
   let name = 'message'
   const lines: string[] = []
@@ -169,7 +176,9 @@ export class AgentHub {
         await this.deliver(text, replyId, false)
         return
       }
-      if (!(error instanceof StreamOpenError)) {
+      if (error instanceof StreamClosedBeforeDoneError) {
+        this.log('warn', 'Akis done olmadan kapandi, tek seferlik yanit deneniyor')
+      } else if (!(error instanceof StreamOpenError)) {
         this.fail(reason(error))
         await this.resync()
         return
@@ -206,13 +215,22 @@ export class AgentHub {
       throw aborted(error) ? error : new StreamOpenError(error)
     }
 
+    let doneReceived = false
     let failure: unknown = null
     const pump = this.consume(response, controller, replyId, state).catch((error: unknown) => {
       failure = error
     })
 
     try {
-      await this.options.client.startAgentStream(sessionId, content)
+      const fallback = await this.options.client.startAgentStream(sessionId, content)
+      if (fallback?.content) {
+        controller.abort()
+        await pump
+        this.state.model = fallback.model || this.state.model
+        this.applyAnswer(replyId, fallback.content)
+        this.log('info', 'Ajan yaniti tamamlandi')
+        return
+      }
     } catch (error) {
       controller.abort()
       await pump
@@ -258,7 +276,6 @@ export class AgentHub {
     } finally {
       reader.cancel().catch(() => undefined)
       if (this.abort === controller) this.abort = null
-      this.settle(replyId)
     }
   }
 
@@ -281,6 +298,7 @@ export class AgentHub {
     }
 
     if (event.name === 'done') {
+      onDone()
       this.finishPending('', false)
       this.log('info', 'Ajan yaniti tamamlandi')
       state.settled = true
