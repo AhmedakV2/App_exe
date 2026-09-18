@@ -83,7 +83,7 @@ export class AgentHub {
   snapshot(): AgentChatState {
     return {
       ...this.state,
-      tiers: this.state.tiers.map((tier) => ({ ...tier })),
+      tiers: (this.state.tiers ?? []).map((tier) => ({ ...tier })),
       turns: this.state.turns.map((turn) => ({
         ...turn,
         actions: turn.actions.map((action) => ({ ...action }))
@@ -394,8 +394,8 @@ export class AgentHub {
   private async loadModel(): Promise<void> {
     try {
       const info = await this.options.client.agentModels()
-      this.state.tiers = info.tiers
-      if (!this.state.model) this.state.model = info.defaultModel
+      this.state.tiers = Array.isArray(info.tiers) ? info.tiers : []
+      if (!this.state.model && info.defaultModel) this.state.model = info.defaultModel
       this.publish()
     } catch {
       return
