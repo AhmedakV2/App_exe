@@ -4,6 +4,7 @@ import type {
   AgentLogEntry,
   AgentState,
   ChatSummary,
+  ModelTierDto,
   ApprovalRequest,
   LoginPayload,
   ProfilePayload
@@ -34,6 +35,7 @@ declare global {
       cancelAsk: () => Promise<ChannelResult<boolean>>
       newChat: () => Promise<ChannelResult<AgentChatState>>
       removeChat: () => Promise<ChannelResult<AgentChatState>>
+      selectModel: (model: string) => Promise<ChannelResult<AgentChatState>>
       chatHistory: () => Promise<ChannelResult<ChatSummary[]>>
       openChat: (id: string) => Promise<ChannelResult<AgentChatState>>
       deleteChat: (id: string) => Promise<ChannelResult<ChatSummary[]>>

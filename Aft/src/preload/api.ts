@@ -17,6 +17,7 @@ const aftApi = {
   cancelAsk: () => ipcRenderer.invoke('aft:agent:cancel'),
   newChat: () => ipcRenderer.invoke('aft:agent:reset'),
   removeChat: () => ipcRenderer.invoke('aft:agent:remove'),
+  selectModel: (model: string) => ipcRenderer.invoke('aft:agent:model', model),
   chatHistory: () => ipcRenderer.invoke('aft:agent:history'),
   openChat: (id: string) => ipcRenderer.invoke('aft:agent:open', id),
   deleteChat: (id: string) => ipcRenderer.invoke('aft:agent:drop', id),

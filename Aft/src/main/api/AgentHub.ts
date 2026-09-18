@@ -83,6 +83,7 @@ export class AgentHub {
   snapshot(): AgentChatState {
     return {
       ...this.state,
+      tiers: this.state.tiers.map((tier) => ({ ...tier })),
       turns: this.state.turns.map((turn) => ({
         ...turn,
         actions: turn.actions.map((action) => ({ ...action }))
@@ -161,6 +162,7 @@ export class AgentHub {
       sessionId: detail.session.id,
       title: detail.session.title,
       model: detail.session.model,
+      tiers: this.state.tiers,
       turns: detail.messages.filter(visible).map(toTurn),
       busy: false,
       error: ''
@@ -247,7 +249,7 @@ export class AgentHub {
     }
 
     try {
-      const answer = await this.options.client.sendAgentMessage(sessionId, text)
+      const answer = await this.options.client.sendAgentMessage(sessionId, text, this.state.model)
       this.state.model = answer.model || this.state.model
       this.applyAnswer(replyId, answer.content)
       this.log('info', 'Ajan yaniti tamamlandi')
@@ -283,7 +285,11 @@ export class AgentHub {
     })
 
     try {
-      const fallback = await this.options.client.startAgentStream(sessionId, content)
+      const fallback = await this.options.client.startAgentStream(
+        sessionId,
+        content,
+        this.state.model
+      )
       if (fallback?.content) {
         controller.abort()
         await pump
@@ -368,7 +374,8 @@ export class AgentHub {
       orgId: this.orgId,
       deviceId: this.deviceId,
       title,
-      mode: 'CHAT'
+      mode: 'CHAT',
+      model: this.state.model
     })
 
     this.state.sessionId = session.id
@@ -387,12 +394,20 @@ export class AgentHub {
   private async loadModel(): Promise<void> {
     try {
       const info = await this.options.client.agentModels()
-      if (this.state.model) return
-      this.state.model = info.plannerModel
+      this.state.tiers = info.tiers
+      if (!this.state.model) this.state.model = info.defaultModel
       this.publish()
     } catch {
       return
     }
+  }
+
+  selectModel(model: string): AgentChatState {
+    if (!model || model === this.state.model) return this.snapshot()
+    this.state.model = model
+    this.publish()
+    this.log('info', 'Model degistirildi', [model])
+    return this.snapshot()
   }
 
   private async resync(): Promise<void> {

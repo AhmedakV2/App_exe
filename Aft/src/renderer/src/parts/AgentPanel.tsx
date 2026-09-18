@@ -89,6 +89,7 @@ const EMPTY_CHAT: AgentChatState = {
   sessionId: '',
   title: '',
   model: '',
+  tiers: [],
   turns: [],
   busy: false,
   error: ''
@@ -276,10 +277,30 @@ export function AgentPanel(): React.JSX.Element {
           </button>
         )}
       </div>
-      <p className="chat-hint">
-        <kbd>Enter</kbd> gönderir · <kbd>Shift</kbd>+<kbd>Enter</kbd> satır ekler
-        {chat.model ? ' · ' + chat.model : ''}
-      </p>
+      <div className="chat-hint">
+        <span>
+          <kbd>Enter</kbd> gönderir · <kbd>Shift</kbd>+<kbd>Enter</kbd> satır ekler
+        </span>
+        {chat.tiers.length ? (
+          <label className="chat-model">
+            <Glyph name="spark" size={12} />
+            <select
+              value={chat.model}
+              disabled={chat.busy}
+              aria-label="Model profili"
+              onChange={(event) => void window.aftApi.selectModel(event.target.value)}
+            >
+              {chat.tiers.map((tier) => (
+                <option key={tier.tier} value={tier.model}>
+                  {tier.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <span>{chat.model}</span>
+        )}
+      </div>
     </form>
   )
 
