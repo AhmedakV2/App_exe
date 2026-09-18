@@ -3,6 +3,7 @@ import type {
   AgentChatState,
   AgentLogEntry,
   AgentState,
+  ChatSummary,
   ApprovalRequest,
   LoginPayload,
   ProfilePayload
@@ -33,6 +34,9 @@ declare global {
       cancelAsk: () => Promise<ChannelResult<boolean>>
       newChat: () => Promise<ChannelResult<AgentChatState>>
       removeChat: () => Promise<ChannelResult<AgentChatState>>
+      chatHistory: () => Promise<ChannelResult<ChatSummary[]>>
+      openChat: (id: string) => Promise<ChannelResult<AgentChatState>>
+      deleteChat: (id: string) => Promise<ChannelResult<ChatSummary[]>>
       onChat: (fn: (state: AgentChatState) => void) => () => void
       onAgentLog: (fn: (entry: AgentLogEntry) => void) => () => void
       gateDone: () => void

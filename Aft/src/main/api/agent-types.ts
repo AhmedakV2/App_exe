@@ -24,6 +24,23 @@ export interface AgentMessageDto {
   createdAt: string
 }
 
+export interface AgentSessionPage {
+  content: AgentSessionDto[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export interface ChatSummary {
+  id: string
+  title: string
+  model: string
+  status: string
+  createdAt: number
+  active: boolean
+}
+
 export interface AgentSessionDetailDto {
   session: AgentSessionDto
   messages: AgentMessageDto[]

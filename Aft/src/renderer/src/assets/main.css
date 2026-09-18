@@ -645,6 +645,11 @@ textarea {
   color: var(--text);
 }
 
+.ghost-btn.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .ghost-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
@@ -5350,6 +5355,115 @@ body[data-view='splash'] {
   border-radius: var(--r-xs);
   background: var(--panel);
   font: 500 10px var(--mono);
+}
+
+.chat-history {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  width: min(320px, 82%);
+  height: 100%;
+  border-left: var(--hair) solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--lift-3);
+  animation: chat-history-in 160ms ease-out;
+}
+
+.chat-history-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+  padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4);
+  border-bottom: var(--hair) solid var(--line);
+}
+
+.chat-history-head strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--fs-body);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-history-empty {
+  margin: 0;
+  padding: var(--sp-5) var(--sp-4);
+  color: var(--muted);
+  font-size: var(--fs-meta);
+  text-align: center;
+}
+
+.chat-history-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: var(--sp-2);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.chat-history-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-1) 0 0;
+  border-radius: var(--r-md);
+}
+
+.chat-history-item:hover {
+  background: var(--hover);
+}
+
+.chat-history-item.on {
+  background: var(--accent-soft);
+}
+
+.chat-history-open {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-history-open:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.chat-history-title {
+  overflow: hidden;
+  font-size: var(--fs-body);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-history-meta {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@keyframes chat-history-in {
+  from {
+    transform: translateX(12px);
+    opacity: 0;
+  }
 }
 
 .chat-approval {

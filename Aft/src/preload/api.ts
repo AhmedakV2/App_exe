@@ -17,6 +17,9 @@ const aftApi = {
   cancelAsk: () => ipcRenderer.invoke('aft:agent:cancel'),
   newChat: () => ipcRenderer.invoke('aft:agent:reset'),
   removeChat: () => ipcRenderer.invoke('aft:agent:remove'),
+  chatHistory: () => ipcRenderer.invoke('aft:agent:history'),
+  openChat: (id: string) => ipcRenderer.invoke('aft:agent:open', id),
+  deleteChat: (id: string) => ipcRenderer.invoke('aft:agent:drop', id),
   onChat: (fn: (state: unknown) => void): (() => void) => {
     const handler = (_event: IpcRendererEvent, state: unknown): void => fn(state)
     ipcRenderer.on('aft:agent:chat', handler)

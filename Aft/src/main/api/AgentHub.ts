@@ -3,6 +3,8 @@ import type { ApiClient } from './ApiClient'
 import { EMPTY_CHAT } from './agent-types'
 import type {
   AgentActivity,
+  AgentSessionDto,
+  ChatSummary,
   AgentChatState,
   AgentLogEntry,
   AgentLogLevel,
@@ -34,6 +36,22 @@ class StreamClosedBeforeDoneError extends Error {
     super('stream-closed-before-done')
     this.name = 'StreamClosedBeforeDoneError'
   }
+}
+
+function deltaText(data: string): string {
+  try {
+    const parsed: unknown = JSON.parse(data)
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof (parsed as { text?: unknown }).text === 'string'
+    ) {
+      return (parsed as { text: string }).text
+    }
+  } catch {
+    return data
+  }
+  return data
 }
 
 function parseBlock(block: string): SseEvent | null {
@@ -126,6 +144,52 @@ export class AgentHub {
     this.finishPending('Üretim durduruldu', true)
     if (!sessionId) return false
     return this.options.client.cancelAgentSession(sessionId).catch(() => false)
+  }
+
+  async history(): Promise<ChatSummary[]> {
+    if (!this.orgId) return []
+    const page = await this.options.client.listAgentSessions(this.orgId)
+    return page.content.map((item) => this.summary(item))
+  }
+
+  async open(sessionId: string): Promise<AgentChatState> {
+    if (sessionId === this.state.sessionId) return this.snapshot()
+    this.stop()
+
+    const detail = await this.options.client.agentSession(sessionId)
+    this.state = {
+      sessionId: detail.session.id,
+      title: detail.session.title,
+      model: detail.session.model,
+      turns: detail.messages.filter(visible).map(toTurn),
+      busy: false,
+      error: ''
+    }
+    this.publish()
+    this.log('info', 'Sohbet acildi', [detail.session.title])
+    return this.snapshot()
+  }
+
+  async discard(sessionId: string): Promise<ChatSummary[]> {
+    await this.options.client.deleteAgentSession(sessionId).catch(() => undefined)
+    if (sessionId === this.state.sessionId) {
+      this.stop()
+      this.state = { ...EMPTY_CHAT, turns: [] }
+      this.publish()
+    }
+    this.log('info', 'Sohbet silindi')
+    return this.history()
+  }
+
+  private summary(item: AgentSessionDto): ChatSummary {
+    return {
+      id: item.id,
+      title: item.title || 'Adsiz sohbet',
+      model: item.model,
+      status: item.status,
+      createdAt: Date.parse(item.createdAt) || Date.now(),
+      active: item.id === this.state.sessionId
+    }
   }
 
   async remove(): Promise<void> {
@@ -275,7 +339,7 @@ export class AgentHub {
     if (event.name === 'delta') {
       const target = this.state.turns.find((item) => item.id === replyId)
       if (!target) return
-      target.text += event.data
+      target.text += deltaText(event.data)
       this.publish()
       return
     }

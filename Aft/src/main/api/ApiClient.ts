@@ -5,6 +5,7 @@ import type {
   AgentReplyDto,
   AgentSessionDetailDto,
   AgentSessionDto,
+  AgentSessionPage,
   ModelInfoDto
 } from './agent-types'
 import { ApiError, retryAfterMillis } from './ApiError'
@@ -155,6 +156,11 @@ export class ApiClient {
     )
   }
 
+  async listAgentSessions(orgId: string, size = 50): Promise<AgentSessionPage> {
+    const query = '?orgId=' + encodeURIComponent(orgId) + '&size=' + size + '&page=0'
+    return this.call<AgentSessionPage>('GET', '/api/v1/agent/sessions' + query, null, true)
+  }
+
   async agentModels(): Promise<ModelInfoDto> {
     return this.call<ModelInfoDto>('GET', '/api/v1/agent/models', null, true)
   }
@@ -262,7 +268,7 @@ export class ApiClient {
     if (body !== null && body !== undefined) headers['Content-Type'] = 'application/json'
     if (authorized) headers.Authorization = 'Bearer ' + this.auth.accessToken()
 
-    const response = await fetch(API_BASE_URL + path, {
+    const response = await this.fetchWithTimeout(API_BASE_URL + path, {
       method,
       headers,
       body: body === null || body === undefined ? undefined : JSON.stringify(body)
