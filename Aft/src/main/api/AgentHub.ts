@@ -190,7 +190,19 @@ export class AgentHub {
     const settled = this.watch(turnId, replyId)
 
     try {
-      await this.options.client.startAgentStream(sessionId, text, this.state.model, turnId)
+      const direct = await this.options.client.startAgentStream(
+        sessionId,
+        text,
+        this.state.model,
+        turnId
+      )
+      if (direct?.content) {
+        this.release(turnId)
+        this.state.model = direct.model || this.state.model
+        this.applyAnswer(replyId, direct.content)
+        this.log('info', 'Ajan yaniti tamamlandi')
+        return
+      }
     } catch (error) {
       this.release(turnId)
       if (stale(error) && retry) {

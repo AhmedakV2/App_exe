@@ -160,12 +160,14 @@ export class ApiClient {
     content: string,
     model: string,
     turnId: string
-  ): Promise<void> {
-    await this.call(
+  ): Promise<AgentReplyDto | undefined> {
+    return this.call<AgentReplyDto | undefined>(
       'POST',
       '/api/v1/agent/sessions/' + sessionId + '/messages?stream=true',
       { content, model, turnId },
-      true
+      true,
+      {},
+      AGENT_TIMEOUT_MS
     )
   }
 
