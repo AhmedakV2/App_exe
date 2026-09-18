@@ -40,6 +40,13 @@ export interface ApprovalRequest {
   summary: string
 }
 
-export type { AgentChatState, AgentLogEntry, AgentLogLevel, ChatTurn } from '../api/agent-types'
+export type {
+  AgentChatState,
+  AgentLogEntry,
+  AgentLogLevel,
+  ChatTurn,
+  ToolAction,
+  ToolActionState
+} from '../api/agent-types'
 
 export type { ToolInvocation }

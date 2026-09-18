@@ -1,3 +1,23 @@
+import type { PlaybackOptions, RunResult, Scenario } from '../scenario'
+
+export interface PlaybackRunInput {
+  scenarioId?: string
+  scenario?: Scenario
+  options?: Partial<PlaybackOptions>
+}
+
+export interface PlaybackRunOutput {
+  run: RunResult
+  reports: string[]
+}
+
+export interface PlaybackAccess {
+  execute(input: PlaybackRunInput): Promise<PlaybackRunOutput>
+  abort(): boolean
+  lastRun(): RunResult | null
+  running(): boolean
+}
+
 export interface ToolInvocation {
   callId: string
   sessionId: string

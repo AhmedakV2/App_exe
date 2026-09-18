@@ -47,6 +47,16 @@ export interface ModelInfoDto {
   fastModel: string
 }
 
+export type ToolActionState = 'running' | 'ok' | 'failed' | 'rejected'
+
+export interface ToolAction {
+  callId: string
+  toolName: string
+  state: ToolActionState
+  detail: string
+  at: number
+}
+
 export interface ChatTurn {
   id: string
   role: 'user' | 'assistant'
@@ -54,6 +64,7 @@ export interface ChatTurn {
   pending: boolean
   failed: boolean
   at: number
+  actions: ToolAction[]
 }
 
 export interface AgentChatState {

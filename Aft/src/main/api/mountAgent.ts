@@ -7,10 +7,11 @@ import { ToolDispatcher } from './ToolDispatcher'
 import { ToolSocket } from './ToolSocket'
 import { browserTools } from './tools/browserTools'
 import { identityTools } from './tools/identityTools'
+import { playbackTools } from './tools/playbackTools'
 import { runTools } from './tools/runTools'
 import { scenarioTools } from './tools/scenarioTools'
 import type { AgentActivity } from './agent-types'
-import type { AgentEndpoint, ApprovalGate } from './types'
+import type { AgentEndpoint, ApprovalGate, PlaybackAccess } from './types'
 
 const MAX_RETRY_AFTER_MS = 60_000
 
@@ -21,6 +22,7 @@ export interface AgentMountOptions {
   indexer: Indexer
   contexts: ContextStore
   descriptors: DescriptorStore
+  playback?: PlaybackAccess | null
   approve: ApprovalGate
   onStateChange?: (connected: boolean) => void
   onActivity?: (activity: AgentActivity) => void
@@ -37,14 +39,17 @@ let bridge: AgentBridge | null = null
 export async function mountAgent(options: AgentMountOptions): Promise<AgentBridge> {
   if (bridge) return bridge
 
+  const playback = options.playback ?? null
+
   const dispatcher = new ToolDispatcher({
     approve: options.approve,
     onActivity: options.onActivity,
     handlers: {
       ...scenarioTools(options.scenarios),
-      ...runTools(options.indexer, options.contexts),
+      ...runTools(options.indexer, options.contexts, playback),
       ...identityTools(options.descriptors),
-      ...browserTools(options.controller)
+      ...browserTools(options.controller),
+      ...(playback ? playbackTools(playback) : {})
     }
   })
 

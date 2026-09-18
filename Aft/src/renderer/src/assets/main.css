@@ -5102,6 +5102,74 @@ body[data-view='splash'] {
   color: var(--danger);
 }
 
+.chat-trail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0 0 var(--sp-3);
+  padding: 0;
+  list-style: none;
+}
+
+.chat-bubble > .chat-trail:only-child {
+  margin-bottom: 0;
+}
+
+.chat-trail-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-meta);
+  line-height: 1.4;
+}
+
+.chat-trail-item svg {
+  flex: 0 0 auto;
+}
+
+.chat-trail-item.running {
+  color: var(--accent);
+}
+
+.chat-trail-item.running svg {
+  animation: chat-trail-spin 1.4s linear infinite;
+}
+
+.chat-trail-item.ok {
+  color: var(--ok);
+}
+
+.chat-trail-item.failed {
+  color: var(--danger);
+}
+
+.chat-trail-item.rejected {
+  color: var(--warn);
+}
+
+.chat-trail-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-trail-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@keyframes chat-trail-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .chat-text {
   margin: 0;
   white-space: pre-wrap;

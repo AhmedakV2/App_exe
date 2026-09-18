@@ -14,6 +14,16 @@ function level(args: Record<string, unknown>, fallback: ScanLevel): ScanLevel {
 
 export function browserTools(controller: BrowserController): Record<string, ToolHandler> {
   return {
+    page_state: async () => ({
+      url: controller.url(),
+      title: controller.title(),
+      loading: controller.isLoading(),
+      canGoBack: controller.canGoBack(),
+      canGoForward: controller.canGoForward(),
+      visionOn: controller.isVisionOn(),
+      scanLevel: controller.getLevel()
+    }),
+
     page_snapshot: async (args) => {
       const graph = await controller.scanGraph(
         level(args, controller.getLevel()),

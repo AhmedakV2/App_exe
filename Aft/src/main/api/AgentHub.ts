@@ -2,11 +2,13 @@ import { randomUUID } from 'node:crypto'
 import type { ApiClient } from './ApiClient'
 import { EMPTY_CHAT } from './agent-types'
 import type {
+  AgentActivity,
   AgentChatState,
   AgentLogEntry,
   AgentLogLevel,
   AgentMessageDto,
-  ChatTurn
+  ChatTurn,
+  ToolAction
 } from './agent-types'
 
 export interface AgentHubOptions {
@@ -54,7 +56,43 @@ export class AgentHub {
   constructor(private readonly options: AgentHubOptions) {}
 
   snapshot(): AgentChatState {
-    return { ...this.state, turns: this.state.turns.map((turn) => ({ ...turn })) }
+    return {
+      ...this.state,
+      turns: this.state.turns.map((turn) => ({
+        ...turn,
+        actions: turn.actions.map((action) => ({ ...action }))
+      }))
+    }
+  }
+
+  note(activity: AgentActivity): void {
+    const target = this.state.turns.find((item) => item.pending)
+    if (!target) return
+
+    if (activity.kind === 'invocation') {
+      const action: ToolAction = {
+        callId: activity.callId,
+        toolName: activity.toolName,
+        state: 'running',
+        detail: '',
+        at: Date.now()
+      }
+      target.actions.push(action)
+      this.publish()
+      return
+    }
+
+    const entry = target.actions.find((item) => item.callId === activity.callId)
+    if (!entry) return
+
+    if (activity.kind === 'approval') {
+      entry.state = activity.ok ? 'running' : 'rejected'
+      entry.detail = activity.detail
+    } else if (activity.kind === 'result') {
+      entry.state = activity.ok ? 'ok' : 'failed'
+      entry.detail = activity.detail
+    }
+    this.publish()
   }
 
   bind(orgId: string, deviceId: string | null): void {
@@ -302,6 +340,7 @@ export class AgentHub {
       target.pending = false
       target.failed = target.text.length === 0
       if (target.failed) target.text = 'Yanit alinamadi'
+      abandon(target)
     }
     this.state.busy = false
     this.publish()
@@ -313,6 +352,7 @@ export class AgentHub {
       item.pending = false
       item.failed = failed && !item.text
       if (item.failed) item.text = message
+      abandon(item)
     }
     this.state.busy = false
     this.publish()
@@ -324,6 +364,14 @@ export class AgentHub {
 
   private publish(): void {
     this.options.onChange(this.snapshot())
+  }
+}
+
+function abandon(target: ChatTurn): void {
+  for (const action of target.actions) {
+    if (action.state !== 'running') continue
+    action.state = 'failed'
+    action.detail = action.detail || 'Sonuc alinamadi'
   }
 }
 
@@ -362,10 +410,19 @@ function toTurn(message: AgentMessageDto): ChatTurn {
     text: message.content,
     pending: false,
     failed: false,
-    at: Date.parse(message.createdAt) || Date.now()
+    at: Date.parse(message.createdAt) || Date.now(),
+    actions: []
   }
 }
 
 function turn(role: ChatTurn['role'], text: string, pending: boolean): ChatTurn {
-  return { id: randomUUID(), role, text, pending, failed: false, at: Date.now() }
+  return {
+    id: randomUUID(),
+    role,
+    text,
+    pending,
+    failed: false,
+    at: Date.now(),
+    actions: []
+  }
 }
