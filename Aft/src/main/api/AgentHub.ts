@@ -22,6 +22,10 @@ interface SseEvent {
   data: string
 }
 
+interface StreamState {
+  settled: boolean
+}
+
 class StreamOpenError extends Error {
   constructor(readonly source: unknown) {
     super(reason(source))
@@ -192,6 +196,7 @@ export class AgentHub {
   private async stream(sessionId: string, content: string, replyId: string): Promise<void> {
     const controller = new AbortController()
     this.abort = controller
+    const state: StreamState = { settled: false }
 
     let response: Response
     try {
@@ -202,7 +207,7 @@ export class AgentHub {
     }
 
     let failure: unknown = null
-    const pump = this.consume(response, controller, replyId).catch((error: unknown) => {
+    const pump = this.consume(response, controller, replyId, state).catch((error: unknown) => {
       failure = error
     })
 
@@ -211,17 +216,24 @@ export class AgentHub {
     } catch (error) {
       controller.abort()
       await pump
+      if (state.settled) return
       throw error
     }
 
     await pump
-    if (failure) throw failure
+    if (failure && !state.settled) {
+      throw failure
+    }
+    if (failure) {
+      this.log('warn', 'Yanit tamamlandiktan sonra baglanti kapandi', [reason(failure)])
+    }
   }
 
   private async consume(
     response: Response,
     controller: AbortController,
-    replyId: string
+    replyId: string,
+    state: StreamState
   ): Promise<void> {
     const reader = (response.body as ReadableStream<Uint8Array>).getReader()
     const decoder = new TextDecoder()
@@ -237,7 +249,7 @@ export class AgentHub {
         while (split >= 0) {
           const event = parseBlock(buffer.slice(0, split))
           buffer = buffer.slice(split + 2)
-          if (event) this.apply(event, replyId)
+          if (event) this.apply(event, replyId, state)
           split = buffer.indexOf('\n\n')
         }
       }
@@ -250,7 +262,7 @@ export class AgentHub {
     }
   }
 
-  private apply(event: SseEvent, replyId: string): void {
+  private apply(event: SseEvent, replyId: string, state: StreamState): void {
     if (event.name === 'delta') {
       const target = this.state.turns.find((item) => item.id === replyId)
       if (!target) return
@@ -264,12 +276,14 @@ export class AgentHub {
       this.state.error = message
       this.finishPending(message, true)
       this.log('error', 'Ajan yaniti basarisiz', [message])
+      state.settled = true
       return
     }
 
     if (event.name === 'done') {
       this.finishPending('', false)
       this.log('info', 'Ajan yaniti tamamlandi')
+      state.settled = true
     }
   }
 
