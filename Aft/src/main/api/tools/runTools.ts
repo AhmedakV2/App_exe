@@ -1,5 +1,6 @@
 import { DEFAULT_RUN_QUERY, type Indexer, type RunQuery } from '../../data'
 import type { ContextStore, RunStatus } from '../../scenario'
+import { compactContext } from './projection'
 import type { PlaybackAccess, ToolHandler } from '../types'
 
 const STATUSES: readonly RunStatus[] = ['passed', 'failed', 'errored', 'aborted']
@@ -59,7 +60,7 @@ export function runTools(
       const id = text(args, 'contextId')
       const context = await contexts.read(id)
       if (!context) throw new Error('Baglam paketi bulunamadi: ' + id)
-      return context
+      return compactContext(context)
     }
   }
 }

@@ -1,4 +1,5 @@
 import { parseScenario, type PlaybackOptions } from '../../scenario'
+import { compactStep } from './projection'
 import type { PlaybackAccess, PlaybackRunInput, ToolHandler } from '../types'
 
 function text(args: Record<string, unknown>, key: string): string {
@@ -38,7 +39,7 @@ export function playbackTools(playback: PlaybackAccess): Record<string, ToolHand
         failures: run.failures,
         contexts: run.contexts,
         reports: payload.reports,
-        steps: run.steps
+        steps: run.steps.map(compactStep)
       }
     },
 

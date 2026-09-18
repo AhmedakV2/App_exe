@@ -1,9 +1,11 @@
 import {
   DEFAULT_DEFAULTS,
+  ELEMENT_STEP_KINDS,
   SCENARIO_VERSION,
   parseScenario,
   validateScenario,
   type Scenario,
+  type ScenarioStep,
   type ScenarioStore
 } from '../../scenario'
 import type { ToolHandler } from '../types'
@@ -16,6 +18,18 @@ function text(args: Record<string, unknown>, key: string): string {
 function count(args: Record<string, unknown>, key: string, fallback: number): number {
   const value = args[key]
   return typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : fallback
+}
+
+function targetless(steps: readonly ScenarioStep[], path: string): string[] {
+  const gaps: string[] = []
+  steps.forEach((step, index) => {
+    const at = path + '[' + index + ']'
+    if (ELEMENT_STEP_KINDS.includes(step.kind) && !step.target) {
+      gaps.push(at + ' (' + step.kind + ') hedefsiz')
+    }
+    if (step.steps.length) gaps.push(...targetless(step.steps, at + '.steps'))
+  })
+  return gaps
 }
 
 function outline(scenario: Scenario): Record<string, unknown> {
@@ -98,6 +112,18 @@ export function scenarioTools(store: ScenarioStore): Record<string, ToolHandler>
         defaults: existing?.defaults ?? DEFAULT_DEFAULTS,
         steps: Array.isArray(args.steps) ? args.steps : []
       })
+      const gaps = targetless(draft.steps, 'steps')
+      if (gaps.length) {
+        throw new Error(
+          'Taslak yazilmadi, su adimlarin hedefi cozulemedi: ' +
+            gaps.join(', ') +
+            '. Hedefi target alanina yaz: {"target":{"testId":"..."}} veya ' +
+            '{"target":{"elementId":"..."}} ya da {"target":{"fieldName":"..."}} ' +
+            'ya da {"target":{"name":"..."}} ya da {"target":{"text":"..."}}. ' +
+            'Dogru degeri page_snapshot ciktisindaki element.target alanindan alabilirsin.'
+        )
+      }
+
       const folder = text(args, 'folder')
       const file = await store.write(draft, folder || null)
       const report = validateScenario(draft)
