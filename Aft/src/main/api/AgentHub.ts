@@ -22,10 +22,6 @@ interface SseEvent {
   data: string
 }
 
-interface StreamState {
-  settled: boolean
-}
-
 class StreamOpenError extends Error {
   constructor(readonly source: unknown) {
     super(reason(source))
@@ -63,11 +59,6 @@ export class AgentHub {
   private abort: AbortController | null = null
   private orgId = ''
   private deviceId: string | null = null
-  private retryCompact = false
-  private enforceToolRun = false
-  private activeReplyId: string | null = null
-  private activeReplyClearTimer: ReturnType<typeof setTimeout> | null = null
-  private toolGraceMs = 1500
 
   constructor(private readonly options: AgentHubOptions) {}
 
@@ -82,9 +73,7 @@ export class AgentHub {
   }
 
   note(activity: AgentActivity): void {
-    const replyId = this.activeReplyId
-    if (!replyId) return
-    const target = this.state.turns.find((item) => item.id === replyId)
+    const target = this.state.turns.find((item) => item.pending)
     if (!target) return
 
     if (activity.kind === 'invocation') {
@@ -121,22 +110,11 @@ export class AgentHub {
 
   reset(): void {
     this.stop()
-    this.retryCompact = false
-    if (this.activeReplyClearTimer) {
-      clearTimeout(this.activeReplyClearTimer)
-      this.activeReplyClearTimer = null
-    }
-    this.activeReplyId = null
     this.state = { ...EMPTY_CHAT, turns: [] }
     this.publish()
   }
 
   stop(): void {
-    if (this.activeReplyClearTimer) {
-      clearTimeout(this.activeReplyClearTimer)
-      this.activeReplyClearTimer = null
-    }
-    this.activeReplyId = null
     if (!this.abort) return
     this.abort.abort()
     this.abort = null
@@ -153,11 +131,6 @@ export class AgentHub {
   async remove(): Promise<void> {
     const sessionId = this.state.sessionId
     this.stop()
-    if (this.activeReplyClearTimer) {
-      clearTimeout(this.activeReplyClearTimer)
-      this.activeReplyClearTimer = null
-    }
-    this.activeReplyId = null
     if (sessionId) await this.options.client.deleteAgentSession(sessionId).catch(() => undefined)
     this.state = { ...EMPTY_CHAT, turns: [] }
     this.publish()
@@ -168,16 +141,9 @@ export class AgentHub {
     if (!text) return this.snapshot()
     if (this.state.busy) throw new Error('Onceki istek hala suruyor')
 
-    this.retryCompact = false
-    this.enforceToolRun = false
     this.state.turns.push(turn('user', text, false))
     const reply = turn('assistant', '', true)
     this.state.turns.push(reply)
-    this.activeReplyId = reply.id
-    if (this.activeReplyClearTimer) {
-      clearTimeout(this.activeReplyClearTimer)
-      this.activeReplyClearTimer = null
-    }
     this.state.busy = true
     this.state.error = ''
     this.publish()
@@ -196,66 +162,6 @@ export class AgentHub {
       return
     }
 
-    const lower = text.toLowerCase()
-    const isScanIntent =
-      lower.includes('sayfayı tara') ||
-      lower.includes('sayfayi tara') ||
-      lower.includes('scan') ||
-      lower.includes('page snapshot')
-    const isExecutionIntent =
-      lower.includes('senaryoyu çalıştır') ||
-      lower.includes('senaryoyu calistir') ||
-      lower.includes('çalıştır') ||
-      lower.includes('calistir') ||
-      lower.includes('run scenario') ||
-      lower.includes('local_scenario_run') ||
-      lower.includes('rapor')
-
-    if (isScanIntent) {
-      try {
-        const answer = await this.options.client.sendAgentMessage(sessionId, text)
-        if (
-          isExecutionIntent &&
-          this.enforceToolRun &&
-          !this.pendingTurnHasTool(replyId, ['local_scenario_run'])
-        ) {
-          throw new Error('tool-run-not-invoked')
-        }
-        this.retryCompact = false
-        this.enforceToolRun = false
-        this.state.model = answer.model || this.state.model
-        this.applyAnswer(replyId, answer.content)
-        this.log('info', 'Ajan yaniti tamamlandi')
-        return
-      } catch (error) {
-        if (aborted(error)) return
-        if (stale(error) && retry) {
-          this.forget()
-          await this.deliver(text, replyId, false)
-          return
-        }
-        if (shouldCompactRetry(error) && !this.retryCompact) {
-          this.retryCompact = true
-          const compact = 'Açık sayfayı kısa modda tara ve sadece ana form adımlarını maddeler halinde ver.'
-          this.log('warn', 'Doğrulama hatası, kısa tekrar denemesi yapılıyor', [reason(error)])
-          await this.deliver(compact, replyId, false)
-          return
-        }
-        if (
-          isExecutionIntent &&
-          !this.enforceToolRun &&
-          shouldForceToolRun(error, this.pendingTurnHasTool(replyId, ['local_scenario_run']))
-        ) {
-          this.enforceToolRun = true
-          const forceRun =
-            'Sadece tool kullan. local_scenario_run çağır; bitince local_run_detail ve local_health_report çağır; ardından kısa Türkçe madde madde rapor ver.'
-          this.log('warn', 'Ajan tool cagrisi yapmadi, zorunlu tool akisi deneniyor')
-          await this.deliver(forceRun, replyId, false)
-          return
-        }
-      }
-    }
-
     try {
       await this.stream(sessionId, text, replyId)
       return
@@ -264,13 +170,6 @@ export class AgentHub {
       if (stale(error) && retry) {
         this.forget()
         await this.deliver(text, replyId, false)
-        return
-      }
-      if (shouldCompactRetry(error) && !this.retryCompact) {
-        this.retryCompact = true
-        const compact = 'Açık sayfayı kısa modda tara ve sadece ana form adımlarını maddeler halinde ver.'
-        this.log('warn', 'Doğrulama hatası, kısa tekrar denemesi yapılıyor', [reason(error)])
-        await this.deliver(compact, replyId, false)
         return
       }
       if (error instanceof StreamClosedBeforeDoneError) {
@@ -285,15 +184,6 @@ export class AgentHub {
 
     try {
       const answer = await this.options.client.sendAgentMessage(sessionId, text)
-      if (
-        isExecutionIntent &&
-        this.enforceToolRun &&
-        !this.pendingTurnHasTool(replyId, ['local_scenario_run'])
-      ) {
-        throw new Error('tool-run-not-invoked')
-      }
-      this.retryCompact = false
-      this.enforceToolRun = false
       this.state.model = answer.model || this.state.model
       this.applyAnswer(replyId, answer.content)
       this.log('info', 'Ajan yaniti tamamlandi')
@@ -303,47 +193,14 @@ export class AgentHub {
         await this.deliver(text, replyId, false)
         return
       }
-      if (shouldCompactRetry(error) && !this.retryCompact) {
-        this.retryCompact = true
-        const compact = 'Açık sayfayı kısa modda tara ve sadece ana form adımlarını maddeler halinde ver.'
-        this.log('warn', 'Doğrulama hatası, kısa tekrar denemesi yapılıyor', [reason(error)])
-        await this.deliver(compact, replyId, false)
-        return
-      }
-      if (
-        isExecutionIntent &&
-        !this.enforceToolRun &&
-        shouldForceToolRun(error, this.pendingTurnHasTool(replyId, ['local_scenario_run']))
-      ) {
-        this.enforceToolRun = true
-        const forceRun =
-          'Sadece tool kullan. local_scenario_run çağır; bitince local_run_detail ve local_health_report çağır; ardından kısa Türkçe madde madde rapor ver.'
-        this.log('warn', 'Ajan tool cagrisi yapmadi, zorunlu tool akisi deneniyor')
-        await this.deliver(forceRun, replyId, false)
-        return
-      }
       this.fail(reason(error))
       await this.resync()
     }
   }
 
-  private pendingTurnHasTool(replyId: string, required: string[]): boolean {
-    const target =
-      this.state.turns.find((item) => item.id === replyId) ??
-      (this.activeReplyId
-        ? this.state.turns.find((item) => item.id === this.activeReplyId)
-        : undefined)
-    if (!target) return false
-    for (const tool of required) {
-      if (!target.actions.some((action) => action.toolName === tool)) return false
-    }
-    return true
-  }
-
   private async stream(sessionId: string, content: string, replyId: string): Promise<void> {
     const controller = new AbortController()
     this.abort = controller
-    const state: StreamState = { settled: false }
 
     let response: Response
     try {
@@ -353,8 +210,11 @@ export class AgentHub {
       throw aborted(error) ? error : new StreamOpenError(error)
     }
 
+    let doneReceived = false
     let failure: unknown = null
-    const pump = this.consume(response, controller, replyId, state).catch((error: unknown) => {
+    const pump = this.consume(response, controller, replyId, () => {
+      doneReceived = true
+    }).catch((error: unknown) => {
       failure = error
     })
 
@@ -363,7 +223,6 @@ export class AgentHub {
       if (fallback?.content) {
         controller.abort()
         await pump
-        this.retryCompact = false
         this.state.model = fallback.model || this.state.model
         this.applyAnswer(replyId, fallback.content)
         this.log('info', 'Ajan yaniti tamamlandi')
@@ -372,25 +231,19 @@ export class AgentHub {
     } catch (error) {
       controller.abort()
       await pump
-      if (state.settled) return
       throw error
     }
 
     await pump
-    if (failure && !state.settled) {
-      throw failure
-    }
-    if (failure && state.settled) {
-      this.log('warn', 'Yanit tamamlandiktan sonra baglanti kapandi', [reason(failure)])
-    }
-    this.retryCompact = false
+    if (failure) throw failure
+    if (!doneReceived) throw new StreamClosedBeforeDoneError()
   }
 
   private async consume(
     response: Response,
     controller: AbortController,
     replyId: string,
-    state: StreamState
+    onDone: () => void
   ): Promise<void> {
     const reader = (response.body as ReadableStream<Uint8Array>).getReader()
     const decoder = new TextDecoder()
@@ -406,7 +259,7 @@ export class AgentHub {
         while (split >= 0) {
           const event = parseBlock(buffer.slice(0, split))
           buffer = buffer.slice(split + 2)
-          if (event) this.apply(event, replyId, state)
+          if (event) this.apply(event, replyId, onDone)
           split = buffer.indexOf('\n\n')
         }
       }
@@ -418,7 +271,7 @@ export class AgentHub {
     }
   }
 
-  private apply(event: SseEvent, replyId: string, state: StreamState): void {
+  private apply(event: SseEvent, replyId: string, onDone: () => void): void {
     if (event.name === 'delta') {
       const target = this.state.turns.find((item) => item.id === replyId)
       if (!target) return
@@ -432,14 +285,13 @@ export class AgentHub {
       this.state.error = message
       this.finishPending(message, true)
       this.log('error', 'Ajan yaniti basarisiz', [message])
-      state.settled = true
       return
     }
 
     if (event.name === 'done') {
+      onDone()
       this.finishPending('', false)
       this.log('info', 'Ajan yaniti tamamlandi')
-      state.settled = true
     }
   }
 
@@ -513,7 +365,6 @@ export class AgentHub {
       abandon(target)
     }
     this.state.busy = false
-    this.scheduleClearActiveReply()
     this.publish()
   }
 
@@ -526,16 +377,7 @@ export class AgentHub {
       abandon(item)
     }
     this.state.busy = false
-    this.scheduleClearActiveReply()
     this.publish()
-  }
-
-  private scheduleClearActiveReply(): void {
-    if (this.activeReplyClearTimer) clearTimeout(this.activeReplyClearTimer)
-    this.activeReplyClearTimer = setTimeout(() => {
-      this.activeReplyId = null
-      this.activeReplyClearTimer = null
-    }, this.toolGraceMs)
   }
 
   private log(level: AgentLogLevel, text: string, detail: string[] = []): void {
@@ -562,18 +404,6 @@ function aborted(error: unknown): boolean {
 function stale(error: unknown): boolean {
   const status = (error as { status?: unknown }).status
   return status === 400 || status === 404 || status === 422
-}
-
-function shouldCompactRetry(error: unknown): boolean {
-  if (stale(error)) return true
-  const message = reason(error).toLowerCase()
-  return message.includes('dogrulanamadi') || message.includes('validation')
-}
-
-function shouldForceToolRun(error: unknown, hasScenarioRun: boolean): boolean {
-  if (hasScenarioRun) return false
-  if (!(error instanceof Error)) return false
-  return error.message === 'tool-run-not-invoked'
 }
 
 const SOCKET_HINTS: Record<string, string> = {

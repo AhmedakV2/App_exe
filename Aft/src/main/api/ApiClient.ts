@@ -161,18 +161,14 @@ export class ApiClient {
 
   async openAgentStream(sessionId: string, signal: AbortSignal): Promise<Response> {
     await this.ensureToken()
-    const response = await this.fetchWithTimeout(
-      API_BASE_URL + '/api/v1/agent/sessions/' + sessionId + '/stream',
-      {
-        method: 'GET',
-        headers: {
-          Authorization: 'Bearer ' + this.auth.accessToken(),
-          Accept: 'text/event-stream'
-        },
-        signal
+    const response = await fetch(API_BASE_URL + '/api/v1/agent/sessions/' + sessionId + '/stream', {
+      method: 'GET',
+      headers: {
+        Authorization: 'Bearer ' + this.auth.accessToken(),
+        Accept: 'text/event-stream'
       },
-      REQUEST_TIMEOUT_MS
-    )
+      signal
+    })
     if (!response.ok || !response.body) throw await this.toError(response)
     return response
   }
@@ -266,7 +262,7 @@ export class ApiClient {
     if (body !== null && body !== undefined) headers['Content-Type'] = 'application/json'
     if (authorized) headers.Authorization = 'Bearer ' + this.auth.accessToken()
 
-    const response = await this.fetchWithTimeout(API_BASE_URL + path, {
+    const response = await fetch(API_BASE_URL + path, {
       method,
       headers,
       body: body === null || body === undefined ? undefined : JSON.stringify(body)

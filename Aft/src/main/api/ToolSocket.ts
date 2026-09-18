@@ -87,12 +87,7 @@ export class ToolSocket {
 
     socket.onmessage = (event) => this.onFrame(String(event.data))
     socket.onerror = drop
-    socket.onclose = (event) => {
-      if (event.code === 1006) {
-        this.cooldownMs = Math.max(this.cooldownMs, 5000)
-      }
-      drop()
-    }
+    socket.onclose = drop
   }
 
   private onFrame(raw: string): void {
