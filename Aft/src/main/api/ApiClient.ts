@@ -158,15 +158,14 @@ export class ApiClient {
   async startAgentStream(
     sessionId: string,
     content: string,
-    model: string
-  ): Promise<AgentReplyDto | undefined> {
-    return this.call<AgentReplyDto | undefined>(
+    model: string,
+    turnId: string
+  ): Promise<void> {
+    await this.call(
       'POST',
       '/api/v1/agent/sessions/' + sessionId + '/messages?stream=true',
-      { content, model },
-      true,
-      {},
-      AGENT_TIMEOUT_MS
+      { content, model, turnId },
+      true
     )
   }
 
@@ -177,20 +176,6 @@ export class ApiClient {
 
   async agentModels(): Promise<ModelInfoDto> {
     return this.call<ModelInfoDto>('GET', '/api/v1/agent/models', null, true)
-  }
-
-  async openAgentStream(sessionId: string, signal: AbortSignal): Promise<Response> {
-    await this.ensureToken()
-    const response = await fetch(API_BASE_URL + '/api/v1/agent/sessions/' + sessionId + '/stream', {
-      method: 'GET',
-      headers: {
-        Authorization: 'Bearer ' + this.auth.accessToken(),
-        Accept: 'text/event-stream'
-      },
-      signal
-    })
-    if (!response.ok || !response.body) throw await this.toError(response)
-    return response
   }
 
   async wsTicket(): Promise<string> {

@@ -1,14 +1,16 @@
 import { ApiError } from './ApiError'
 import { decode, encode } from './stomp'
-import type { AgentEndpoint, ToolInvocation, ToolResult } from './types'
+import type { AgentEndpoint, ChatFrame, ToolInvocation, ToolResult } from './types'
 
 const TOOL_QUEUE = '/user/queue/tools'
+const CHAT_QUEUE = '/user/queue/chat'
 const RESULT_DESTINATION = '/app/tool-results'
 const MAX_BACKOFF_MS = 30_000
 
 export interface ToolSocketOptions {
   endpoint: AgentEndpoint
   onInvocation: (invocation: ToolInvocation) => void
+  onChatFrame?: (frame: ChatFrame) => void
   onStateChange?: (connected: boolean) => void
 }
 
@@ -98,6 +100,7 @@ export class ToolSocket {
       this.attempt = 0
       if (this.connected()) {
         this.socket?.send(encode('SUBSCRIBE', { id: 'tools', destination: TOOL_QUEUE }))
+        this.socket?.send(encode('SUBSCRIBE', { id: 'chat', destination: CHAT_QUEUE }))
         this.options.onStateChange?.(true)
       }
       return
@@ -105,11 +108,18 @@ export class ToolSocket {
 
     if (frame.command !== 'MESSAGE' || !frame.body) return
 
+    let payload: unknown
     try {
-      this.options.onInvocation(JSON.parse(frame.body) as ToolInvocation)
+      payload = JSON.parse(frame.body)
     } catch {
       return
     }
+
+    if (frame.headers.subscription === 'chat') {
+      this.options.onChatFrame?.(payload as ChatFrame)
+      return
+    }
+    this.options.onInvocation(payload as ToolInvocation)
   }
 
   private scheduleReconnect(): void {
