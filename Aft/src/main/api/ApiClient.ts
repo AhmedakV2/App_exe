@@ -32,6 +32,7 @@ export interface TokenResponse {
 }
 
 const MAX_RETRY_AFTER_MS = 60_000
+const REQUEST_TIMEOUT_MS = 90_000
 
 interface ProblemDetail {
   title?: string
@@ -160,14 +161,18 @@ export class ApiClient {
 
   async openAgentStream(sessionId: string, signal: AbortSignal): Promise<Response> {
     await this.ensureToken()
-    const response = await fetch(API_BASE_URL + '/api/v1/agent/sessions/' + sessionId + '/stream', {
-      method: 'GET',
-      headers: {
-        Authorization: 'Bearer ' + this.auth.accessToken(),
-        Accept: 'text/event-stream'
+    const response = await this.fetchWithTimeout(
+      API_BASE_URL + '/api/v1/agent/sessions/' + sessionId + '/stream',
+      {
+        method: 'GET',
+        headers: {
+          Authorization: 'Bearer ' + this.auth.accessToken(),
+          Accept: 'text/event-stream'
+        },
+        signal
       },
-      signal
-    })
+      REQUEST_TIMEOUT_MS
+    )
     if (!response.ok || !response.body) throw await this.toError(response)
     return response
   }
@@ -222,6 +227,32 @@ export class ApiClient {
     await this.auth.save(session)
   }
 
+  private async fetchWithTimeout(
+    input: string,
+    init: RequestInit,
+    timeoutMs: number = REQUEST_TIMEOUT_MS
+  ): Promise<Response> {
+    const controller = new AbortController()
+    const external = init.signal
+    const onAbort = (): void => controller.abort()
+
+    if (external) {
+      if (external.aborted) {
+        controller.abort()
+      } else {
+        external.addEventListener('abort', onAbort, { once: true })
+      }
+    }
+
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      return await fetch(input, { ...init, signal: controller.signal })
+    } finally {
+      clearTimeout(timer)
+      if (external) external.removeEventListener('abort', onAbort)
+    }
+  }
+
   private async call<T>(
     method: string,
     path: string,
@@ -235,7 +266,7 @@ export class ApiClient {
     if (body !== null && body !== undefined) headers['Content-Type'] = 'application/json'
     if (authorized) headers.Authorization = 'Bearer ' + this.auth.accessToken()
 
-    const response = await fetch(API_BASE_URL + path, {
+    const response = await this.fetchWithTimeout(API_BASE_URL + path, {
       method,
       headers,
       body: body === null || body === undefined ? undefined : JSON.stringify(body)

@@ -38,6 +38,8 @@ export interface ToolResult {
 export interface AgentConfig {
   orgId: string
   deviceKey: string
+  streamPreferred: boolean
+  requestTimeoutMs: number
 }
 
 export interface SessionState {

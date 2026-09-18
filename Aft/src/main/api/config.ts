@@ -9,7 +9,9 @@ export const API_BASE_URL = 'http://10.6.100.134:8092'
 
 export const DEFAULT_CONFIG: AgentConfig = {
   orgId: '',
-  deviceKey: ''
+  deviceKey: '',
+  streamPreferred: false,
+  requestTimeoutMs: 90_000
 }
 
 const FILE_NAME = 'agent-config.json'
@@ -19,10 +21,26 @@ function text(source: Record<string, unknown>, key: string): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function numberValue(source: Record<string, unknown>, key: string, fallback: number): number {
+  const value = source[key]
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return fallback
+}
+
 function normalize(raw: unknown): AgentConfig {
   if (!raw || typeof raw !== 'object') return { ...DEFAULT_CONFIG }
   const source = raw as Record<string, unknown>
-  return { orgId: text(source, 'orgId'), deviceKey: text(source, 'deviceKey') }
+  const streamPreferred = source['streamPreferred']
+  return {
+    orgId: text(source, 'orgId'),
+    deviceKey: text(source, 'deviceKey'),
+    streamPreferred: typeof streamPreferred === 'boolean' ? streamPreferred : DEFAULT_CONFIG.streamPreferred,
+    requestTimeoutMs: numberValue(source, 'requestTimeoutMs', DEFAULT_CONFIG.requestTimeoutMs)
+  }
 }
 
 export class ConfigStore {

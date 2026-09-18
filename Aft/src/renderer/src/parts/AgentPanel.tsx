@@ -64,7 +64,7 @@ function ToolTrail({ actions }: { actions: ToolAction[] }): React.JSX.Element | 
 const SUGGESTIONS: { title: string; detail: string; glyph: string }[] = [
   {
     title: 'Sayfayı tara',
-    detail: 'Açık sayfadaki formu tarayıp test adımlarını çıkar',
+    detail: 'Açık sayfayı kısa modda tara ve form adımlarını çıkar',
     glyph: 'radar'
   },
   {
