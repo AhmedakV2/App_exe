@@ -98,6 +98,23 @@ export class PlaybackChannel {
     return [...this.indexFaults]
   }
 
+  execute(input: Partial<RunRequest>): Promise<RunPayload> {
+    return this.run(input)
+  }
+
+  abort(): boolean {
+    this.engine.cancel()
+    return this.engine.isRunning()
+  }
+
+  lastRun(): RunResult | null {
+    return this.engine.last()
+  }
+
+  running(): boolean {
+    return this.engine.isRunning()
+  }
+
   register(): void {
     if (this.registered) return
     this.registered = true
@@ -133,14 +150,9 @@ export class PlaybackChannel {
       guard('Kosum tamamlandi', () => this.run(request as Partial<RunRequest>))
     )
 
-    ipcMain.handle('aft:playback:cancel', () =>
-      guard('Kosum iptal edildi', () => {
-        this.engine.cancel()
-        return this.engine.isRunning()
-      })
-    )
+    ipcMain.handle('aft:playback:cancel', () => guard('Kosum iptal edildi', () => this.abort()))
 
-    ipcMain.handle('aft:playback:last', () => guard('Son kosum okundu', () => this.engine.last()))
+    ipcMain.handle('aft:playback:last', () => guard('Son kosum okundu', () => this.lastRun()))
 
     ipcMain.handle('aft:playback:contexts', () =>
       guard('Baglam listesi hazir', async (): Promise<ContextListPayload> => ({

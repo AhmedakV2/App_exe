@@ -83,11 +83,47 @@ export class ToolDispatcher {
   }
 
   private clip(callId: string, payload: unknown): ToolResult {
-    const serialized = JSON.stringify(payload ?? null)
-    if (Buffer.byteLength(serialized, 'utf8') <= MAX_RESULT_BYTES) {
-      return ok(callId, payload, false)
+    const size = Buffer.byteLength(JSON.stringify(payload ?? null), 'utf8')
+    if (size <= MAX_RESULT_BYTES) return ok(callId, payload, false)
+
+    const trimmed = this.shrink(payload)
+    if (trimmed && Buffer.byteLength(JSON.stringify(trimmed), 'utf8') <= MAX_RESULT_BYTES) {
+      return ok(callId, trimmed, true)
     }
-    const cut = Buffer.from(serialized, 'utf8').subarray(0, MAX_RESULT_BYTES).toString('utf8')
-    return { callId, ok: true, contentJson: cut, error: null, truncated: true }
+    return ok(
+      callId,
+      {
+        truncated: true,
+        bytes: size,
+        limit: MAX_RESULT_BYTES,
+        error:
+          'Sonuc boyut sinirini asti ve gonderilemedi. Daraltici parametrelerle tekrar cagir: ' +
+          'limit dusur, filter ver veya daha dar bir kimlik kullan.'
+      },
+      true
+    )
+  }
+
+  private shrink(payload: unknown): Record<string, unknown> | null {
+    if (!payload || typeof payload !== 'object') return null
+    const source = payload as Record<string, unknown>
+    const out: Record<string, unknown> = { truncated: true }
+
+    for (const [key, value] of Object.entries(source)) {
+      if (!Array.isArray(value)) {
+        out[key] = value
+        continue
+      }
+      const budget = Math.max(1, Math.floor(MAX_RESULT_BYTES / 4 / this.weight(value)))
+      out[key] = value.slice(0, budget)
+      out[key + 'Total'] = value.length
+    }
+    return out
+  }
+
+  private weight(items: unknown[]): number {
+    const sample = items.slice(0, 20)
+    const bytes = Buffer.byteLength(JSON.stringify(sample), 'utf8')
+    return Math.max(1, Math.ceil(bytes / Math.max(1, sample.length)))
   }
 }

@@ -6,7 +6,7 @@ import { API_BASE_URL, ConfigStore } from '../api/config'
 import { AgentHub } from '../api/AgentHub'
 import type { AgentActivity, AgentChatState, AgentLogEntry } from '../api/agent-types'
 import { mountAgent, unmountAgent, agentBridge } from '../api/mountAgent'
-import type { ToolInvocation } from '../api/types'
+import type { PlaybackAccess, ToolInvocation } from '../api/types'
 import type { BrowserController } from '../browser/BrowserController'
 import type { Indexer } from '../data'
 import type { DescriptorStore } from '../identity'
@@ -28,6 +28,7 @@ export interface ApiChannelOptions {
   indexer: Indexer
   contexts: ContextStore
   descriptors: DescriptorStore
+  playback?: PlaybackAccess | null
 }
 
 function describe(error: unknown): string {
@@ -208,10 +209,10 @@ export class ApiChannel {
   }
 
   private onActivity(activity: AgentActivity): void {
-    const level = activity.ok ? 'tool' : 'error'
+    this.hub.note(activity)
     this.pushLog({
       at: Date.now(),
-      level,
+      level: activity.ok ? 'tool' : 'error',
       text: activity.toolName + ' · ' + activity.kind,
       detail: activity.detail ? [activity.detail] : []
     })
@@ -269,6 +270,7 @@ export class ApiChannel {
       indexer: this.options.indexer,
       contexts: this.options.contexts,
       descriptors: this.options.descriptors,
+      playback: this.options.playback ?? null,
       approve: (invocation) => this.askUser(invocation),
       onActivity: (activity) => this.onActivity(activity),
       onStateChange: (connected) => {

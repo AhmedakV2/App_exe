@@ -1,12 +1,64 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import type { AgentChatState, AgentState, ApprovalRequest } from '../../../main/bridge/api-types'
+import type {
+  AgentChatState,
+  AgentState,
+  ApprovalRequest,
+  ToolAction
+} from '../../../main/bridge/api-types'
 import { Glyph } from '../icons'
 import { formatClock } from '../format'
 import ChatBlocks, { CopyButton } from './ChatBlocks'
 
 const WRITE_TOOLS: Record<string, string> = {
   browser_command: 'Tarayıcıda bir eylem çalıştırılacak',
-  scenario_draft_write: 'Senaryo taslağı kaydedilecek'
+  scenario_draft_write: 'Senaryo taslağı kaydedilecek',
+  local_scenario_run: 'Senaryo baştan sona koşulacak',
+  local_scenario_delete: 'Senaryo kalıcı olarak silinecek',
+  local_run_cancel: 'Süren koşum durdurulacak'
+}
+
+const TOOL_LABELS: Record<string, string> = {
+  local_scenario_list: 'Senaryolar listeleniyor',
+  local_scenario_search: 'Senaryolarda aranıyor',
+  local_scenario_read: 'Senaryo okunuyor',
+  local_scenario_validate: 'Senaryo doğrulanıyor',
+  local_scenario_run: 'Senaryo koşuluyor',
+  local_scenario_delete: 'Senaryo siliniyor',
+  local_run_history: 'Koşum geçmişi okunuyor',
+  local_run_detail: 'Koşum ayrıntısı okunuyor',
+  local_run_cancel: 'Koşum durduruluyor',
+  local_health_report: 'Sağlık raporu çıkarılıyor',
+  local_descriptor_search: 'Descriptor kataloğu taranıyor',
+  local_failure_context: 'Hata bağlamı okunuyor',
+  page_state: 'Sayfa durumu okunuyor',
+  page_snapshot: 'Sayfa taranıyor',
+  browser_command: 'Tarayıcı komutu çalıştırılıyor',
+  scenario_draft_write: 'Senaryo taslağı yazılıyor'
+}
+
+const ACTION_GLYPHS: Record<ToolAction['state'], string> = {
+  running: 'radar',
+  ok: 'check',
+  failed: 'alert',
+  rejected: 'shield'
+}
+
+function ToolTrail({ actions }: { actions: ToolAction[] }): React.JSX.Element | null {
+  if (!actions.length) return null
+  return (
+    <ul className="chat-trail">
+      {actions.map((action) => (
+        <li key={action.callId} className={'chat-trail-item ' + action.state}>
+          <Glyph name={ACTION_GLYPHS[action.state]} size={12} />
+          <span className="chat-trail-name">{TOOL_LABELS[action.toolName] ?? action.toolName}</span>
+          {action.state === 'rejected' ? <span className="chat-trail-note">reddedildi</span> : null}
+          {action.state === 'failed' && action.detail ? (
+            <span className="chat-trail-note">{action.detail}</span>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 const SUGGESTIONS: { title: string; detail: string; glyph: string }[] = [
@@ -284,8 +336,9 @@ export function AgentPanel(): React.JSX.Element {
                     ) : null}
                   </div>
                   <div className={'chat-bubble' + (item.failed ? ' bad' : '')}>
+                    <ToolTrail actions={item.actions} />
                     {item.text ? <ChatBlocks text={item.text} /> : null}
-                    {item.pending && !item.text ? (
+                    {item.pending && !item.text && !item.actions.length ? (
                       <span className="chat-typing">
                         <i />
                         <i />

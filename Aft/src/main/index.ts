@@ -799,7 +799,8 @@ function createWindow(): void {
         scenarios: playback.library(),
         indexer: data.indexer(),
         contexts: data.contextStore(),
-        descriptors: identity.catalog()
+        descriptors: identity.catalog(),
+        playback
       })
       bindApiViewer(chatView.webContents)
     })
