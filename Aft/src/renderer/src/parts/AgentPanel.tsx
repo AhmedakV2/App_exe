@@ -3,6 +3,7 @@ import type {
   AgentChatState,
   AgentState,
   ApprovalRequest,
+  ChatSummary,
   ToolAction
 } from '../../../main/bridge/api-types'
 import { Glyph } from '../icons'
@@ -88,6 +89,7 @@ const EMPTY_CHAT: AgentChatState = {
   sessionId: '',
   title: '',
   model: '',
+  tiers: [],
   turns: [],
   busy: false,
   error: ''
@@ -103,6 +105,9 @@ export function AgentPanel(): React.JSX.Element {
   const [pinned, setPinned] = useState(true)
   const [linking, setLinking] = useState(false)
   const [linkError, setLinkError] = useState('')
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [history, setHistory] = useState<ChatSummary[]>([])
+  const [historyBusy, setHistoryBusy] = useState(false)
 
   const threadRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
@@ -131,6 +136,40 @@ export function AgentPanel(): React.JSX.Element {
     const thread = threadRef.current
     if (thread) thread.scrollTop = thread.scrollHeight
   }, [chat.turns, pinned])
+
+  const loadHistory = useCallback((): void => {
+    setHistoryBusy(true)
+    void window.aftApi
+      .chatHistory()
+      .then((result) => setHistory(result.ok && result.data ? result.data : []))
+      .finally(() => setHistoryBusy(false))
+  }, [])
+
+  const toggleHistory = useCallback((): void => {
+    setHistoryOpen((open) => {
+      if (!open) loadHistory()
+      return !open
+    })
+  }, [loadHistory])
+
+  const startChat = useCallback((): void => {
+    void window.aftApi.newChat().then(() => loadHistory())
+  }, [loadHistory])
+
+  const pickChat = useCallback(
+    (id: string): void => {
+      void window.aftApi.openChat(id).then(() => loadHistory())
+    },
+    [loadHistory]
+  )
+
+  const dropChat = useCallback((id: string): void => {
+    setHistoryBusy(true)
+    void window.aftApi
+      .deleteChat(id)
+      .then((result) => setHistory(result.ok && result.data ? result.data : []))
+      .finally(() => setHistoryBusy(false))
+  }, [])
 
   const onThreadScroll = useCallback((): void => {
     const thread = threadRef.current
@@ -238,10 +277,30 @@ export function AgentPanel(): React.JSX.Element {
           </button>
         )}
       </div>
-      <p className="chat-hint">
-        <kbd>Enter</kbd> gönderir · <kbd>Shift</kbd>+<kbd>Enter</kbd> satır ekler
-        {chat.model ? ' · ' + chat.model : ''}
-      </p>
+      <div className="chat-hint">
+        <span>
+          <kbd>Enter</kbd> gönderir · <kbd>Shift</kbd>+<kbd>Enter</kbd> satır ekler
+        </span>
+        {chat.tiers.length ? (
+          <label className="chat-model">
+            <Glyph name="spark" size={12} />
+            <select
+              value={chat.model}
+              disabled={chat.busy}
+              aria-label="Model profili"
+              onChange={(event) => void window.aftApi.selectModel(event.target.value)}
+            >
+              {chat.tiers.map((tier) => (
+                <option key={tier.tier} value={tier.model}>
+                  {tier.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <span>{chat.model}</span>
+        )}
+      </div>
     </form>
   )
 
@@ -255,24 +314,14 @@ export function AgentPanel(): React.JSX.Element {
         </span>
         <span className="chat-push" />
         <button
-          className="ghost-btn"
+          className={historyOpen ? 'ghost-btn on' : 'ghost-btn'}
           type="button"
-          title="Yeni sohbet"
-          aria-label="Yeni sohbet"
-          disabled={chat.busy || empty}
-          onClick={() => void window.aftApi.newChat()}
+          title="Sohbet geçmişi"
+          aria-label="Sohbet geçmişi"
+          aria-expanded={historyOpen}
+          onClick={toggleHistory}
         >
-          <Glyph name="plus" size={15} />
-        </button>
-        <button
-          className="ghost-btn"
-          type="button"
-          title="Sohbeti sil"
-          aria-label="Sohbeti sil"
-          disabled={chat.busy || !chat.sessionId}
-          onClick={() => void window.aftApi.removeChat()}
-        >
-          <Glyph name="trash" size={15} />
+          <Glyph name="history" size={15} />
         </button>
       </header>
 
@@ -373,6 +422,71 @@ export function AgentPanel(): React.JSX.Element {
           <div className="chat-foot">{composer}</div>
         </>
       )}
+
+      {historyOpen ? (
+        <aside className="chat-history" aria-label="Sohbet geçmişi">
+          <header className="chat-history-head">
+            <strong>Sohbet geçmişi</strong>
+            <button
+              className="ghost-btn"
+              type="button"
+              title="Yeni sohbet"
+              aria-label="Yeni sohbet"
+              disabled={chat.busy}
+              onClick={startChat}
+            >
+              <Glyph name="plus" size={14} />
+            </button>
+            <button
+              className="ghost-btn"
+              type="button"
+              title="Paneli kapat"
+              aria-label="Paneli kapat"
+              onClick={toggleHistory}
+            >
+              <Glyph name="close" size={14} />
+            </button>
+          </header>
+
+          {historyBusy && !history.length ? <p className="chat-history-empty">Yükleniyor</p> : null}
+          {!historyBusy && !history.length ? (
+            <p className="chat-history-empty">Henüz kayıtlı sohbet yok</p>
+          ) : null}
+
+          <ul className="chat-history-list">
+            {history.map((item) => (
+              <li
+                key={item.id}
+                className={
+                  item.id === chat.sessionId ? 'chat-history-item on' : 'chat-history-item'
+                }
+              >
+                <button
+                  className="chat-history-open"
+                  type="button"
+                  disabled={chat.busy}
+                  onClick={() => pickChat(item.id)}
+                >
+                  <span className="chat-history-title">{item.title}</span>
+                  <span className="chat-history-meta">
+                    {formatClock(item.createdAt)} · {item.model}
+                  </span>
+                </button>
+                <button
+                  className="ghost-btn"
+                  type="button"
+                  title="Sohbeti sil"
+                  aria-label="Sohbeti sil"
+                  disabled={chat.busy}
+                  onClick={() => dropChat(item.id)}
+                >
+                  <Glyph name="trash" size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      ) : null}
 
       {pending ? (
         <div className="chat-approval">

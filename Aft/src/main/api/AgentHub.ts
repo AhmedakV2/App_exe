@@ -3,6 +3,8 @@ import type { ApiClient } from './ApiClient'
 import { EMPTY_CHAT } from './agent-types'
 import type {
   AgentActivity,
+  AgentSessionDto,
+  ChatSummary,
   AgentChatState,
   AgentLogEntry,
   AgentLogLevel,
@@ -36,6 +38,22 @@ class StreamClosedBeforeDoneError extends Error {
   }
 }
 
+function deltaText(data: string): string {
+  try {
+    const parsed: unknown = JSON.parse(data)
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      typeof (parsed as { text?: unknown }).text === 'string'
+    ) {
+      return (parsed as { text: string }).text
+    }
+  } catch {
+    return data
+  }
+  return data
+}
+
 function parseBlock(block: string): SseEvent | null {
   let name = 'message'
   const lines: string[] = []
@@ -65,6 +83,7 @@ export class AgentHub {
   snapshot(): AgentChatState {
     return {
       ...this.state,
+      tiers: (this.state.tiers ?? []).map((tier) => ({ ...tier })),
       turns: this.state.turns.map((turn) => ({
         ...turn,
         actions: turn.actions.map((action) => ({ ...action }))
@@ -128,6 +147,53 @@ export class AgentHub {
     return this.options.client.cancelAgentSession(sessionId).catch(() => false)
   }
 
+  async history(): Promise<ChatSummary[]> {
+    if (!this.orgId) return []
+    const page = await this.options.client.listAgentSessions(this.orgId)
+    return page.content.map((item) => this.summary(item))
+  }
+
+  async open(sessionId: string): Promise<AgentChatState> {
+    if (sessionId === this.state.sessionId) return this.snapshot()
+    this.stop()
+
+    const detail = await this.options.client.agentSession(sessionId)
+    this.state = {
+      sessionId: detail.session.id,
+      title: detail.session.title,
+      model: detail.session.model,
+      tiers: this.state.tiers,
+      turns: detail.messages.filter(visible).map(toTurn),
+      busy: false,
+      error: ''
+    }
+    this.publish()
+    this.log('info', 'Sohbet acildi', [detail.session.title])
+    return this.snapshot()
+  }
+
+  async discard(sessionId: string): Promise<ChatSummary[]> {
+    await this.options.client.deleteAgentSession(sessionId).catch(() => undefined)
+    if (sessionId === this.state.sessionId) {
+      this.stop()
+      this.state = { ...EMPTY_CHAT, turns: [] }
+      this.publish()
+    }
+    this.log('info', 'Sohbet silindi')
+    return this.history()
+  }
+
+  private summary(item: AgentSessionDto): ChatSummary {
+    return {
+      id: item.id,
+      title: item.title || 'Adsiz sohbet',
+      model: item.model,
+      status: item.status,
+      createdAt: Date.parse(item.createdAt) || Date.now(),
+      active: item.id === this.state.sessionId
+    }
+  }
+
   async remove(): Promise<void> {
     const sessionId = this.state.sessionId
     this.stop()
@@ -183,7 +249,7 @@ export class AgentHub {
     }
 
     try {
-      const answer = await this.options.client.sendAgentMessage(sessionId, text)
+      const answer = await this.options.client.sendAgentMessage(sessionId, text, this.state.model)
       this.state.model = answer.model || this.state.model
       this.applyAnswer(replyId, answer.content)
       this.log('info', 'Ajan yaniti tamamlandi')
@@ -219,7 +285,11 @@ export class AgentHub {
     })
 
     try {
-      const fallback = await this.options.client.startAgentStream(sessionId, content)
+      const fallback = await this.options.client.startAgentStream(
+        sessionId,
+        content,
+        this.state.model
+      )
       if (fallback?.content) {
         controller.abort()
         await pump
@@ -275,7 +345,7 @@ export class AgentHub {
     if (event.name === 'delta') {
       const target = this.state.turns.find((item) => item.id === replyId)
       if (!target) return
-      target.text += event.data
+      target.text += deltaText(event.data)
       this.publish()
       return
     }
@@ -304,7 +374,8 @@ export class AgentHub {
       orgId: this.orgId,
       deviceId: this.deviceId,
       title,
-      mode: 'CHAT'
+      mode: 'CHAT',
+      model: this.state.model
     })
 
     this.state.sessionId = session.id
@@ -323,12 +394,20 @@ export class AgentHub {
   private async loadModel(): Promise<void> {
     try {
       const info = await this.options.client.agentModels()
-      if (this.state.model) return
-      this.state.model = info.plannerModel
+      this.state.tiers = Array.isArray(info.tiers) ? info.tiers : []
+      if (!this.state.model && info.defaultModel) this.state.model = info.defaultModel
       this.publish()
     } catch {
       return
     }
+  }
+
+  selectModel(model: string): AgentChatState {
+    if (!model || model === this.state.model) return this.snapshot()
+    this.state.model = model
+    this.publish()
+    this.log('info', 'Model degistirildi', [model])
+    return this.snapshot()
   }
 
   private async resync(): Promise<void> {

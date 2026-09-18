@@ -44,6 +44,8 @@ export type {
   AgentChatState,
   AgentLogEntry,
   AgentLogLevel,
+  ChatSummary,
+  ModelTierDto,
   ChatTurn,
   ToolAction,
   ToolActionState

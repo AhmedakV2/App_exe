@@ -24,6 +24,23 @@ export interface AgentMessageDto {
   createdAt: string
 }
 
+export interface AgentSessionPage {
+  content: AgentSessionDto[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export interface ChatSummary {
+  id: string
+  title: string
+  model: string
+  status: string
+  createdAt: number
+  active: boolean
+}
+
 export interface AgentSessionDetailDto {
   session: AgentSessionDto
   messages: AgentMessageDto[]
@@ -39,12 +56,18 @@ export interface AgentReplyDto {
   tokenOut: number
 }
 
+export interface ModelTierDto {
+  tier: string
+  label: string
+  model: string
+}
+
 export interface ModelInfoDto {
-  activeProvider: string
-  activeProviders: string[]
-  models: string[]
-  plannerModel: string
-  fastModel: string
+  provider: string
+  ready: boolean
+  tiers: ModelTierDto[]
+  defaultTier: string
+  defaultModel: string
 }
 
 export type ToolActionState = 'running' | 'ok' | 'failed' | 'rejected'
@@ -71,6 +94,7 @@ export interface AgentChatState {
   sessionId: string
   title: string
   model: string
+  tiers: ModelTierDto[]
   turns: ChatTurn[]
   busy: boolean
   error: string
@@ -95,6 +119,7 @@ export const EMPTY_CHAT: AgentChatState = {
   sessionId: '',
   title: '',
   model: '',
+  tiers: [],
   turns: [],
   busy: false,
   error: ''

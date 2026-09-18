@@ -171,6 +171,20 @@ export class ApiChannel {
       })
     )
 
+    ipcMain.handle('aft:agent:model', (_event, model: unknown) =>
+      guard('model secildi', () => this.hub.selectModel(String(model)))
+    )
+
+    ipcMain.handle('aft:agent:history', () => guard('sohbet gecmisi', () => this.hub.history()))
+
+    ipcMain.handle('aft:agent:open', (_event, id: unknown) =>
+      guard('sohbet acildi', () => this.hub.open(String(id)))
+    )
+
+    ipcMain.handle('aft:agent:drop', (_event, id: unknown) =>
+      guard('sohbet silindi', () => this.hub.discard(String(id)))
+    )
+
     ipcMain.handle('aft:api:approve', (_event, input: unknown) =>
       guard('onay', () => {
         const decision = input as { callId: string; approved: boolean }

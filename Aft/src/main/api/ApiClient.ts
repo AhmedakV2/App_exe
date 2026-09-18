@@ -5,6 +5,7 @@ import type {
   AgentReplyDto,
   AgentSessionDetailDto,
   AgentSessionDto,
+  AgentSessionPage,
   ModelInfoDto
 } from './agent-types'
 import { ApiError, retryAfterMillis } from './ApiError'
@@ -33,6 +34,7 @@ export interface TokenResponse {
 
 const MAX_RETRY_AFTER_MS = 60_000
 const REQUEST_TIMEOUT_MS = 90_000
+const AGENT_TIMEOUT_MS = 600_000
 
 interface ProblemDetail {
   title?: string
@@ -110,6 +112,7 @@ export class ApiClient {
     deviceId: string | null
     title: string
     mode: string
+    model: string
   }): Promise<AgentSessionDto> {
     return this.call<AgentSessionDto>('POST', '/api/v1/agent/sessions', input, true)
   }
@@ -137,22 +140,39 @@ export class ApiClient {
     return result.cancelled === true
   }
 
-  async sendAgentMessage(sessionId: string, content: string): Promise<AgentReplyDto> {
+  async sendAgentMessage(
+    sessionId: string,
+    content: string,
+    model: string
+  ): Promise<AgentReplyDto> {
     return this.call<AgentReplyDto>(
       'POST',
       '/api/v1/agent/sessions/' + sessionId + '/messages',
-      { content },
-      true
+      { content, model },
+      true,
+      {},
+      AGENT_TIMEOUT_MS
     )
   }
 
-  async startAgentStream(sessionId: string, content: string): Promise<AgentReplyDto | undefined> {
+  async startAgentStream(
+    sessionId: string,
+    content: string,
+    model: string
+  ): Promise<AgentReplyDto | undefined> {
     return this.call<AgentReplyDto | undefined>(
       'POST',
       '/api/v1/agent/sessions/' + sessionId + '/messages?stream=true',
-      { content },
-      true
+      { content, model },
+      true,
+      {},
+      AGENT_TIMEOUT_MS
     )
+  }
+
+  async listAgentSessions(orgId: string, size = 50): Promise<AgentSessionPage> {
+    const query = '?orgId=' + encodeURIComponent(orgId) + '&size=' + size + '&page=0'
+    return this.call<AgentSessionPage>('GET', '/api/v1/agent/sessions' + query, null, true)
   }
 
   async agentModels(): Promise<ModelInfoDto> {
@@ -254,7 +274,8 @@ export class ApiClient {
     path: string,
     body: unknown,
     authorized: boolean,
-    extraHeaders: Record<string, string> = {}
+    extraHeaders: Record<string, string> = {},
+    timeoutMs: number = REQUEST_TIMEOUT_MS
   ): Promise<T> {
     if (authorized) await this.ensureToken()
 
@@ -262,11 +283,15 @@ export class ApiClient {
     if (body !== null && body !== undefined) headers['Content-Type'] = 'application/json'
     if (authorized) headers.Authorization = 'Bearer ' + this.auth.accessToken()
 
-    const response = await fetch(API_BASE_URL + path, {
-      method,
-      headers,
-      body: body === null || body === undefined ? undefined : JSON.stringify(body)
-    })
+    const response = await this.fetchWithTimeout(
+      API_BASE_URL + path,
+      {
+        method,
+        headers,
+        body: body === null || body === undefined ? undefined : JSON.stringify(body)
+      },
+      timeoutMs
+    )
 
     if (!response.ok) throw await this.toError(response)
 
